@@ -2495,6 +2495,64 @@ async def save_ollama_default(run_id: UUID, dry_run: bool = False):
         raise HTTPException(status_code=409, detail=str(e)) from None
     return result.to_dict() if hasattr(result, "to_dict") else result
 
+
+# --- Ollama restore + diff (missing from batch 1 review) ---
+
+@router.post("/ollama-default/restore")
+async def restore_ollama_default(request: RestoreDefaultsRequest):
+    from lm_optimizer.services.ollama_defaults import DefaultsError, restore_ollama_defaults
+    try:
+        result = restore_ollama_defaults(
+            request.model_id, backup=request.backup, dry_run=request.dry_run
+        )
+    except DefaultsError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+    return result.to_dict() if hasattr(result, "to_dict") else result
+
+
+@router.get("/runs/{run_id}/ollama-default-diff")
+async def get_run_ollama_default_diff(run_id: UUID):
+    from dataclasses import replace as _replace
+    run = run_repo.get(str(run_id))
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    best = run.get_best_config()
+    if best is None:
+        raise HTTPException(status_code=404, detail="No validated winner in this run")
+    config = best.config
+    if config is None:
+        raise HTTPException(status_code=404, detail="No validated winner config")
+    if config.context_length is None and getattr(best, "context_length", None):
+        config = _replace(config, context_length=best.context_length)
+    model_id = getattr(getattr(run, "model", None), "id", "") or ""
+    from lm_optimizer.services.ollama_defaults import diff_ollama_defaults
+    return diff_ollama_defaults(model_id, config)
+
+
+# --- Monitoring / profiling helper routes ---
+
+@router.get("/monitor/gpu-status")
+async def get_gpu_status():
+    from lm_optimizer.services.gpu_monitor import should_run_tests, is_gpu_busy, is_cpu_busy
+    return should_run_tests()
+
+
+# --- Speculative decoding + KV cache helpers exposed via routes ---
+
+@router.post("/runs/{run_id}/auto-tune-speculative")
+async def auto_tune_speculative_for_run(run_id: UUID):
+    from lm_optimizer.api.routes import auto_tune_speculative
+    return auto_tune_speculative(None)
+
+
+@router.post("/runs/{run_id}/auto-tune-kv-cache")
+async def auto_tune_kv_cache_for_run(run_id: UUID, gpu_vram_gb: float = 8.0):
+    from lm_optimizer.api.routes import auto_tune_kv_cache
+    return auto_tune_kv_cache(None, gpu_vram_gb)
+
+
+# --- End of added routes ---
+
 # --- Speculative decoding + KV cache auto-tuning helpers ---
 def auto_tune_speculative(config, best_config=None):
     """Auto-select speculative decoding params based on model size and config."""
