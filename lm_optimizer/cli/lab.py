@@ -1306,6 +1306,11 @@ def test_manager(
     speed_floor: float = typer.Option(5.0, "--speed-floor"),
     calm_minutes: int = typer.Option(15, "--calm-minutes", help="Minutes of GPU/CPU calm before full cycle proceeds"),
     check_interval: int = typer.Option(60, "--check-interval", help="Seconds between GPU/CPU checks"),
+    all_models: bool = typer.Option(False, "--all", help="Run all models"),
+    models: str = typer.Option(None, "--models", help="Comma-separated model indices (e.g., 1,2,5,8)"),
+    test_count: int = typer.Option(1, "--test-count", help="Number of tests to run (1=single, 3=full)"),
+    detail_level: str = typer.Option("full", "--detail-level", help="Detail level: short, benchmark, pure-opt, full"),
+    overnight: bool = typer.Option(False, "--overnight", help="Run through all selected without interruption"),
 ):
     """Integrated test manager: intelligent ordering, partial results, assistant opt-in."""
     from lm_optimizer.services.test_manager import TestManager
