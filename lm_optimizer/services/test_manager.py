@@ -39,14 +39,21 @@ class TestManager:
 
     def auto_tune_speculative(self, config=None):
         """Auto-select speculative decoding params based on model size and config."""
-        from lm_optimizer.api.routes import auto_tune_speculative
-        self._speculative_config = auto_tune_speculative(config)
+        # Service-level implementation (no API layer dependency for scheduling logic)
+        # Default: draftSimple=True, maxTokens=3, MTP disabled for stability.
+        self._speculative_config = {"draftSimple": True, "draftMaxTokens": 3, "draftMinTokens": 0, "draftMtp": False}
         return self._speculative_config
 
     def auto_tune_kv_cache(self, gpu_vram_gb=8.0):
         """Auto-select KV cache quantization based on GPU VRAM."""
-        from lm_optimizer.api.routes import auto_tune_kv_cache
-        self._kv_cache_config = auto_tune_kv_cache(None, gpu_vram_gb)
+        # Service-level implementation (no API layer dependency for scheduling logic)
+        # Default thresholds: >=24GB -> q8_0; >=12GB -> q4_0; else f16.
+        if gpu_vram_gb >= 24:
+            self._kv_cache_config = {"vCacheQuantizationType": "q8_0", "kCacheQuantizationType": "q8_0"}
+        elif gpu_vram_gb >= 12:
+            self._kv_cache_config = {"vCacheQuantizationType": "q4_0", "kCacheQuantizationType": "q4_0"}
+        else:
+            self._kv_cache_config = {"vCacheQuantizationType": "f16", "kCacheQuantizationType": "f16"}
         return self._kv_cache_config
 
     def order_models(self, models: list["ModelInfo"]) -> list[str]:
