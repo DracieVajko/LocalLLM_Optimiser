@@ -2529,6 +2529,40 @@ async def get_run_ollama_default_diff(run_id: UUID):
     return diff_ollama_defaults(model_id, config)
 
 
+@router.post("/runs/{run_id}/verify-ollama-default")
+async def verify_ollama_default(run_id: UUID):
+    """Verify saved Ollama defaults via echo load (never writes)."""
+    import asyncio
+    from dataclasses import replace as _replace
+    run = run_repo.get(str(run_id))
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    best = run.get_best_config()
+    if best is None:
+        raise HTTPException(status_code=404, detail="No validated winner in this run")
+    config = best.config
+    if config is None:
+        raise HTTPException(status_code=404, detail="No validated winner config")
+    if config.context_length is None and getattr(best, "context_length", None):
+        config = _replace(config, context_length=best.context_length)
+    model_id = getattr(getattr(run, "model", None), "id", "") or ""
+    _client_result = get_lm_client(echo_probe=False)
+    if hasattr(_client_result, "__await__"):
+        client = await _client_result
+    else:
+        client = _client_result
+    try:
+        from lm_optimizer.services.lmstudio_default_verify import verify_defaults
+        result = await verify_defaults(model_id, config, client=client)
+    finally:
+        try:
+            if hasattr(client, "close"):
+                await client.close()
+        except Exception:
+            pass
+    return result
+
+
 # --- Monitoring / profiling helper routes ---
 
 @router.get("/monitor/gpu-status")
