@@ -105,7 +105,7 @@ class TestManager:
         # and delete associated temp files within this folder only.
         return ["cleaned"]
 
-    def quick_test_nemotron(self, model_id: str = "lmstudio-community/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-GGUF", dry_run: bool = True) -> dict:
+    def quick_test_nemotron(self, model_id: str = "nvidia-nemotron-3.5-bolt-74b-a9b-24gb", dry_run: bool = True) -> dict:
         """Prepare quick default/test for new Nemotron Bolt models (no live load)."""
         from lm_optimizer.services.lmstudio_defaults import resolve_defaults_path, apply_defaults
         from lm_optimizer.domain.models import LoadConfiguration
