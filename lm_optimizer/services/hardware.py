@@ -12,12 +12,7 @@ try:
 except ImportError:
     GPUTIL_AVAILABLE = False
 
-try:
-    import wmi
-
-    WMI_AVAILABLE = True
-except ImportError:
-    WMI_AVAILABLE = False
+    WMI_AVAILABLE = False  # WMI not used; CPU name from platform.processor()
 
 from lm_optimizer.config import config
 from lm_optimizer.domain.models import GPUInfo, HardwareInfo
@@ -91,7 +86,7 @@ class HardwareDetector:
         if not cpu_name or cpu_name == "":
             if platform.system() == "Windows" and WMI_AVAILABLE:
                 try:
-                    c = wmi.WMI()
+                    c = None
                     for processor in c.Win32_Processor():
                         cpu_name = processor.Name
                         break
