@@ -292,11 +292,12 @@ class TestCliDedup:
         from rich.console import Console
 
         from lm_optimizer.cli import main as _cli
+        from lm_optimizer.cli import result_view
 
         run, _ = _run([_result(ctx=8192, gen=31.0), _result(ctx=16384, gen=24.0)])
         rec = Console(record=True, width=200)
-        monkeypatch.setattr(_cli, "console", rec)
-        monkeypatch.setattr(_cli, "_generation_for", lambda *a: {})
+        monkeypatch.setattr(result_view, "console", rec)
+        monkeypatch.setattr(result_view, "_generation_for", lambda *a: {})
         monkeypatch.setattr(_cli, "_save_preset_and_report", lambda *a, **k: True)
         _cli._display_optimization_result(run)
         out = rec.export_text()
