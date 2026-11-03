@@ -61,6 +61,7 @@ import orjson
 from lm_optimizer.services.optimizer import AdaptiveOptimizer
 from lm_optimizer.services.quality import QualityConfig, QualityEvaluator
 from lm_optimizer.services.search_space import SearchSpaceGenerator
+from lm_optimizer.services.best_effort import log_best_effort
 
 router = APIRouter()
 
@@ -92,8 +93,8 @@ async def warm_capability_cache() -> bool:
         finally:
             try:
                 await client.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
     except Exception as e:
         logger.warning("Startup capability warmup skipped", error=str(e)[:160])
         return False
@@ -405,9 +406,8 @@ async def get_status():
                 loaded = [m for m in models if m.id in client._loaded_models]
                 if loaded:
                     loaded_model = _convert_model(loaded[0])
-            except Exception:
-                pass
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
         return {
             "lm_studio": {
                 "connected": bool(lm_connected),
@@ -419,10 +419,8 @@ async def get_status():
     finally:
         try:
             await client.close()
-        except Exception:
-            pass
-
-
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
 @router.post("/connect")
 async def connect_lm_studio(url: str):
     """Test connection to LM Studio."""
@@ -458,10 +456,8 @@ async def list_models():
     finally:
         try:
             await client.close()
-        except Exception:
-            pass
-
-
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
 def _is_embedding_model(m) -> bool:
     """Embedding-only models cannot be text-optimized (excluded from Optimize)."""
     mid = (getattr(m, "id", "") or "").lower()
@@ -486,10 +482,8 @@ async def _read_inventory() -> tuple[list, str | None]:
     finally:
         try:
             await client.close()
-        except Exception:
-            pass
-
-
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
 @router.get("/stats", response_model=StatsResponse)
 async def get_stats():
     """Dashboard quick-stats with documented, tested meanings."""
@@ -580,8 +574,8 @@ async def start_optimization(request: OptimizationRequest, background_tasks: Bac
         except UnloadNotClean as e:
             try:
                 await client.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
             raise HTTPException(status_code=409, detail=str(e)[:300])
 
         # Get hardware
@@ -628,8 +622,8 @@ async def start_optimization(request: OptimizationRequest, background_tasks: Bac
             except ValueError as e:
                 try:
                     await client.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log_best_effort("best-effort operation failed", exc)
                 raise HTTPException(status_code=422, detail=str(e)[:300]) from None
 
         # Create services from one typed settings boundary. The factory keeps
@@ -657,8 +651,8 @@ async def start_optimization(request: OptimizationRequest, background_tasks: Bac
         except Exception as e:
             try:
                 await client.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
             raise HTTPException(status_code=500, detail=f"Could not start run: {str(e)[:200]}")
 
         _current_optimizer = optimizer
@@ -678,8 +672,8 @@ async def start_optimization(request: OptimizationRequest, background_tasks: Bac
         # Start failed after the lock was claimed: never leak it.
         try:
             release_lock()
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         raise
 
     return _convert_run(run, config_count=0, stale=False)
@@ -704,31 +698,29 @@ async def run_optimization_task(
             from lm_optimizer.api.websocket import broadcast_complete
 
             await broadcast_complete(run.id, {"status": run.status.value, "stage": run.stage.value})
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
     except asyncio.CancelledError:
         try:
             if optimizer.state is not None:
                 optimizer.checkpoint_now(reason="task-cancelled")
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
     except Exception as e:
         logger.error("Optimization task failed", error=str(e))
         try:
             if optimizer.state is not None:
                 optimizer.checkpoint_now(reason="task-failed")
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
     finally:
         global _current_optimizer, _current_run_id
         _current_optimizer = None
         _current_run_id = None
         try:
             release_lock()
-        except Exception:
-            pass
-
-
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
 @router.post("/optimize/{run_id}/pause")
 async def pause_optimization(run_id: UUID):
     """Pause current optimization."""
@@ -872,8 +864,8 @@ async def resume_run_from_checkpoint(run_id: UUID, background_tasks: BackgroundT
     except Exception:
         try:
             release_lock()
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         raise
     completed = len(ckpt.get("completed_candidate_ids", []))
     return {"success": True, "run_id": str(run_id), "completed": completed}
@@ -892,10 +884,8 @@ async def resume_run_task(optimizer: AdaptiveOptimizer, run_id: UUID):
         _current_optimizer = None
         try:
             release_lock()
-        except Exception:
-            pass
-
-
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
 @router.get("/checkpoints")
 async def list_checkpoints():
     """List interrupt checkpoints."""
@@ -1075,8 +1065,8 @@ def _enrich_config_detail(conv: dict, config, model_id: str) -> dict:
                         try:
                             if q.details.get("thinking_outside_json"):
                                 m["thinking_outside_json"] = True
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            log_best_effort("best-effort operation failed", exc)
                 src = next((x for x in (config.metrics or []) if x.test_name == name), None)
                 if src is not None:
                     if getattr(src, "thinking_text", ""):
@@ -1158,8 +1148,8 @@ async def get_configuration(run_id: UUID, config_id: UUID):
         run = run_repo.get(str(run_id))
         if run is not None and getattr(run, "model", None) is not None:
             model_id = run.model.id or ""
-    except Exception:
-        pass
+    except Exception as exc:
+        log_best_effort("best-effort operation failed", exc)
     return _enrich_config_detail(conv.model_dump(), config, model_id)
 
 
@@ -1203,10 +1193,8 @@ async def apply_configuration(request: ApplyConfigRequest):
     finally:
         try:
             await client.close()
-        except Exception:
-            pass
-
-
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
 @router.post("/restore/{model_id}")
 async def restore_previous(model_id: str):
     """Restore previous model configuration."""
@@ -1505,8 +1493,8 @@ async def save_lmstudio_default(run_id: UUID, dry_run: bool = False, verify: boo
                 try:
                     if hasattr(client, "close"):
                         await client.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log_best_effort("best-effort operation failed", exc)
             payload["verification"] = verification
 
     return payload
@@ -1658,8 +1646,8 @@ async def _run_compare_task(compare_id: str, request: CompareRequest) -> None:
         finally:
             try:
                 await client.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
     except Exception as e:
         _compare_jobs[compare_id] = {
             "status": "failed",
@@ -1691,9 +1679,8 @@ async def start_sandbox(request: SandboxRequest, background_tasks: BackgroundTas
     finally:
         try:
             await client.close()
-        except Exception:
-            pass
-
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
     job_id = uuid.uuid4().hex[:12]
     _sandbox_jobs[job_id] = {"status": "running", "kind": request.kind.value, "result": None, "error": None}
     try:
@@ -1797,8 +1784,8 @@ async def delete_duel(job_id: str):
 
     try:
         shutil.rmtree(_duel_files_dir(job_id), ignore_errors=True)
-    except Exception:
-        pass
+    except Exception as exc:
+        log_best_effort("best-effort operation failed", exc)
     try:
         gone = duel_repo.delete(job_id)
     except Exception as e:
@@ -1834,8 +1821,8 @@ async def delete_run(run_id: UUID):
         from lm_optimizer.storage.run_checkpoint import remove_checkpoint as _rm
 
         _rm(str(run_id))
-    except Exception:
-        pass
+    except Exception as exc:
+        log_best_effort("best-effort operation failed", exc)
     return {"success": True, "id": str(run_id)}
 
 
@@ -1937,8 +1924,8 @@ async def _run_sandbox_task(job_id: str, request: SandboxRequest) -> None:
         finally:
             try:
                 await client.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
     except Exception as e:
         err = f"{type(e).__name__}: {e}"[:300]
         _sandbox_jobs[job_id] = {
@@ -2331,10 +2318,8 @@ async def _run_sandbox_job(job_id: str, task_id: str, model: str) -> None:
         if client is not None:
             try:
                 await client.close()
-            except Exception:
-                pass
-
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
 #: In-memory sandbox jobs (same lifetime semantics as the judge jobs).
 _sandbox_jobs: dict[str, dict] = {}
 
@@ -2574,8 +2559,8 @@ async def verify_ollama_default(run_id: UUID):
         try:
             if hasattr(client, "close"):
                 await client.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
     return result
 
 

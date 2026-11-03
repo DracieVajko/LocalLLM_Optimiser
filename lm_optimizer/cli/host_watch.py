@@ -16,6 +16,7 @@ from lm_optimizer.services.foreign_watchdog import (
     ForeignModelWatchdog,
     build_watchdog,
 )
+from lm_optimizer.services.best_effort import log_best_effort
 
 logger = get_logger(__name__)
 console = Console()
@@ -114,8 +115,8 @@ def host_watch(
         finally:
             try:
                 await client.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
         return {
             "checked_at": report.checked_at.isoformat(),
             "backend": report.backend,

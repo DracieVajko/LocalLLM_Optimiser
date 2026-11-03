@@ -60,6 +60,7 @@ from lm_optimizer.services.unload_guard import UnloadNotClean, assert_unloaded
 from lm_optimizer.services.optimizer import AdaptiveOptimizer
 from lm_optimizer.services.quality import QualityConfig, QualityEvaluator
 from lm_optimizer.services.search_space import SearchSpaceGenerator
+from lm_optimizer.services.best_effort import log_best_effort
 
 app = typer.Typer(
     name="lm-optimizer",
@@ -374,8 +375,8 @@ def _host_info_dict(hardware, note: str | None = None) -> dict:
         ver = _version_info()
         info["version"] = ver["lms"]
         info["backend"] = ver["backend"]
-    except Exception:
-        pass
+    except Exception as exc:
+        log_best_effort("best-effort operation failed", exc)
     if note:
         info["note"] = note
     return info
@@ -389,8 +390,8 @@ def _version_info() -> dict:
     backend = "unknown"
     try:
         backend = lms_cli.runtime_survey().get("engine") or "unknown"
-    except Exception:
-        pass
+    except Exception as exc:
+        log_best_effort("best-effort operation failed", exc)
     return {"lms": lms_cli.lms_version(), "backend": backend}
 
 
@@ -1131,8 +1132,8 @@ def manual_memory_duel(
 
             try:
                 await client.ensure_unloaded(model)
-            except Exception:
-                pass
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
             try:
                 await assert_unloaded(
                     client, purpose=f"manual-memory-duel:{model}:{stage}:post"
@@ -1715,9 +1716,8 @@ def optimize(
                 holder = _read_holder(_lock_path())
                 if holder and _holder_alive(holder):
                     holder_dead = False
-            except Exception:
-                pass
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
             if holder_dead:
                 recon = reconcile_stale_runs(
                     dry_run=True, model_id=model, is_fresh=lambda rid, now: False
@@ -3227,8 +3227,8 @@ def auto(
                 finally:
                     try:
                         await client.ensure_unloaded(m.id)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        log_best_effort("best-effort operation failed", exc)
                 # Fail-closed boundary: the next model must never inherit a
                 # dirty host (two models sharing the GPU invalidates speeds).
                 try:
@@ -3294,8 +3294,8 @@ def auto(
         finally:
             try:
                 await client.unload_all()
-            except Exception:
-                pass
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
             await client.close()
 
     _acquire_run_lock("auto")
@@ -3403,8 +3403,8 @@ def fit(
                 finally:
                     try:
                         await client.ensure_unloaded(m.id)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        log_best_effort("best-effort operation failed", exc)
                 # Fail-closed boundary (see auto loop): never ladder the next
                 # model on a dirty host.
                 try:
@@ -3420,8 +3420,8 @@ def fit(
         finally:
             try:
                 await client.unload_all()
-            except Exception:
-                pass
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
             await client.close()
 
     _acquire_run_lock("fit")
@@ -3721,9 +3721,8 @@ def ctx(
                         finally:
                             try:
                                 await svc.ensure_unloaded(model)
-                            except Exception:
-                                pass
-
+                            except Exception as exc:
+                                log_best_effort("best-effort operation failed", exc)
             if quality_rungs > 0:
                 if not 0 <= warmup_runs <= 5:
                     console.print("[red]Invalid --warmup-runs (0-5)[/red]")
@@ -3750,8 +3749,8 @@ def ctx(
                 console.print(f"[red]Done, but host not clean:[/red] {e}")
                 try:
                     await client.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log_best_effort("best-effort operation failed", exc)
                 sys.exit(1)
             await client.close()
 
@@ -4155,8 +4154,8 @@ def _resolve_run_id(prefix: str) -> str | None:
     try:
         if load_checkpoint(prefix) is not None:
             return prefix
-    except Exception:
-        pass
+    except Exception as exc:
+        log_best_effort("best-effort operation failed", exc)
     try:
         matches = sorted(
             _Path(str(checkpoint_dir())).glob(f"run_{prefix}*.json"), key=lambda p: p.name
@@ -4164,8 +4163,8 @@ def _resolve_run_id(prefix: str) -> str | None:
         if len(matches) == 1:
             stem = matches[0].stem
             return stem[4:] if stem.startswith("run_") else stem
-    except Exception:
-        pass
+    except Exception as exc:
+        log_best_effort("best-effort operation failed", exc)
     return None
 
 
@@ -4903,8 +4902,8 @@ def _display_optimization_result(run):
                 f"{_med:.1f} tok/s median of {len(_same)} "
                 f"(stored repeat {best.get_avg_generation_tok_s():.1f})",
             )
-    except Exception:
-        pass
+    except Exception as exc:
+        log_best_effort("best-effort operation failed", exc)
     console.print(rec)
 
     ctx_speed = (best.generation or {}).get("context_speed")
@@ -4973,9 +4972,8 @@ def _display_optimization_result(run):
                 f"{_slowest_cfg.get_avg_generation_tok_s():.1f} tok/s "
                 f"(ctx {_slowest_cfg.context_length}).[/dim]"
             )
-    except Exception:
-        pass
-
+    except Exception as exc:
+        log_best_effort("best-effort operation failed", exc)
     # Metrics with baseline comparison (percentage changes from actual measurements)
     metrics_table = Table(title="Performance Metrics")
     metrics_table.add_column("Metric", style="cyan")

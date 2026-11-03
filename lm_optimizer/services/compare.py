@@ -10,6 +10,7 @@ from pathlib import Path
 
 from lm_optimizer.domain.models import BenchmarkCase, ConfigurationResult, LoadConfiguration
 from lm_optimizer.logging_config import get_logger
+from lm_optimizer.services.best_effort import log_best_effort
 
 logger = get_logger(__name__)
 
@@ -248,8 +249,8 @@ async def run_ab_compare(
                 gen["phase"] = "compare"
                 gen["compare_side"] = tag
                 out.generation = gen
-            except Exception:
-                pass
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
             ok = out.status not in ("failed", "error") and not out.error
             # A load failure still yields ok=False with preserved error text.
             if tag == "A":
@@ -290,9 +291,8 @@ async def run_ab_compare(
                     res.quality_a = round(agg.overall, 3)
                 else:
                     res.quality_b = round(agg.overall, 3)
-            except Exception:
-                pass
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
     if res.side_a_ok and res.side_b_ok:
         res.speed_winner = _band_winner(res.speed_a, res.speed_b)
         if res.quality_a is not None and res.quality_b is not None:

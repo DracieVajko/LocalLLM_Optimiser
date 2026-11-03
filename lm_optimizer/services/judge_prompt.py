@@ -2,6 +2,7 @@
 
 import json
 from dataclasses import dataclass
+from lm_optimizer.services.best_effort import log_best_effort
 
 
 @dataclass
@@ -231,8 +232,8 @@ class PromptBuilder:
                     if isinstance(v, (int, float)):
                         parts.append(f"{k}:{v:.2f}")
                 return ", ".join(parts)[:50]
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         return "—"
 
     @classmethod
@@ -253,9 +254,8 @@ class PromptBuilder:
             runtime = {}
             try:
                 runtime = json.loads(cfg.get("config_json") or "{}")
-            except Exception:
-                pass
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
             gpu = runtime.get("gpu_ratio", "?")
             batch = runtime.get("eval_batch_size", "?")
             flash = runtime.get("flash_attention", "?")
@@ -273,9 +273,8 @@ class PromptBuilder:
             by_test = {}
             try:
                 by_test = json.loads(cfg.get("quality_json") or "{}").get("by_test", {})
-            except Exception:
-                pass
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
             stab = cfg.get("stability_score", 0)
             vram = cfg.get("peak_vram_gb", 0)
 
@@ -289,9 +288,8 @@ class PromptBuilder:
                         prompt_text = (m.get("prompt_text") or "—")[:500]
                         output_text = (m.get("output_text") or "—")[:500]
                         break
-            except Exception:
-                pass
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
             parts.append(f"### Config {cfg_id} ({model})")
             parts.append(f"- Runtime: gpu={gpu}, batch={batch}, flash={flash}, kv={kv}, parallel={parallel}, checkpoints={checkpoints}")
             parts.append(f"- Metrics: gen_tok_s={gen_tok:.2f}, prompt_tok_s={prompt_tok:.0f}, ttft_ms={ttft:.0f}")
@@ -348,8 +346,8 @@ class PromptBuilder:
                 by_test = {}
                 try:
                     by_test = json.loads(cfg.get("quality_json") or "{}").get("by_test", {})
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log_best_effort("best-effort operation failed", exc)
                 coding = by_test.get("coding_task", "—")
                 structured = by_test.get("structured_output", "—")
                 med_reas = by_test.get("medium_reasoning", "—")

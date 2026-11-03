@@ -42,6 +42,7 @@ from lm_optimizer.services.quality_lab import (
     default_tasks,
     run_task_with_seeds,
 )
+from lm_optimizer.services.best_effort import log_best_effort
 
 logger = get_logger(__name__)
 console = Console()
@@ -232,9 +233,8 @@ def context_explorer(
                             console.print(f"[yellow]retrieval failed: {e}[/yellow]")
                         try:
                             await svc.ensure_unloaded(model)
-                        except Exception:
-                            pass
-
+                        except Exception as exc:
+                            log_best_effort("best-effort operation failed", exc)
             report = build_report(points, min_tps=min_tps)
             console.print("")
             console.print(format_report(report, model))
@@ -246,9 +246,8 @@ def context_explorer(
         finally:
             try:
                 await client.close()
-            except Exception:
-                pass
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
     import asyncio
 
     asyncio.run(_run())
@@ -332,9 +331,8 @@ def quality_lab(
         finally:
             try:
                 await client.close()
-            except Exception:
-                pass
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
     import asyncio
 
     asyncio.run(_run())
@@ -723,13 +721,13 @@ def duel(
                 # (only one model fits into the VRAM at a time).
                 try:
                     await svc.ensure_unloaded(side.model_id)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log_best_effort("best-effort operation failed", exc)
         finally:
             try:
                 await client.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
         return results
 
     async def _runner(side, task_id):
@@ -803,9 +801,8 @@ def sandbox(
         finally:
             try:
                 await client.close()
-            except Exception:
-                pass
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
     import asyncio
 
     result = asyncio.run(runner.run_async(_generate))
@@ -975,9 +972,8 @@ def hash_all():
         finally:
             try:
                 await client.close()
-            except Exception:
-                pass
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
     ids = _asyncio.run(_list())
     results = hash_all_models(ids)
     for result in results:
@@ -1288,9 +1284,8 @@ def verify_default(
                 close = getattr(client, "close", None)
                 if close is not None:
                     await close()
-            except Exception:
-                pass
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
     result = asyncio.run(_run())
     _print_verify_result(result)
 

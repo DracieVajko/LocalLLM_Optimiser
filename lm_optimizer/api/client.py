@@ -22,6 +22,7 @@ from tenacity import (
 
 from lm_optimizer.config import config
 from lm_optimizer.logging_config import get_logger
+from lm_optimizer.services.best_effort import log_best_effort
 
 logger = get_logger(__name__)
 
@@ -497,14 +498,13 @@ class LMStudioClient:
             if identifier:
                 try:
                     await self.unload_model(identifier=identifier)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log_best_effort("best-effort operation failed", exc)
             elif smallest is not None:
                 try:
                     await self.unload_model(model_id=smallest.id)
-                except Exception:
-                    pass
-
+                except Exception as exc:
+                    log_best_effort("best-effort operation failed", exc)
     async def _request_with_retry(
         self,
         method: str,

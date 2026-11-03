@@ -18,6 +18,7 @@ from lm_optimizer.domain.models import (
 )
 from lm_optimizer.logging_config import get_logger
 from lm_optimizer.services.lm_studio import LMStudioClient
+from lm_optimizer.services.best_effort import log_best_effort
 
 logger = get_logger(__name__)
 
@@ -67,15 +68,15 @@ def _sample_mem() -> dict:
             if primary:
                 out["vram_free_mb"] = float(primary["free_mb"])
                 out["vram_total_mb"] = float(primary["total_mb"])
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         try:
             mem = mem_free_gb() or {}
             if "ram_free_gb" in mem:
                 out["ram_free_gb"] = float(mem["ram_free_gb"])
                 out["ram_total_gb"] = float(mem["total_ram_gb"])
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         return out
     except Exception:
         return {}
@@ -725,8 +726,8 @@ class BenchmarkService:
                                 load_config,
                                 metrics,
                             )
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            log_best_effort("best-effort operation failed", exc)
                     all_metrics.append(metrics)
 
             # Peak memory from before/after snapshots (real measurement;
@@ -863,9 +864,8 @@ class BenchmarkService:
         finally:
             try:
                 await self.client.ensure_unloaded(model_id)
-            except Exception:
-                pass
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
     @staticmethod
     def _extract_response(response: dict) -> tuple[dict, str, dict]:
         """Split a converted chat dict into (usage, output_text, stats)."""

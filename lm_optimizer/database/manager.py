@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from lm_optimizer.config import config
+from lm_optimizer.services.best_effort import log_best_effort
 
 
 class DatabaseManager:
@@ -26,8 +27,8 @@ class DatabaseManager:
                     import shutil
 
                     shutil.copy2(legacy, new_path)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log_best_effort("best-effort operation failed", exc)
             self.db_path = new_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_database()
@@ -299,9 +300,8 @@ class DatabaseManager:
         ]:
             try:
                 conn.execute(f"ALTER TABLE configurations ADD COLUMN {col} {ddl}")
-            except Exception:
-                pass
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
         # Add checks fields to quality_results
         for col, ddl in [
             ("checks_passed", "INTEGER"),
@@ -309,15 +309,13 @@ class DatabaseManager:
         ]:
             try:
                 conn.execute(f"ALTER TABLE quality_results ADD COLUMN {col} {ddl}")
-            except Exception:
-                pass
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
         # Also update benchmarks ttft to estimated_ttft for clarity (keep old column)
         try:
             conn.execute("ALTER TABLE benchmarks ADD COLUMN estimated_ttft_ms REAL")
-        except Exception:
-            pass
-
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
     def _migration_007_benchmark_params(self, conn: sqlite3.Connection) -> None:
         """Ensure benchmark params are stored - no-op if migration 006 covered."""
         pass
@@ -330,9 +328,8 @@ class DatabaseManager:
         ]:
             try:
                 conn.execute(f"ALTER TABLE runs ADD COLUMN {col} {ddl}")
-            except Exception:
-                pass
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
     def _migration_009_capability_snapshots(self, conn: sqlite3.Connection) -> None:
         """Per-run parameter registry snapshot (source + status per parameter)."""
         conn.execute("""

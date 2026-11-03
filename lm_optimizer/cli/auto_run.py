@@ -35,6 +35,7 @@ from lm_optimizer.services.search_space import SearchSpaceGenerator
 from lm_optimizer.services.version_identity import VersionIdentity, lms_identity
 from lm_optimizer.services import lms_cli as _lms_cli
 from lm_optimizer.benchmark.suite_version import BENCHMARK_SUITE_VERSION
+from lm_optimizer.services.best_effort import log_best_effort
 
 logger = get_logger(__name__)
 console = Console()
@@ -608,9 +609,8 @@ def _auto_run_body(
         finally:
             try:
                 await client.close()
-            except Exception:
-                pass
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
     try:
         lm_models = asyncio.run(_discover())
     except Exception as e:

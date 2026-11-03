@@ -12,6 +12,7 @@ from lm_optimizer.api.routes import router as api_router
 from lm_optimizer.api.websocket import ws_router
 from lm_optimizer.config import config
 from lm_optimizer.logging_config import get_logger, setup_logging
+from lm_optimizer.services.best_effort import log_best_effort
 
 logger = get_logger(__name__)
 
@@ -238,8 +239,8 @@ async def config_json_page(request: Request, run_id: str, config_id: str):
         run = run_repo.get(str(run_id))
         if run is not None and getattr(run, "model", None) is not None:
             model_id = run.model.id or ""
-    except Exception:
-        pass
+    except Exception as exc:
+        log_best_effort("best-effort operation failed", exc)
     conv = _convert_config_result(config)
     enriched = _enrich_config_detail(conv.model_dump(mode="json"), config, model_id)
     payload = _json.dumps(enriched, indent=1, ensure_ascii=False, default=str)

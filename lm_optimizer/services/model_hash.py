@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from lm_optimizer.services.best_effort import log_best_effort
 
 #: Cache file (keyed by absolute file path + size + mtime).
 DEFAULT_CACHE = Path("data") / "model_hashes.json"
@@ -111,10 +112,8 @@ def _save_cache(cache_path: Path, cache: dict) -> None:
     try:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         cache_path.write_text(json.dumps(cache, indent=2), encoding="utf-8")
-    except Exception:
-        pass
-
-
+    except Exception as exc:
+        log_best_effort("best-effort operation failed", exc)
 def model_sha256(
     model_id: str,
     cache_path: Path = DEFAULT_CACHE,

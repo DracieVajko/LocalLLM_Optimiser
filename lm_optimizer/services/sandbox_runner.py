@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from lm_optimizer.logging_config import get_logger
+from lm_optimizer.services.best_effort import log_best_effort
 
 logger = get_logger(__name__)
 
@@ -348,8 +349,8 @@ async def run_manual_prompt(
     try:
         try:
             await client.ensure_unloaded(model_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         loaded = await client.load_model(model_id, load_config)
         if not getattr(loaded, "success", False):
             error = f"load failed: {getattr(loaded, 'error', None) or 'unknown'}"
@@ -457,9 +458,8 @@ async def run_sandbox_task(
         # Never stack a second instance of the same model.
         try:
             await client.ensure_unloaded(model_id)
-        except Exception:
-            pass
-
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         loaded = await client.load_model(model_id, load_config)
         if not getattr(loaded, "success", False):
             load_error = getattr(loaded, "error", None) or "load failed"

@@ -19,6 +19,7 @@ from pathlib import Path
 
 from lm_optimizer.domain.models import LoadConfiguration
 from lm_optimizer.logging_config import get_logger
+from lm_optimizer.services.best_effort import log_best_effort
 
 logger = get_logger(__name__)
 
@@ -136,8 +137,8 @@ async def _run_side(
         finally:
             try:
                 await client.ensure_unloaded(model_id)
-            except Exception:
-                pass
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
     except Exception as e:
         side.error = f"{type(e).__name__}: {e}"[:300]
     finally:

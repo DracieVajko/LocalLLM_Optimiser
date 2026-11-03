@@ -50,6 +50,7 @@ from lm_optimizer.services.fingerprint import (
 from lm_optimizer.services.lm_studio import LMStudioClient
 from lm_optimizer.services.quality import QualityEvaluator
 from lm_optimizer.services.search_space import SearchSpace, SearchSpaceGenerator
+from lm_optimizer.services.best_effort import log_best_effort
 
 logger = get_logger(__name__)
 
@@ -410,8 +411,8 @@ def parse_phase_skips(value) -> set[str]:
         import typer.models as _tm
         if isinstance(value, _tm.OptionInfo):
             value = getattr(value, "default", None)
-    except Exception:
-        pass
+    except Exception as exc:
+        log_best_effort("best-effort operation failed", exc)
     if value is None:
         return set()
     if isinstance(value, str):
@@ -851,9 +852,8 @@ class AdaptiveOptimizer:
                 self.quality, "config", None
             ) is not None:
                 self.quality.config.minimum_score = quality_threshold
-        except Exception:
-            pass
-
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         # Resolve profile weights
         resolved_weights = profile_weights or DEFAULT_PROFILE_WEIGHTS.get(profile)
         if resolved_weights:
@@ -992,9 +992,8 @@ class AdaptiveOptimizer:
         lms_version = "unknown"
         try:
             lms_version = _lms_cli.lms_version()
-        except Exception:
-            pass
-
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         hw_fp = hardware_fingerprint(hardware)
         fp_components = {
             "model_id": model.id,
@@ -1130,9 +1129,8 @@ class AdaptiveOptimizer:
                 return
             cb(self.state.run.stage.value, len(self.state.tested_configs),
                _display_total(self.state))
-        except Exception:
-            pass
-
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
     def _log_event(self, message: str, detail: str = "") -> None:
         """Append a compact live-log event (no verbose internals)."""
         try:
@@ -1145,8 +1143,8 @@ class AdaptiveOptimizer:
                 self.state.event_log.append(entry)
                 if len(self.state.event_log) > 200:
                     self.state.event_log = self.state.event_log[-200:]
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         logger.info(message, detail=detail)
 
     async def _broadcast(self, extra: dict) -> None:
@@ -1195,8 +1193,8 @@ class AdaptiveOptimizer:
                 **extra,
             }
             await broadcast_progress(st.run.id, payload)
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         self._report_progress()
 
     def _checkpoint(self, reason: str = "periodic") -> None:
@@ -1207,9 +1205,8 @@ class AdaptiveOptimizer:
                 self.state.checkpoint_seq = int(getattr(self.state, "checkpoint_seq", 0) or 0) + 1
                 self._sync_phase_params()
                 _save_ckpt(self.state, reason=reason)
-        except Exception:
-            pass
-
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
     # ---------- host guard: foreign model loads ----------
 
     def _host_guard(self) -> "ForeignModelWatchdog | None":
@@ -1287,8 +1284,8 @@ class AdaptiveOptimizer:
                     self.state.event_log = self.state.event_log[-200:]
                 if self.state.errors is not None:
                     self.state.errors = self.state.errors[-50:]
-            except Exception:
-                pass
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
         return out
 
     def checkpoint_now(self, reason: str = "manual") -> None:
@@ -1297,9 +1294,8 @@ class AdaptiveOptimizer:
         try:
             if self.state is not None:
                 run_repo.save(self.state.run)
-        except Exception:
-            pass
-
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
     async def _resolve_baseline(
         self, model: ModelIdentity, baseline_config: LoadConfiguration | None
     ) -> LoadConfiguration | None:
@@ -1361,9 +1357,8 @@ class AdaptiveOptimizer:
             quality_scores = self.quality.evaluate_all(self.state.run.model.id, result.metrics)
             agg_quality = self.quality.aggregate_quality(quality_scores)
             result.quality_score = agg_quality
-        except Exception:
-            pass
-
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         # Score baseline with current weights (will be recomputed later)
         result.run_id = self.state.run.id
         config_repo.save(result)
@@ -1886,9 +1881,8 @@ class AdaptiveOptimizer:
         try:
             agg = measured.get("aggregate_tok_s", 0.0)
             self._log_event(f"Measured aggregate {agg} tok/s", f"parallel={parallel}")
-        except Exception:
-            pass
-
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
     async def _stage_validation(self) -> None:
         """Stage 5: Final validation with multiple runs."""
         logger.info("Stage 5: Final validation")
@@ -2001,9 +1995,8 @@ class AdaptiveOptimizer:
         self.state.flash_required = False
         try:
             settings_repo.set(self.FLASH_REQUIRED_SETTING, "0", "flash-off served")
-        except Exception:
-            pass
-
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
     def _check_rope_quality(self, breakdown: dict) -> None:
         """Experimental RoPE guard: never claim faster-is-better below 0.98."""
         if self.state.run.is_experimental and breakdown.get("quality", 1.0) < 0.98:
@@ -2077,8 +2070,8 @@ class AdaptiveOptimizer:
         def _stamp(res: ConfigurationResult) -> ConfigurationResult:
             try:
                 res.duration_ms = (time.perf_counter() - t0) * 1000.0
-            except Exception:
-                pass
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
             return res
 
         try:
@@ -2097,9 +2090,8 @@ class AdaptiveOptimizer:
             result.run_id = self.state.run.id
             try:
                 self.state.current_config_id = result.id
-            except Exception:
-                pass
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
             # Phase gate: only a passed benchmark may continue. Failed loads
             # MUST NOT receive metrics evaluation, quality, score or Pareto.
             if result.status != "passed":
@@ -2258,8 +2250,8 @@ class AdaptiveOptimizer:
             self._log_event("Candidate failed", str(e)[:120])
             try:
                 await self.client.ensure_unloaded(self.state.run.model.id)
-            except Exception:
-                pass
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
             failed = ConfigurationResult(
                 config=load_config,
                 context_length=context_length,
@@ -2271,8 +2263,8 @@ class AdaptiveOptimizer:
             failed.score = None
             try:
                 failed.run_id = self.state.run.id
-            except Exception:
-                pass
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
             _stamp(failed)
             try:
                 config_repo.save(failed)
@@ -2384,8 +2376,8 @@ class AdaptiveOptimizer:
                     r.score_breakdown = None
                     try:
                         config_repo.save(r)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        log_best_effort("best-effort operation failed", exc)
                     continue
                 weights = self._phase_weights()
                 breakdown = score_result_breakdown(
@@ -2617,9 +2609,8 @@ class AdaptiveOptimizer:
                 "phase_b_result": self.state.phase_b_result,
             }
             self.state.run.benchmark_params = params
-        except Exception:
-            pass
-
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
     def _speed_caps(self):
         """Capability gates for the speed plan (registry-backed, R1)."""
         from lm_optimizer.services.speed_search import SpeedCaps
@@ -2645,8 +2636,8 @@ class AdaptiveOptimizer:
         advanced = {}
         try:
             advanced = (self.state.run.benchmark_params or {})
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         return SpeedCaps(
             rest_keys=frozenset(rest),
             gpu_via_cli=bool(getattr(self.benchmark, "gpu_via_cli", False)),
@@ -2721,8 +2712,8 @@ class AdaptiveOptimizer:
         model = flag
         try:
             self.benchmark.last_unverified_unload = None
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         self._log_event(
             "UNLOAD_UNVERIFIED",
             f"model={model} unload could not be verified; stopping before "
@@ -2733,8 +2724,8 @@ class AdaptiveOptimizer:
                 f"unload_not_verified: {model} still occupying memory; "
                 "refusing further memory-heavy loads"
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         self.cancel()
         return True
 
@@ -2747,8 +2738,8 @@ class AdaptiveOptimizer:
         result.run_id = self.state.run.id
         try:
             self.state.current_config_id = result.id
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         gen = dict(result.generation or {})
         gen["stage"] = self.state.run.stage.value
         gen["phase"] = OptimizationPhase.SPEED.value
@@ -3191,8 +3182,8 @@ class AdaptiveOptimizer:
             if result.quality_score is not None:
                 try:
                     result.quality_score.details["quality_lab"] = lab
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log_best_effort("best-effort operation failed", exc)
             if lab.get("hard_gate_failures"):
                 result.status = ConfigurationStatus.QUALITY_FAILED
                 self._log_event(
@@ -3536,8 +3527,8 @@ class AdaptiveOptimizer:
             from datetime import datetime as _dt
 
             cur["updated_at"] = _dt.now().isoformat(timespec="seconds")
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         self.state.recovery_cursor = cur
         self._sync_phase_params()
         try:
@@ -4104,9 +4095,8 @@ class AdaptiveOptimizer:
                         else 0
                     )
                 self.state.run.baseline_metrics["changes_vs_baseline"] = changes
-            except Exception:
-                pass
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
         # Explicit terminal state: SUCCESS / PARTIAL_SUCCESS / FAILED.
         # If speed floor enforced and not met, use a special status
         if enforce_floor and not speed_floor_met:
@@ -4202,8 +4192,8 @@ class AdaptiveOptimizer:
         try:
             if not await self.client.ensure_unloaded(run.model.id):
                 logger.warning("Model may still be loaded after pause", model=run.model.id)
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         run.status = RunStatus.PAUSED
         run.stage = OptimizationStage.PAUSED
         try:
@@ -4212,15 +4202,15 @@ class AdaptiveOptimizer:
             logger.error("Pause status save failed", error=str(e))
         try:
             await self._broadcast({"stage": "paused", "event": "paused"})
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         self.state.should_pause = False
         try:
             flag = self._pause_flag_path()
             if flag is not None and flag.exists():
                 flag.unlink()
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         self._log_event("Paused", reason)
         raise PauseRequested(reason)
 
@@ -4236,20 +4226,19 @@ class AdaptiveOptimizer:
                         _signal.SIGINT,
                         getattr(self, "_pause_prev_handler", _signal.default_int_handler),
                     )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log_best_effort("best-effort operation failed", exc)
                 raise KeyboardInterrupt()
             self._pause_second_signal = True
             try:
                 if self.state is not None:
                     self.state.should_pause = True
-            except Exception:
-                pass
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
             try:
                 self._log_event("Pause requested (SIGINT)", "finishing current operation")
-            except Exception:
-                pass
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
         return _handler
 
     def _install_pause_handler(self) -> None:
@@ -4267,8 +4256,8 @@ class AdaptiveOptimizer:
         """Return path for graceful pause (state already persisted)."""
         try:
             run_repo.save(run)
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         await self._broadcast({"stage": "paused", "event": "paused"})
         return run
 
@@ -4280,13 +4269,12 @@ class AdaptiveOptimizer:
             prev = getattr(self, "_pause_prev_handler", None)
             if prev is not None:
                 _signal.signal(_signal.SIGINT, prev)
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         try:
             self._pause_second_signal = False
-        except Exception:
-            pass
-
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
     def resume(self) -> None:
         """Resume optimization."""
         if self.state:
@@ -4360,9 +4348,8 @@ class AdaptiveOptimizer:
             lms_version = "unknown"
             try:
                 lms_version = _lms_cli.lms_version()
-            except Exception:
-                pass
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
             hw_fp = hardware_fingerprint(hw) if hw else "unknown"
             current_fp = fingerprint_components or {
                 "model_id": full.model.id,
@@ -4428,8 +4415,8 @@ class AdaptiveOptimizer:
                 del _pab["pause"]
                 _params["phase_ab"] = _pab
                 self.state.run.benchmark_params = _params
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         self.state.started_at = datetime.now()
         self.state.run.status = RunStatus.RESUMED
         self.state.run.stage = OptimizationStage.DISCOVERY
@@ -4464,8 +4451,8 @@ class AdaptiveOptimizer:
             flag = self._pause_flag_path(run_id)
             if flag is not None and flag.exists():
                 flag.unlink()
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         self._install_pause_handler()
 
         # Legacy runs (no phase_ab record in the persisted run) resume
@@ -4652,8 +4639,8 @@ class AdaptiveOptimizer:
         )
         try:
             run_repo.save(self.state.run)
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         return {"recovery_log": merged_log, "recovery_cursor": merged_cursor}
 
     def _reconcile_phase_and_winner(self, full: Any, ckpt: dict) -> None:

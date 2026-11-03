@@ -22,6 +22,7 @@ import orjson
 
 from lm_optimizer.config import config
 from lm_optimizer.logging_config import get_logger
+from lm_optimizer.services.best_effort import log_best_effort
 
 logger = get_logger(__name__)
 
@@ -353,8 +354,8 @@ def list_checkpoints() -> list[dict]:
                 )
             except Exception:
                 out.append({"run_id": p.stem.replace("run_", ""), "corrupted": True})
-    except Exception:
-        pass
+    except Exception as exc:
+        log_best_effort("best-effort operation failed", exc)
     return out
 
 

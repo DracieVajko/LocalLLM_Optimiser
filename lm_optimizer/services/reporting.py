@@ -7,6 +7,7 @@ from typing import Any
 
 from lm_optimizer.domain.models import OptimizationRun, RunStatus
 from lm_optimizer.logging_config import get_logger
+from lm_optimizer.services.best_effort import log_best_effort
 
 logger = get_logger(__name__)
 
@@ -276,8 +277,8 @@ def save_failed_report(
             qs = c.quality_score
             if qs and qs.checks_total:
                 return f"{qs.checks_passed}/{qs.checks_total}"
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         return "—"
 
     lines = [
@@ -355,8 +356,8 @@ def save_failed_report(
         try:
             for m in closest.metrics or []:
                 by_name[m.test_name] = m
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         if not failed_names:
             lines.append("_No fully-failed tests; closest config failed on aggregate._")
         for name in sorted(failed_names):

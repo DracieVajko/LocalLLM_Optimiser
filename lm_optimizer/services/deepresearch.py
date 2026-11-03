@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
+from lm_optimizer.services.best_effort import log_best_effort
 
 logger = logging.getLogger(__name__)
 
@@ -227,10 +228,8 @@ async def run_model_on_queries(config: DeepResearchConfig, lm_studio_url: str) -
         # Unload model
         try:
             await client.post("/api/v1/models/unload", json={"model": config.model_name})
-        except Exception:
-            pass
-
-
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
 async def run_race_evaluation(config: DeepResearchConfig) -> bool:
     """Run the RACE evaluation pipeline."""
     logger.info("Starting RACE evaluation")

@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from lm_optimizer.domain.models import OptimizationRun, RunStatus
+from lm_optimizer.services.best_effort import log_best_effort
 
 
 def _status_of(c: Any) -> str:
@@ -203,12 +204,12 @@ def why_text(best: Any, baseline_metrics: dict | None, profile: str) -> str:
     parts = [f"profile={profile}"]
     try:
         parts.append(f"gen={best.get_avg_generation_tok_s():.1f} tok/s")
-    except Exception:
-        pass
+    except Exception as exc:
+        log_best_effort("best-effort operation failed", exc)
     try:
         parts.append(f"ctx={best.context_length}")
-    except Exception:
-        pass
+    except Exception as exc:
+        log_best_effort("best-effort operation failed", exc)
     bd = getattr(best, "score_breakdown", None)
     if bd:
         top = sorted(bd.items(), key=lambda kv: kv[1], reverse=True)[:2]
@@ -219,14 +220,14 @@ def why_text(best: Any, baseline_metrics: dict | None, profile: str) -> str:
             cur = best.get_avg_generation_tok_s()
             pct = (cur - base) / base * 100 if base else 0
             parts.append(f"vs-baseline={pct:+.1f}%")
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
     q = getattr(best, "quality_score", None)
     if q is not None:
         try:
             parts.append(f"correctness={q.overall:.3f}")
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
     return "; ".join(parts)
 
 

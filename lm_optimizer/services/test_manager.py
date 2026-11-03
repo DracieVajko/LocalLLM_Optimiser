@@ -8,6 +8,7 @@ optional assistant endpoint — all within this repo, never leaking outside.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from lm_optimizer.services.best_effort import log_best_effort
 
 if TYPE_CHECKING:
     from lm_optimizer.domain.models import ModelInfo
@@ -131,8 +132,8 @@ class TestManager:
                     # Reserve floor (250-500MB) for scheduling; return available above floor.
                     available = max(0, int((vram_gb - 0.375) * 1024 * 1024 * 1024))  # 375MB floor
                     return available
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         return 1024 * 1024 * 1024  # 1 GB placeholder
 
     def can_use_assistant(self) -> bool:

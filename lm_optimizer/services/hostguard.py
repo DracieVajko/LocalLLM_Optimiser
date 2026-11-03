@@ -14,6 +14,7 @@ import time
 from typing import Any
 
 from lm_optimizer.logging_config import get_logger
+from lm_optimizer.services.best_effort import log_best_effort
 
 logger = get_logger(__name__)
 
@@ -169,8 +170,8 @@ def _query_pagefile(_query: str) -> str:
             rows = data if isinstance(data, list) else [data]
             names = [str(r.get("Name", "?")) for r in rows if isinstance(r, dict) and r.get("Name")]
             return ", ".join(names)
-    except Exception:
-        pass
+    except Exception as exc:
+        log_best_effort("best-effort operation failed", exc)
     return ""
 
 

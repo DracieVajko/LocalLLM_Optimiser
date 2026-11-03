@@ -10,6 +10,7 @@ otherwise. Combos identical to each other are never re-run.
 from lm_optimizer.domain.models import BenchmarkCase, LoadConfiguration
 from lm_optimizer.logging_config import get_logger
 from lm_optimizer.services.generation_profiles import profiles_for
+from lm_optimizer.services.best_effort import log_best_effort
 
 logger = get_logger(__name__)
 
@@ -83,8 +84,8 @@ async def run_sampling_sweep(
                 gen["phase"] = "sampling"
                 gen["sampling_profile"] = combo["profile"]
                 out.generation = gen
-            except Exception:
-                pass
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
             ok = out.status not in ("failed", "error") and not out.error
             entry["ok"] = bool(ok)
             entry["tok_s"] = round(out.get_avg_generation_tok_s(), 1) if ok else 0.0

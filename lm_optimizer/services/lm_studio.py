@@ -32,6 +32,7 @@ from lm_optimizer.domain.models import (
     ModelIdentity,
 )
 from lm_optimizer.logging_config import get_logger
+from lm_optimizer.services.best_effort import log_best_effort
 
 logger = get_logger(__name__)
 
@@ -249,8 +250,8 @@ class LMStudioClient:
                     "version": "v1",
                     "load_parameters": sorted(self._capabilities.load_parameters),
                 }
-            except Exception:
-                pass
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
         except Exception as e:
             logger.warning("Failed to detect capabilities, using defaults", error=str(e))
             self._capabilities = LMStudioCapabilities(version="v1")
@@ -353,14 +354,13 @@ class LMStudioClient:
             if identifier:
                 try:
                     await self.unload_model(identifier=identifier)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log_best_effort("best-effort operation failed", exc)
             elif smallest is not None:
                 try:
                     await self.unload_model(model_id=smallest.id)
-                except Exception:
-                    pass
-
+                except Exception as exc:
+                    log_best_effort("best-effort operation failed", exc)
     async def _request_with_retry(
         self,
         method: str,

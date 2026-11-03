@@ -4,6 +4,7 @@ import platform
 import subprocess
 
 import psutil
+from lm_optimizer.services.best_effort import log_best_effort
 
 # WMI is not used; CPU name comes from platform.processor().
 WMI_AVAILABLE = False
@@ -84,8 +85,8 @@ class HardwareDetector:
                     for processor in c.Win32_Processor():
                         cpu_name = processor.Name
                         break
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log_best_effort("best-effort operation failed", exc)
         if not cpu_name:
             cpu_name = platform.machine()
         return cpu_name
@@ -157,9 +158,8 @@ class HardwareDetector:
                                 vendor="AMD",
                             )
                         )
-            except Exception:
-                pass
-
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
         return gpus
 
     def _get_cuda_version(self) -> str | None:
@@ -177,8 +177,8 @@ class HardwareDetector:
                 for line in result.stdout.split("\n"):
                     if "release" in line.lower():
                         return line.split("release")[-1].split(",")[0].strip()
-        except Exception:
-            pass
+        except Exception as exc:
+            log_best_effort("best-effort operation failed", exc)
         return None
 
     def _check_vulkan(self) -> bool:
