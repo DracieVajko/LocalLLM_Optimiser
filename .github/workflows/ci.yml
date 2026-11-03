@@ -18,9 +18,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+      - name: Lock file is current
+        run: uv lock --check
       - name: Install
         run: |
           python -m pip install --upgrade pip
