@@ -50,7 +50,7 @@ from lm_optimizer.domain.models import (
     RunStatus,
 )
 from lm_optimizer.services.advanced_settings import AdvancedSettings
-from lm_optimizer.services.benchmark import build_benchmark_service
+from lm_optimizer.services.optimization_workflow import build_optimizer
 from lm_optimizer.services.hardware import hardware_detector
 from lm_optimizer.services.joblock import JobBusyError, acquire_lock, release_lock
 from lm_optimizer.services.lm_studio import LMStudioClient, create_client
@@ -59,8 +59,6 @@ from pathlib import Path
 from datetime import datetime
 import orjson
 from lm_optimizer.services.optimizer import AdaptiveOptimizer
-from lm_optimizer.services.quality import QualityConfig, QualityEvaluator
-from lm_optimizer.services.search_space import SearchSpaceGenerator
 from lm_optimizer.services.best_effort import log_best_effort
 
 router = APIRouter()
@@ -629,11 +627,8 @@ async def start_optimization(request: OptimizationRequest, background_tasks: Bac
         # Create services from one typed settings boundary. The factory keeps
         # CLI and API flag lists, warmup and max-token scale in sync.
         adv = AdvancedSettings(adv)
-        benchmark_service = build_benchmark_service(client, adv)
-        quality_evaluator = QualityEvaluator(QualityConfig(minimum_score=request.quality_threshold))
-        search_generator = SearchSpaceGenerator(client)
-        optimizer = AdaptiveOptimizer(
-            client, benchmark_service, quality_evaluator, search_generator
+        optimizer = build_optimizer(
+            client, adv, quality_threshold=request.quality_threshold
         )
         weights = (
             ProfileWeights(**request.custom_weights.dict())
@@ -853,11 +848,8 @@ async def resume_run_from_checkpoint(run_id: UUID, background_tasks: BackgroundT
 
         client = await get_lm_client()
         hardware_detector.detect()
-        benchmark_service = build_benchmark_service(client, run.advanced_settings or {})
-        quality_evaluator = QualityEvaluator(QualityConfig(minimum_score=run.quality_threshold))
-        search_generator = SearchSpaceGenerator(client)
-        optimizer = AdaptiveOptimizer(
-            client, benchmark_service, quality_evaluator, search_generator
+        optimizer = build_optimizer(
+            client, run.advanced_settings or {}, quality_threshold=run.quality_threshold
         )
         _current_optimizer = optimizer
         background_tasks.add_task(resume_run_task, optimizer, run_id)

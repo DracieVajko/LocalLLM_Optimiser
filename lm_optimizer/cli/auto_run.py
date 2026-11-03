@@ -20,7 +20,7 @@ from lm_optimizer.domain.models import (
 )
 from lm_optimizer.logging_config import get_logger, setup_logging
 from lm_optimizer.services.advanced_settings import AdvancedSettings
-from lm_optimizer.services.benchmark import build_benchmark_service
+from lm_optimizer.services.optimization_workflow import build_optimizer
 from lm_optimizer.services.fingerprint import (
     compute_fingerprint,
     fingerprint_diff,
@@ -29,9 +29,6 @@ from lm_optimizer.services.fingerprint import (
 from lm_optimizer.services.joblock import JobBusyError, acquire_lock, release_lock
 from lm_optimizer.services.lm_studio import LMStudioClient
 from lm_optimizer.services.model_eligibility import partition_models
-from lm_optimizer.services.optimizer import AdaptiveOptimizer
-from lm_optimizer.services.quality import QualityConfig, QualityEvaluator
-from lm_optimizer.services.search_space import SearchSpaceGenerator
 from lm_optimizer.services.version_identity import VersionIdentity, lms_identity
 from lm_optimizer.services import lms_cli as _lms_cli
 from lm_optimizer.benchmark.suite_version import BENCHMARK_SUITE_VERSION
@@ -373,12 +370,13 @@ async def _execute_auto_run_for_model(
     if physical_batches:
         advanced["physical_batches"] = [int(x.strip()) for x in physical_batches.split(",")]
 
-    benchmark_service = build_benchmark_service(
-        client, advanced, style=style, gpu_via_cli=gpu_via_cli
+    optimizer = build_optimizer(
+        client,
+        advanced,
+        style=style,
+        quality_threshold=quality_threshold,
+        gpu_via_cli=gpu_via_cli,
     )
-    quality_evaluator = QualityEvaluator(QualityConfig(minimum_score=quality_threshold))
-    search_generator = SearchSpaceGenerator(client)
-    optimizer = AdaptiveOptimizer(client, benchmark_service, quality_evaluator, search_generator)
 
     try:
         if action == "RESUME":

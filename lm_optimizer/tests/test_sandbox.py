@@ -285,7 +285,7 @@ class TestStartOptimization:
                 calls.append(args)
                 return run, None, {}
         monkeypatch.setattr(routes, "get_lm_client", fake_get_client)
-        monkeypatch.setattr(routes, "AdaptiveOptimizer", lambda *a, **k: FakeOptimizer())
+        monkeypatch.setattr(routes, "build_optimizer", lambda *a, **k: FakeOptimizer())
         monkeypatch.setattr(routes, "run_optimization_task", AsyncMock())
         old_opt, old_id = routes._current_optimizer, routes._current_run_id
         try:

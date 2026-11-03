@@ -297,7 +297,7 @@ def _benchmark_config_obj(repetitions: int, max_tokens_scale: float = 1.0, warmu
     )()
 
 
-async def _run_optimization(
+async def _execute_optimization_workflow(
     client,
     model_info,
     hardware,
@@ -322,34 +322,19 @@ async def _run_optimization(
             "[yellow]max-tokens scaled to "
             f"{max_tokens_scale}: faster, but truncation may fail quality gates.[/yellow]"
         )
-    benchmark_service = BenchmarkService(
+    from lm_optimizer.services.optimization_workflow import run_optimization_workflow
+
+    return await run_optimization_workflow(
         client,
-        benchmark_config=_benchmark_config_obj(
-            repetitions, max_tokens_scale, advanced.get("warmup_runs", 1)
-        ),
-        style=style,
-        gpu_via_cli=gpu_via_cli,
-        include_categories=advanced.get("include_categories"),
-        test_only=advanced.get("test_only", False),
-        speed_only=advanced.get("speed_only", False),
-        quality_only=advanced.get("quality_only", False),
-        speed_context=advanced.get("speed_context"),
-        mtp_test=advanced.get("mtp_test", False),
-        reasoning_sweep=advanced.get("reasoning_sweep", False),
-        quality_lab=advanced.get("quality_lab", False),
-        test_names=advanced.get("test_names") or None,
-        min_tps=advanced.get("min_tps"),
-    )
-    quality_evaluator = QualityEvaluator(QualityConfig(minimum_score=quality_threshold))
-    search_generator = SearchSpaceGenerator(client)
-    optimizer = AdaptiveOptimizer(client, benchmark_service, quality_evaluator, search_generator)
-    return await optimizer.optimize(
         model_info,
         hardware,
-        OptimizationProfile(profile_name),
+        profile_name,
         quality_threshold=quality_threshold,
-        advanced_settings=advanced,
+        repetitions=repetitions,
         style=style,
+        settings=advanced,
+        max_tokens_scale=max_tokens_scale,
+        gpu_via_cli=gpu_via_cli,
         progress_cb=advanced.pop("progress_cb", None),
     )
 
@@ -1808,7 +1793,7 @@ def optimize(
     if not _preflight_confirm(effective, dry_run, yes, non_interactive):
         return
 
-    async def _optimize():
+    async def _optimize_one_model():
         client = get_client()
         try:
             try:
@@ -1946,7 +1931,7 @@ def optimize(
                     )
 
                 advanced["progress_cb"] = _bar
-                result = await _run_optimization(
+                result = await _execute_optimization_workflow(
                     client,
                     model_info,
                     hardware,
@@ -1996,7 +1981,7 @@ def optimize(
 
     _acquire_run_lock(f"optimize:{model}")
     try:
-        asyncio.run(_optimize())
+        asyncio.run(_optimize_one_model())
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted — checkpoint saved.[/yellow]")
         sys.exit(130)
@@ -2895,7 +2880,7 @@ def auto(
     test_kv_cpu = kv in ("cpu", "both")
 
     # ========== EXECUTION: connect and run ========
-    async def _auto():
+    async def _auto_run_models():
         client = get_client()
         summary = []
         pipeline_t0 = time.perf_counter()
@@ -3136,7 +3121,7 @@ def auto(
                         if auto_physical_batches:
                             advanced["physical_batches"] = auto_physical_batches
                         advanced["warmup_runs"] = warmup_runs
-                        run = await _run_optimization(
+                        run = await _execute_optimization_workflow(
                             client,
                             m,
                             hardware,
@@ -3300,7 +3285,7 @@ def auto(
 
     _acquire_run_lock("auto")
     try:
-        asyncio.run(_auto())
+        asyncio.run(_auto_run_models())
     finally:
         release_lock()
 

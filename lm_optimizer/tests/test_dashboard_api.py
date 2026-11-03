@@ -230,5 +230,8 @@ class TestLauncher:
         from lm_optimizer.api import routes as _routes
         from lm_optimizer.cli import main as _cli
 
-        assert "AdaptiveOptimizer" in inspect.getsource(_routes.run_optimization_task)
-        assert "BenchmarkService" in inspect.getsource(_cli._run_optimization)
+        # Both entrypoints now compose through the shared workflow module.
+        assert "build_optimizer" in inspect.getsource(_routes.start_optimization)
+        assert "run_optimization_workflow" in inspect.getsource(
+            _cli._execute_optimization_workflow
+        )
