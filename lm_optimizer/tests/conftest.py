@@ -53,6 +53,14 @@ def _isolated_db(tmp_path, monkeypatch):
     yield test_db
 
 
+@pytest.fixture(autouse=True)
+def _isolated_benchmark_cache(tmp_path, monkeypatch):
+    """Give every test its own benchmark memo so cases cannot leak across tests."""
+    monkeypatch.setenv(
+        "LM_OPTIMIZER_BENCHMARK_CACHE", str(tmp_path / "benchmark_cache")
+    )
+
+
 @pytest.fixture
 def mock_client():
     """Mock LM Studio client for testing."""

@@ -687,19 +687,23 @@ class BenchmarkService:
                 return result
             logger.debug("Preheat complete", **preheat.to_dict())
 
-            # Measured runs
+            # Measured runs. A cache hit is only safe for single-repetition
+            # measurements: when reps > 1 the caller explicitly wants multiple
+            # real samples to average out noise, so bypass the memo.
+            cache_eligible = reps == 1
             for run_idx in range(reps):
                 logger.debug("Measured run", run=run_idx + 1)
                 for case in active_cases:
                     cached = None
-                    try:
-                        from lm_optimizer.services.benchmark_cache import get_cached
+                    if cache_eligible:
+                        try:
+                            from lm_optimizer.services.benchmark_cache import get_cached
 
-                        cached = get_cached(
-                            model_id, case, context_length, active_reasoning, load_config
-                        )
-                    except Exception:
-                        cached = None
+                            cached = get_cached(
+                                model_id, case, context_length, active_reasoning, load_config
+                            )
+                        except Exception:
+                            cached = None
                     if cached is not None:
                         logger.debug("Benchmark case cache hit", case=case.name)
                         all_metrics.append(cached)
@@ -707,7 +711,7 @@ class BenchmarkService:
                     metrics = await self._run_single_case(
                         model_id, case, active_reasoning
                     )
-                    if getattr(metrics, "success", False):
+                    if cache_eligible and getattr(metrics, "success", False):
                         try:
                             from lm_optimizer.services.benchmark_cache import store_cached
 
