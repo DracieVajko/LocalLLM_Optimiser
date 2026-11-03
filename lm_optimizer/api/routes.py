@@ -15,18 +15,22 @@ from lm_optimizer.api.schemas import (
     SandboxRequest,
     SandboxResponse,
     ConfigurationResultResponse,
+    ConfigurationsResponse,
     GPUInfoSchema,
     HardwareInfoSchema,
     LoadConfigSchema,
     ModelIdentitySchema,
+    ModelsResponse,
     OptimizationProfileSchema,
     OptimizationRequest,
     OptimizationRunResponse,
     PresetSchema,
     RestoreDefaultsRequest,
+    RunsResponse,
     ProfileWeightsSchema,
     SettingsSchema,
     StatsResponse,
+    StatusResponse,
     JudgeRequest,
     JudgeBackendSchema,
     JudgeVerdictResponse,
@@ -373,7 +377,7 @@ def _convert_preset(p: dict) -> PresetSchema:
 # ============================================================
 
 
-@router.get("/status")
+@router.get("/status", response_model=StatusResponse)
 async def get_status():
     """Get system status (degrades to disconnected when LM Studio is down)."""
     hardware = hardware_detector.detect()
@@ -437,7 +441,7 @@ async def connect_lm_studio(url: str):
 # ============================================================
 
 
-@router.get("/models")
+@router.get("/models", response_model=ModelsResponse)
 async def list_models():
     """List all available models from LM Studio (empty when unreachable)."""
     try:
@@ -1072,7 +1076,7 @@ def _enrich_config_detail(conv: dict, config, model_id: str) -> dict:
     return conv
 
 
-@router.get("/runs")
+@router.get("/runs", response_model=RunsResponse)
 async def list_runs(limit: int = 50, offset: int = 0, model_id: str | None = None):
     """List optimization runs (corrupt rows skipped, counted)."""
     if model_id:
@@ -1110,7 +1114,7 @@ async def get_run(run_id: UUID):
     return _convert_run(run, config_count=n, stale=stale)
 
 
-@router.get("/runs/{run_id}/configurations")
+@router.get("/runs/{run_id}/configurations", response_model=ConfigurationsResponse)
 async def list_configurations(run_id: UUID):
     """List all configurations for a run (corrupt rows skipped, counted)."""
     run = run_repo.get(str(run_id))

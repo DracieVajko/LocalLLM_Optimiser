@@ -398,3 +398,28 @@ class RestoreDefaultsRequest(BaseModel):
     model_id: str
     backup: str = "latest"
     dry_run: bool = False
+
+
+class LMStudioStatusSchema(BaseModel):
+    connected: bool
+    url: str
+    loaded_model: ModelIdentitySchema | None = None
+
+
+class StatusResponse(BaseModel):
+    lm_studio: LMStudioStatusSchema
+    hardware: HardwareInfoSchema
+
+
+class ModelsResponse(BaseModel):
+    models: list[ModelIdentitySchema]
+
+
+class RunsResponse(BaseModel):
+    runs: list[OptimizationRunResponse]
+    skipped: int = 0
+
+
+class ConfigurationsResponse(BaseModel):
+    configurations: list[ConfigurationResultResponse]
+    skipped: int = 0
