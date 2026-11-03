@@ -8,6 +8,10 @@ All notable changes to this project will be documented in this file.
 - **One web implementation**: removed the deprecated `ui/web.py` plus its legacy `optimizer/engine.py`, `storage/checkpoint.py` and `benchmark/runner.py` stack. `api/main.py` is the only web app and `services/optimizer.py` the only orchestrator; the two import cycles they caused are gone.
 - **No GPUtil dependency**: GPU discovery now uses `nvidia-smi` (and `rocm-smi` on Linux); the unmaintained GPUtil package was removed from `pyproject.toml`.
 - **Localhost-only by default**: `web_main` refuses a non-loopback bind unless `LM_OPTIMIZER_ALLOW_REMOTE=1`, matching the unauthenticated local-tool threat model.
+- **Typed settings and shared workflow**: `AdvancedSettings` now owns advanced-settings defaults, and `services/optimization_workflow.py` is the single composition point for the CLI, API and auto-run (`build_optimizer`, `run_optimization_workflow`). Benchmark service wiring can no longer drift between entrypoints.
+- **Visible tolerated failures**: 128 `except Exception: pass` blocks were replaced with `log_best_effort(...)`, which logs the operation, error and traceback at debug level. The layer error contract is documented in the client, benchmark and repository modules.
+- **Typed LM Studio defaults**: the defaults document uses `DefaultsDocument`/`DefaultsField`/`DefaultsChange` TypedDicts; raw `Any` remains only at external judge/OS payloads.
+- **Test markers**: root `conftest.py` marks `lm_optimizer/tests/` as `unit` and `tests/` as `integration`, so `pytest -m unit` / `-m integration` split the 1,500+ suite reliably.
 
 ### Added
 - **Context-speed ladder**: every speed run now ends with a doubling ladder (2k, 4k, 8k, 16k, 32k, 64k, 128k, 256k, clamped to the model limit) measured on the fastest config. Each rung is a real load + short speed probe; the first load failure ends the ladder. Results persist on the winner and in phase params, and resume continues from the last measured rung. Skip explicitly with `--skip-phases context_speed`.
