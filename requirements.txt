@@ -1,5 +1,6 @@
 # LM Studio Auto Optimizer - Requirements
-# Install with: pip install -r requirements.txt
+# Keep in sync with pyproject.toml [project].dependencies.
+# Install with: pip install -r requirements.txt (or pip install -e .)
 
 # Core dependencies
 httpx>=0.27.0
@@ -7,7 +8,6 @@ pydantic>=2.7.0
 pydantic-settings>=2.3.0
 rich>=13.7.0
 psutil>=5.9.0
-GPUtil>=1.4.0
 pyyaml>=6.0.1
 structlog>=24.1.0
 tenacity>=8.2.0
