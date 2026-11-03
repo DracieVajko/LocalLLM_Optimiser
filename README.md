@@ -179,6 +179,12 @@ Experiment Builder under one entry), **Settings**. API under single `/api` prefi
 + websocket progress. Dark mode follows the OS (toggle in nav). Read endpoints
 are load-free and degrade gracefully when LM Studio is down.
 
+**Security model:** the web UI has no user authentication and is intended for
+loopback use only. It binds `127.0.0.1` by default; `web_main` refuses a
+non-loopback bind unless `LM_OPTIMIZER_ALLOW_REMOTE=1` is set, and CORS is
+restricted to localhost origins. Do not expose it to an untrusted network without
+putting an authenticating reverse proxy in front of it.
+
 **Pause/Resume (v1.5.2):** Running and paused runs show **Pause** / **Resume** buttons
 on the Results page. History page has **Resume All Pending** to bulk-resume paused runs.
 API: `POST /api/runs/{run_id}/pause` and `POST /api/runs/{run_id}/resume`.
@@ -443,20 +449,19 @@ python scripts/generate_parameter_matrix.py
 lm_optimizer/
   api/          FastAPI app, routes (single /api prefix), schemas, websocket
   backends/     BackendClient seam + ollama/ client, registry, modelfile (llama-cpp: phase-2 stub)
-  benchmark/    suite (5 fixed tests) + runner (native chat)
+  benchmark/    suite definitions (5 fixed tests)
   cli/          commands (status..param-matrix, incl. compare/pause/ctx/resume)
   database/     SQLite + migrations (runs, duels, capability snapshots)
   discovery/    model inspection
   domain/       dataclasses (LoadConfiguration filters to server-supported keys)
   hardware/     detection (GPU/CPU/RAM, Windows/Linux/macOS branches)
-  optimizer/    legacy engine (deprecated, see services/optimizer.py)
   profiles/     speed/balanced/context/quality weights
   scoring/      normalization + heuristic evaluator
   services/     clients, benchmark, search space, optimizer, matrix, fit,
                 context_sweep, selection, preheat, workload, run_summary,
                 reporting, recommendations, generation defaults, hostguard,
                 lms_cli, parameter_registry, speculative, compare, sandbox
-  storage/      checkpoints
+  storage/      resumable run checkpoint store
   ui/           templates + static JS (dark mode, status poller, duel UI)
 hw_monitor.py vram_matrix.py run-*.bat run-*.sh scripts/ docs/ results/ (gitignored)
 ```

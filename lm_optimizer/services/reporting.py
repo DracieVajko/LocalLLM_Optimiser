@@ -251,7 +251,11 @@ def save_failed_report(
 
     Includes the per-config table, per-test breakdown of the closest config
     and FULL failed-test outputs so the user (or a later session) can decide
-    or debug. Winner runs return None (save_best_report owns those).
+    or debug.
+
+    Returns ``None`` in two cases: the run already has a winner (save_best_report
+    owns it) or there are no configurations to report. Callers that need to
+    distinguish them should check ``run.get_best_config()`` before calling.
     """
     if run.get_best_config() is not None:
         return None

@@ -1217,6 +1217,7 @@ async def apply_configuration(request: ApplyConfigRequest):
         )
         if not result.success:
             raise HTTPException(status_code=400, detail=result.error or "Failed to load model")
+        _audit_config_change("apply", model_id=request.model_id)
         return {"success": True, "identifier": result.identifier}
     finally:
         try:
@@ -1233,6 +1234,7 @@ async def restore_previous(model_id: str):
     client = await get_lm_client()
     try:
         await client.unload_model(model_id=model_id)
+        _audit_config_change("unload_previous", model_id=model_id)
         return {"success": True, "message": "Model unloaded"}
     finally:
         await client.close()
@@ -1385,6 +1387,12 @@ async def restore_model_default(request: RestoreDefaultsRequest):
         raise HTTPException(status_code=404, detail=str(e)) from None
     except DefaultsError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
+    _audit_config_change(
+        "restore_lmstudio_default",
+        model_id=request.model_id,
+        backup=request.backup,
+        dry_run=request.dry_run,
+    )
     return result.to_dict()
 
 
@@ -1479,6 +1487,13 @@ async def save_lmstudio_default(run_id: UUID, dry_run: bool = False, verify: boo
         raise HTTPException(status_code=409, detail=str(e)) from None
 
     payload = result.to_dict()
+    _audit_config_change(
+        "save_lmstudio_default",
+        run_id=str(run_id),
+        model_id=getattr(getattr(run, "model", None), "id", None),
+        dry_run=dry_run,
+        verify=verify,
+    )
 
     if verify:
         if dry_run:
@@ -2460,6 +2475,12 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 
+def _audit_config_change(action: str, **fields) -> None:
+    """Emit a structured audit event for state-changing config operations."""
+    payload = {key: value for key, value in fields.items() if value is not None}
+    logger.info("config_change", action=action, **payload)
+
+
 # --- Ollama defaults (mirrors LM Studio persistence loop) ---
 from pydantic import BaseModel as _OllamaBaseModel
 class _OllamaRestoreRequest(_OllamaBaseModel):
@@ -2496,6 +2517,12 @@ async def save_ollama_default(run_id: UUID, dry_run: bool = False):
         result = save_run_ollama_defaults(run, dry_run=dry_run)
     except DefaultsError as e:
         raise HTTPException(status_code=409, detail=str(e)) from None
+    _audit_config_change(
+        "save_ollama_default",
+        run_id=str(run_id),
+        model_id=getattr(getattr(run, "model", None), "id", None),
+        dry_run=dry_run,
+    )
     return result.to_dict() if hasattr(result, "to_dict") else result
 
 
@@ -2510,6 +2537,12 @@ async def restore_ollama_default(request: RestoreDefaultsRequest):
         )
     except DefaultsError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
+    _audit_config_change(
+        "restore_ollama_default",
+        model_id=request.model_id,
+        backup=request.backup,
+        dry_run=request.dry_run,
+    )
     return result.to_dict() if hasattr(result, "to_dict") else result
 
 

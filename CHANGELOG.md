@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **One web implementation**: removed the deprecated `ui/web.py` plus its legacy `optimizer/engine.py`, `storage/checkpoint.py` and `benchmark/runner.py` stack. `api/main.py` is the only web app and `services/optimizer.py` the only orchestrator; the two import cycles they caused are gone.
+- **No GPUtil dependency**: GPU discovery now uses `nvidia-smi` (and `rocm-smi` on Linux); the unmaintained GPUtil package was removed from `pyproject.toml`.
+- **Localhost-only by default**: `web_main` refuses a non-loopback bind unless `LM_OPTIMIZER_ALLOW_REMOTE=1`, matching the unauthenticated local-tool threat model.
+
 ### Added
 - **Context-speed ladder**: every speed run now ends with a doubling ladder (2k, 4k, 8k, 16k, 32k, 64k, 128k, 256k, clamped to the model limit) measured on the fastest config. Each rung is a real load + short speed probe; the first load failure ends the ladder. Results persist on the winner and in phase params, and resume continues from the last measured rung. Skip explicitly with `--skip-phases context_speed`.
 - **Per-model depth questions**: `optimize` and `auto` ask once per selected model (quick / standard / full / benchmark / skip) instead of a chain of yes/no prompts. `auto` also accepts `--model-detail pattern=level` for unattended runs and `--no-ask-tests`.

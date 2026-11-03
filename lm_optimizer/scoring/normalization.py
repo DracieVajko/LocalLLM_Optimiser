@@ -164,8 +164,8 @@ class NormalizationBounds:
     min_estimated_ttft: float = 0.0
     max_estimated_ttft: float = 0.0
     max_observed_context: int = 0
-    observed_vrams: list[float] = None  # type: ignore
-    observed_rams: list[float] = None  # type: ignore
+    observed_vrams: list[float] | None = None
+    observed_rams: list[float] | None = None
 
     def __post_init__(self):
         if self.observed_vrams is None:
@@ -214,7 +214,7 @@ def compute_bounds(
         try:
             if hasattr(r, "get_avg_generation_tok_s"):
                 # ConfigurationResult has method
-                g = r.get_avg_generation_tok_s()  # type: ignore
+                g = r.get_avg_generation_tok_s()  # type: ignore[attr-defined]
             else:
                 g = 0.0
         except Exception:
@@ -223,7 +223,7 @@ def compute_bounds(
         try:
             p = r.get_avg_prompt_tok_s() if hasattr(r, "get_avg_prompt_tok_s") else 0.0
             if hasattr(r, "get_avg_prompt_tok_s"):
-                p = r.get_avg_prompt_tok_s()  # type: ignore
+                p = r.get_avg_prompt_tok_s()  # type: ignore[attr-defined]
         except Exception:
             p = 0.0
 
@@ -236,9 +236,9 @@ def compute_bounds(
                 else 0.0
             )
             if hasattr(r, "get_avg_estimated_ttft_ms"):
-                t = r.get_avg_estimated_ttft_ms()  # type: ignore
+                t = r.get_avg_estimated_ttft_ms()  # type: ignore[attr-defined]
             elif hasattr(r, "get_avg_ttft_ms"):
-                t = r.get_avg_ttft_ms()  # type: ignore
+                t = r.get_avg_ttft_ms()  # type: ignore[attr-defined]
         except Exception:
             t = 0.0
 
@@ -292,7 +292,7 @@ def score_result_breakdown(
     gen = 0.0
     try:
         if hasattr(result, "get_avg_generation_tok_s") or hasattr(result, "get_avg_generation_tok_s"):
-            gen = result.get_avg_generation_tok_s()  # type: ignore
+            gen = result.get_avg_generation_tok_s()  # type: ignore[attr-defined]
     except Exception:
         gen = 0.0
     norm_gen = normalize_higher_better(gen, bounds.min_gen, bounds.max_gen)
@@ -301,7 +301,7 @@ def score_result_breakdown(
     prompt = 0.0
     try:
         if hasattr(result, "get_avg_prompt_tok_s"):
-            prompt = result.get_avg_prompt_tok_s()  # type: ignore
+            prompt = result.get_avg_prompt_tok_s()  # type: ignore[attr-defined]
     except Exception:
         prompt = 0.0
     norm_prompt = normalize_higher_better(prompt, bounds.min_prompt, bounds.max_prompt)
@@ -310,9 +310,9 @@ def score_result_breakdown(
     ttft = 0.0
     try:
         if hasattr(result, "get_avg_estimated_ttft_ms"):
-            ttft = result.get_avg_estimated_ttft_ms()  # type: ignore
+            ttft = result.get_avg_estimated_ttft_ms()  # type: ignore[attr-defined]
         elif hasattr(result, "get_avg_ttft_ms"):
-            ttft = result.get_avg_ttft_ms()  # type: ignore
+            ttft = result.get_avg_ttft_ms()  # type: ignore[attr-defined]
     except Exception:
         ttft = 0.0
     norm_ttft = normalize_lower_better(ttft, bounds.min_estimated_ttft, bounds.max_estimated_ttft)
@@ -352,11 +352,11 @@ def score_result_breakdown(
             except Exception:
                 hw_vram = None
         elif hasattr(hardware, "gpu") and hardware.gpu:
-            hw_vram = hardware.gpu.vram_gb  # type: ignore
+            hw_vram = hardware.gpu.vram_gb  # type: ignore[union-attr]
         if hasattr(hardware, "total_ram_gb"):
             hw_ram = hardware.total_ram_gb
         elif hasattr(hardware, "memory") and hasattr(hardware.memory, "total_gb"):
-            hw_ram = hardware.memory.total_gb  # type: ignore
+            hw_ram = hardware.memory.total_gb  # type: ignore[union-attr]
 
     peak_vram = getattr(result, "peak_vram_gb", None)
     peak_ram = getattr(result, "peak_ram_gb", None)

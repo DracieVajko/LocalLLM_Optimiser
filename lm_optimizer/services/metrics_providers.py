@@ -149,7 +149,7 @@ _NVIDIA_QUERY = [
 
 def _ram_metrics() -> MemoryMetrics:
     try:
-        import psutil  # type: ignore
+        import psutil  # type: ignore[import-not-found]  # optional dependency
 
         mem = psutil.virtual_memory()
         swap = psutil.swap_memory()
@@ -165,7 +165,7 @@ def _ram_metrics() -> MemoryMetrics:
 
 def _power_metrics() -> PowerMetrics:
     try:
-        import psutil  # type: ignore
+        import psutil  # type: ignore[import-not-found]  # optional dependency
 
         battery = psutil.sensors_battery()
         if battery is None:
