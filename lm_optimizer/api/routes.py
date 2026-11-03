@@ -1962,6 +1962,42 @@ async def judge_submit(request: JudgeRequest, background: BackgroundTasks, wait:
         )
 
 
+@router.get("/judge/history", response_model=list[JudgeHistoryItem])
+def judge_history(limit: int = 20):
+    """Get recent judge verdicts from database."""
+    from lm_optimizer.database.manager import DatabaseManager
+    from lm_optimizer.config import config
+    import json
+
+    db = DatabaseManager(config.storage.database_path)
+    with db.get_connection() as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT id, run_ids_json, use_case, backend, judge_model, verdict_json, created_at, status "
+            "FROM judge_verdicts ORDER BY created_at DESC LIMIT ?",
+            (limit,)
+        ).fetchall()
+
+        results = []
+        for row in rows:
+            verdict = json.loads(row["verdict_json"]) if row["verdict_json"] else {}
+            results.append(JudgeHistoryItem(
+                id=row["id"],
+                run_ids=json.loads(row["run_ids_json"]),
+                use_case=row["use_case"],
+                backend=row["backend"],
+                judge_model=row["judge_model"],
+                created_at=row["created_at"],
+                status=row["status"],
+                confidence=verdict.get("confidence"),
+                overall_winner_model=verdict.get("overall_winner", {}).get("model_id"),
+            ))
+        return results
+
+
+# --- Lab workflows (P2-P5) ------------------------------------------------
+
+
 @router.get("/judge/{judge_id}", response_model=JudgeVerdictResponse)
 def judge_get(judge_id: str):
     """Get judge verdict by ID."""
@@ -2002,42 +2038,6 @@ def judge_get(judge_id: str):
             error_message=row["error_message"],
             poll_url=f"/api/judge/{judge_id}",
         )
-
-
-@router.get("/judge/history", response_model=list[JudgeHistoryItem])
-def judge_history(limit: int = 20):
-    """Get recent judge verdicts from database."""
-    from lm_optimizer.database.manager import DatabaseManager
-    from lm_optimizer.config import config
-    import json
-
-    db = DatabaseManager(config.storage.database_path)
-    with db.get_connection() as conn:
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            "SELECT id, run_ids_json, use_case, backend, judge_model, verdict_json, created_at, status "
-            "FROM judge_verdicts ORDER BY created_at DESC LIMIT ?",
-            (limit,)
-        ).fetchall()
-
-        results = []
-        for row in rows:
-            verdict = json.loads(row["verdict_json"]) if row["verdict_json"] else {}
-            results.append(JudgeHistoryItem(
-                id=row["id"],
-                run_ids=json.loads(row["run_ids_json"]),
-                use_case=row["use_case"],
-                backend=row["backend"],
-                judge_model=row["judge_model"],
-                created_at=row["created_at"],
-                status=row["status"],
-                confidence=verdict.get("confidence"),
-                overall_winner_model=verdict.get("overall_winner", {}).get("model_id"),
-            ))
-        return results
-
-
-# --- Lab workflows (P2-P5) ------------------------------------------------
 
 
 @router.get("/lab/recommend")

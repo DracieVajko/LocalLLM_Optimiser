@@ -179,7 +179,7 @@ class TestDuelHistoryApi:
             live = SimpleNamespace(id=live_id, status=SimpleNamespace(value="running"))
             monkeypatch.setattr(routes.run_repo, "get", lambda *a, **k: live)
             monkeypatch.setattr(routes, "_is_stale_run", lambda *a, **k: False)
-            monkeypatch.setattr(routes, "_current_run_id", live_id)
+            monkeypatch.setattr(routes.registry, "run_id", live_id)
             r = c.delete(f"/api/runs/{live_id}")
             assert r.status_code == 409, r.status_code
 
@@ -216,7 +216,7 @@ class TestAbandonRun:
         live = SimpleNamespace(id=run_id, status=SimpleNamespace(value="running"))
         monkeypatch.setattr(routes.run_repo, "get", lambda *a, **k: live)
         monkeypatch.setattr(routes, "_is_stale_run", lambda *a, **k: False)
-        monkeypatch.setattr(routes, "_current_run_id", run_id)
+        monkeypatch.setattr(routes.registry, "run_id", run_id)
         with TestClient(app, raise_server_exceptions=False) as c:
             assert c.post(f"/api/runs/{run_id}/abandon").status_code == 409
 
@@ -287,7 +287,7 @@ class TestStartOptimization:
         monkeypatch.setattr(routes, "get_lm_client", fake_get_client)
         monkeypatch.setattr(routes, "build_optimizer", lambda *a, **k: FakeOptimizer())
         monkeypatch.setattr(routes, "run_optimization_task", AsyncMock())
-        old_opt, old_id = routes._current_optimizer, routes._current_run_id
+        old_opt, old_id = routes.registry.optimizer, routes.registry.run_id
         try:
             with TestClient(app, raise_server_exceptions=False) as c:
                 r = c.post("/api/optimize", json={"model_id": "m"})
@@ -295,7 +295,7 @@ class TestStartOptimization:
                 assert r.json()["id"] == str(run.id)
                 assert r.json()["status"] == "running"
         finally:
-            routes._current_optimizer, routes._current_run_id = old_opt, old_id
+            routes.registry.optimizer, routes.registry.run_id = old_opt, old_id
 
 
 class TestOptimizeDirtyHost:
