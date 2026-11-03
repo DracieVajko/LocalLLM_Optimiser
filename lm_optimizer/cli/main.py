@@ -4823,6 +4823,32 @@ def _display_optimization_result(run):
             )
         else:
             console.print("[dim]No successful baseline available.[/dim]")
+        # Show every tested config so a failed run is still fully inspectable.
+        configs = list(run.configurations or [])
+        if configs:
+            tbl = Table(title="Tested configurations")
+            tbl.add_column("Ctx", justify="right", style="cyan")
+            tbl.add_column("Gen tok/s", justify="right")
+            tbl.add_column("Quality", justify="right")
+            tbl.add_column("Checks", justify="right")
+            tbl.add_column("Status", style="yellow")
+            tbl.add_column("Error", style="dim")
+            for c in configs:
+                q = c.quality_score.overall if c.quality_score else None
+                checks = (
+                    f"{c.quality_score.checks_passed}/{c.quality_score.checks_total}"
+                    if c.quality_score and c.quality_score.checks_total
+                    else "-"
+                )
+                tbl.add_row(
+                    str(c.context_length),
+                    f"{c.get_avg_generation_tok_s():.1f}",
+                    f"{q:.3f}" if q is not None else "N/A",
+                    checks,
+                    str(getattr(c.status, "value", c.status)),
+                    str(c.error or "")[:60],
+                )
+            console.print(tbl)
         return  # never offer Apply
 
     from lm_optimizer.services.run_summary import final_recommendation

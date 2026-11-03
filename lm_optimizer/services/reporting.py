@@ -307,6 +307,20 @@ def save_failed_report(
         )
     lines += ["", "## Closest config per-test breakdown", ""]
     if closest is not None:
+        ctx_speed = (closest.generation or {}).get("context_speed")
+        if isinstance(ctx_speed, dict) and ctx_speed.get("results"):
+            from lm_optimizer.services.context_speed import format_context_speed
+
+            lines += ["## Context speed (closest config)", ""]
+            lines += format_context_speed(ctx_speed)[1:]
+            lines += [
+                "",
+                f"- Last passing context: {ctx_speed.get('last_passing_context') or 'none'}",
+                f"- Failed context: {ctx_speed.get('failed_context') or 'none'}",
+                f"- Fastest measured context: {ctx_speed.get('max_speed_context') or 'none'}",
+                "",
+            ]
+    if closest is not None:
         try:
             qbt = (closest.generation or {}).get("quality_by_test") or {}
         except Exception:

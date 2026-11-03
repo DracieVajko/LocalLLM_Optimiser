@@ -416,9 +416,12 @@ async def _execute_auto_run_for_model(
                 style=style,
             )
 
-        # Save report
-        from lm_optimizer.services.reporting import save_best_report
-        save_best_report(run, output_dir=output_dir)
+        # Save report (best report when there is a winner; otherwise the
+        # failed-run debug report so every tested config stays visible).
+        from lm_optimizer.services.reporting import save_best_report, save_failed_report
+
+        if save_best_report(run, output_dir=output_dir) is None:
+            save_failed_report(run, output_dir=output_dir)
 
         return {
             "model": model.id,
