@@ -44,6 +44,9 @@ _CAPS_CACHE: dict[str, dict] = {}
 
 # Slow-model allowances: big loads/generations legitimately take minutes.
 LOAD_TIMEOUT_S = 600.0
+# The server can load a model but fail to send the HTTP response (observed
+# 2026-11-03). Wait this long for the response, then poll loaded instances.
+LOAD_RESPONSE_TIMEOUT_S = 30.0
 CHAT_TIMEOUT_FLOOR_S = 300.0
 
 # Candidate load keys with type-correct probe values (reasoning_budget_message
@@ -519,9 +522,29 @@ class LMStudioClient:
         api_params = load_config.to_api_params()
         body = {"model": model_id, **api_params, "echo_load_config": True}
 
+        async def _send(request_body: dict):
+            return await asyncio.wait_for(
+                self._request_with_retry(
+                    "POST",
+                    "/api/v1/models/load",
+                    json_data=request_body,
+                    timeout_s=LOAD_TIMEOUT_S,
+                ),
+                timeout=LOAD_RESPONSE_TIMEOUT_S,
+            )
+
         try:
-            response = await self._request_with_retry(
-                "POST", "/api/v1/models/load", json_data=body, timeout_s=LOAD_TIMEOUT_S
+            response = await _send(body)
+        except asyncio.TimeoutError:
+            # Observed live 2026-11-03: the server loads the model but never
+            # sends the response. Poll the loaded instances instead of holding
+            # the run hostage for the full 600 s request timeout.
+            inst = await self._wait_for_loaded_instance(model_id)
+            if inst is not None:
+                return self._success_from_loaded_instance(model_id, inst, api_params)
+            return LoadModelResult(
+                success=False,
+                error=f"Load timed out after {LOAD_TIMEOUT_S:.0f}s without a response",
             )
         except httpx.HTTPStatusError as e:
             # Older servers may not know echo_load_config: retry without it
@@ -530,9 +553,19 @@ class LMStudioClient:
                 logger.debug("Server lacks echo_load_config; retrying without", model=model_id)
                 body = {"model": model_id, **api_params}
                 try:
-                    response = await self._request_with_retry(
-                        "POST", "/api/v1/models/load", json_data=body,
-                        timeout_s=LOAD_TIMEOUT_S,
+                    response = await _send(body)
+                except asyncio.TimeoutError:
+                    inst = await self._wait_for_loaded_instance(model_id)
+                    if inst is not None:
+                        return self._success_from_loaded_instance(
+                            model_id, inst, api_params
+                        )
+                    return LoadModelResult(
+                        success=False,
+                        error=(
+                            f"Load timed out after {LOAD_TIMEOUT_S:.0f}s "
+                            "without a response"
+                        ),
                     )
                 except httpx.HTTPStatusError as e2:
                     return LoadModelResult(success=False, error=_error_message(e2))
@@ -559,6 +592,47 @@ class LMStudioClient:
             )
         return LoadModelResult(
             success=False, error=result_data.get("error") or f"Unexpected response: {result_data}"
+        )
+
+    async def _wait_for_loaded_instance(self, model_id: str) -> dict | None:
+        """Poll the server until ``model_id`` reports a loaded instance.
+
+        Used when the load request response is lost but the server did load
+        the model. Polling is bounded by the same 600 s load budget.
+        """
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + LOAD_TIMEOUT_S
+        while loop.time() < deadline:
+            try:
+                for inst in await self.get_loaded_instances():
+                    if inst.get("model") == model_id:
+                        return inst
+            except Exception as e:
+                logger.debug("Loaded-instance poll failed", error=str(e)[:120])
+            await asyncio.sleep(2)
+        return None
+
+    def _success_from_loaded_instance(
+        self, model_id: str, inst: dict, requested: dict
+    ) -> LoadModelResult:
+        """Build a success result from the server's loaded-instance echo."""
+        identifier = inst.get("instance_id") or inst.get("id")
+        loaded_config = self._config_from_echo(inst.get("config"))
+        if identifier:
+            self._loaded_models[model_id] = identifier
+        mismatches = self._compare_echo(requested, loaded_config)
+        if mismatches:
+            logger.warning("Requested vs applied mismatch", model=model_id, mismatches=mismatches)
+        logger.warning(
+            "Load response was not sent; accepted the loaded instance",
+            model=model_id,
+            identifier=identifier,
+        )
+        return LoadModelResult(
+            success=True,
+            identifier=identifier,
+            loaded_config=loaded_config,
+            echo_mismatches=mismatches or None,
         )
 
     @staticmethod
