@@ -2099,34 +2099,7 @@ class AdaptiveOptimizer:
             # Phase gate: only a passed benchmark may continue. Failed loads
             # MUST NOT receive metrics evaluation, quality, score or Pareto.
             if result.status != "passed":
-                result.status = classify_error(result.error)
-                result.score = None
-                result.quality_score = None
-                result.score_breakdown = None
-                result.generation = {
-                    **(result.generation or {}),
-                    "stage": self.state.run.stage.value,
-                }
-                try:
-                    config_repo.save(result)
-                except Exception as e:
-                    # Failure recording must never take down the loop.
-                    logger.error("Failure record save failed", error=str(e))
-                if result.status == ConfigurationStatus.OOM:
-                    self._log_event("OOM", f"ctx={context_length}")
-                    self._log_event("Failed region recorded", f"ctx={context_length}")
-                else:
-                    self._log_event(str(result.status.value).upper(), (result.error or "")[:120])
-                logger.info(
-                    "Load/benchmark failed",
-                    config_id=str(result.id),
-                    status=result.status.value,
-                    error=(result.error or "")[:160],
-                )
-                # Learn server-mandated flash here (failures return early and
-                # never reach the passed-path note below).
-                self._note_flash_requirement(result)
-                return _stamp(result)
+                return _stamp(self._record_failed_candidate(result, context_length))
 
             # LOADED + VERIFIED (benchmark success implies the load served).
             result.status = ConfigurationStatus.PASSED
@@ -2176,77 +2149,13 @@ class AdaptiveOptimizer:
             self._note_flash_requirement(result)
 
             # Evaluate quality / correctness (metrics preserved on failure).
-            quality_scores = self.quality.evaluate_all(self.state.run.model.id, result.metrics)
-            agg_quality = self.quality.aggregate_quality(quality_scores)
-            result.quality_score = agg_quality
-            # Provenance: stage + per-test quality travel with the record so
-            # reports can show every test explicitly (nothing fabricated).
-            # quality_completed marks "suite ran to a quality result" for BOTH
-            # outcomes, so resume treats QUALITY_FAILED as completed work and
-            # never re-runs a finished suite merely because it failed.
-            result.generation = {
-                **(result.generation or {}),
-                "stage": self.state.run.stage.value,
-                "quality_completed": True,
-                "quality_by_test": {
-                    name: {
-                        "overall": round(q.overall, 3),
-                        "checks_passed": q.checks_passed,
-                        "checks_total": q.checks_total,
-                    }
-                    for name, q in (quality_scores or {}).items()
-                },
-            }
-
-            if not self.quality.passes_threshold(agg_quality):
-                result.status = ConfigurationStatus.QUALITY_FAILED
-                result.error = f"Quality/correctness {agg_quality.overall:.3f} ({agg_quality.checks_passed}/{agg_quality.checks_total} checks) below threshold {self.quality.config.minimum_score}"
-                result.score = None
-                result.score_breakdown = None
-                try:
-                    config_repo.save(result)
-                except Exception as e:
-                    logger.error("Failure record save failed", error=str(e))
-                self._log_event(
-                    "QUALITY_FAILED",
-                    f"{agg_quality.checks_passed}/{agg_quality.checks_total} ctx={context_length}",
-                )
-                logger.warning(
-                    "QUALITY_FAILED",
-                    config_id=str(result.id),
-                    quality=agg_quality.overall,
-                    checks=f"{agg_quality.checks_passed}/{agg_quality.checks_total}",
-                    threshold=self.quality.config.minimum_score,
-                )
+            if not self._evaluate_candidate_quality(result, context_length):
                 return _stamp(result)
-            self._log_event(
-                "QUALITY_EVALUATED",
-                f"{agg_quality.checks_passed}/{agg_quality.checks_total}",
-            )
 
             # Hardware-agnostic scoring with breakdown
-            score_ctx = self.state.score_context if score_context is None else score_context
-            self._score_eligible(result, score_ctx)
-            breakdown = result.score_breakdown or {}
-            self._check_rope_quality(breakdown)
-
-            config_repo.save(result)
-
-            logger.info(
-                "CONFIG_ELIGIBLE",
-                config_id=str(result.id),
-                gen_tok_s=result.get_avg_generation_tok_s(),
-                quality=f"{agg_quality.checks_passed}/{agg_quality.checks_total}",
-                score=result.score,
-                breakdown=breakdown,
+            return _stamp(
+                self._score_candidate(result, context_length, score_context)
             )
-            self._log_event(
-                f"{result.get_avg_generation_tok_s():.1f} tok/s",
-                f"ctx={context_length}",
-            )
-            self._log_event("CONFIG_ELIGIBLE", f"score={result.score:.3f}")
-
-            return _stamp(result)
 
         except Exception as e:
             logger.error("Config error", error=str(e))
@@ -2275,6 +2184,132 @@ class AdaptiveOptimizer:
             except Exception as se:
                 logger.error("Failure record save failed", error=str(se))
             return failed
+
+    def _record_failed_candidate(
+        self, result: ConfigurationResult, context_length: int
+    ) -> ConfigurationResult:
+        """Persist and annotate a load/benchmark failure (never scored)."""
+        from lm_optimizer.services.failure_states import classify_error
+
+        result.status = classify_error(result.error)
+        result.score = None
+        result.quality_score = None
+        result.score_breakdown = None
+        result.generation = {
+            **(result.generation or {}),
+            "stage": self.state.run.stage.value,
+        }
+        try:
+            config_repo.save(result)
+        except Exception as e:
+            # Failure recording must never take down the loop.
+            logger.error("Failure record save failed", error=str(e))
+        if result.status == ConfigurationStatus.OOM:
+            self._log_event("OOM", f"ctx={context_length}")
+            self._log_event("Failed region recorded", f"ctx={context_length}")
+        else:
+            self._log_event(str(result.status.value).upper(), (result.error or "")[:120])
+        logger.info(
+            "Load/benchmark failed",
+            config_id=str(result.id),
+            status=result.status.value,
+            error=(result.error or "")[:160],
+        )
+        # Learn server-mandated flash here (failures return early and never
+        # reach the passed-path note).
+        self._note_flash_requirement(result)
+        return result
+
+    def _evaluate_candidate_quality(
+        self, result: ConfigurationResult, context_length: int
+    ) -> bool:
+        """Evaluate quality and persist a failure; True when the gate passes."""
+        quality_scores = self.quality.evaluate_all(
+            self.state.run.model.id, result.metrics
+        )
+        agg_quality = self.quality.aggregate_quality(quality_scores)
+        result.quality_score = agg_quality
+        # quality_completed marks "suite ran to a quality result" for BOTH
+        # outcomes, so resume treats QUALITY_FAILED as completed work.
+        result.generation = {
+            **(result.generation or {}),
+            "stage": self.state.run.stage.value,
+            "quality_completed": True,
+            "quality_by_test": {
+                name: {
+                    "overall": round(q.overall, 3),
+                    "checks_passed": q.checks_passed,
+                    "checks_total": q.checks_total,
+                }
+                for name, q in (quality_scores or {}).items()
+            },
+        }
+
+        if not self.quality.passes_threshold(agg_quality):
+            result.status = ConfigurationStatus.QUALITY_FAILED
+            result.error = (
+                f"Quality/correctness {agg_quality.overall:.3f} "
+                f"({agg_quality.checks_passed}/{agg_quality.checks_total} checks) "
+                f"below threshold {self.quality.config.minimum_score}"
+            )
+            result.score = None
+            result.score_breakdown = None
+            try:
+                config_repo.save(result)
+            except Exception as e:
+                logger.error("Failure record save failed", error=str(e))
+            self._log_event(
+                "QUALITY_FAILED",
+                f"{agg_quality.checks_passed}/{agg_quality.checks_total} "
+                f"ctx={context_length}",
+            )
+            logger.warning(
+                "QUALITY_FAILED",
+                config_id=str(result.id),
+                quality=agg_quality.overall,
+                checks=f"{agg_quality.checks_passed}/{agg_quality.checks_total}",
+                threshold=self.quality.config.minimum_score,
+            )
+            return False
+        self._log_event(
+            "QUALITY_EVALUATED",
+            f"{agg_quality.checks_passed}/{agg_quality.checks_total}",
+        )
+        return True
+
+    def _score_candidate(
+        self,
+        result: ConfigurationResult,
+        context_length: int,
+        score_context: bool | None,
+    ) -> ConfigurationResult:
+        """Score an eligible candidate, persist it and emit the success logs."""
+        score_ctx = (
+            self.state.score_context if score_context is None else score_context
+        )
+        self._score_eligible(result, score_ctx)
+        breakdown = result.score_breakdown or {}
+        self._check_rope_quality(breakdown)
+        config_repo.save(result)
+        logger.info(
+            "CONFIG_ELIGIBLE",
+            config_id=str(result.id),
+            gen_tok_s=result.get_avg_generation_tok_s(),
+            quality=(
+                f"{result.quality_score.checks_passed}/"
+                f"{result.quality_score.checks_total}"
+                if result.quality_score
+                else "n/a"
+            ),
+            score=result.score,
+            breakdown=breakdown,
+        )
+        self._log_event(
+            f"{result.get_avg_generation_tok_s():.1f} tok/s",
+            f"ctx={context_length}",
+        )
+        self._log_event("CONFIG_ELIGIBLE", f"score={result.score:.3f}")
+        return result
 
     def _update_best(self, result: ConfigurationResult) -> None:
         """Update best configuration using hardware-agnostic scores.
