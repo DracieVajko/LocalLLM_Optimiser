@@ -214,19 +214,29 @@ async def _connect_guarded(
     model never leaves (caller pauses or aborts). Other errors propagate.
     """
     try:
-        await client.connect()
+        # Load-free first: a leftover/foreign model blocks the echo-probe load
+        # behind it (observed live 2026-11-03: a stale Bonsai kept the probe
+        # waiting until the load timeout). Clean the host, then probe.
+        await client.connect(echo_probe=False)
     except Exception as e:
         if is_connection_error(e):
             raise HostUnreachableError(
                 f"Cannot reach backend at {_client_base_url(client)}", cause=e
             ) from e
         raise
-    return await prepare_host(
+    snapshot = await prepare_host(
         client,
         purpose=purpose,
         wait_interval_s=wait_interval_s,
         max_waits=max_waits,
     )
+    try:
+        # Upgrade to the echo probe only on a clean host. The run's own loads
+        # verify configs too, so a probe failure is logged, never fatal.
+        await client.connect()
+    except Exception as e:
+        logger.warning("Echo probe after host cleanup failed", error=str(e)[:160])
+    return snapshot
 
 
 async def _connect_guarded_or_abort(
