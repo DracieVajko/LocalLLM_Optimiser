@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ProfileWeightsSchema(BaseModel):
@@ -33,6 +33,8 @@ class OptimizationProfileSchema(str, Enum):
 
 
 class GPUInfoSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     index: int
     name: str
     vram_gb: float
@@ -43,6 +45,8 @@ class GPUInfoSchema(BaseModel):
 
 
 class HardwareInfoSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     os: str
     cpu_name: str
     cpu_cores_physical: int
@@ -56,6 +60,8 @@ class HardwareInfoSchema(BaseModel):
 
 
 class ModelIdentitySchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     name: str
     architecture: str | None = None
@@ -68,6 +74,8 @@ class ModelIdentitySchema(BaseModel):
 
 
 class LoadConfigSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     context_length: int | None = None
     flash_attention: bool | None = None
     offload_kv_cache_to_gpu: bool | None = None

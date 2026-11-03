@@ -1,5 +1,9 @@
 """LM Studio API client with async support.
 
+Legacy compatibility module: production code uses
+``lm_optimizer.services.lm_studio``. This module remains because the
+persistence-loop and unload tests exercise its response models directly.
+
 Live-verified contract (2026-09-19): flat load params, unload by instance_id,
 native /api/v1/chat with `input` + `max_output_tokens` (see services/lm_studio.py).
 """

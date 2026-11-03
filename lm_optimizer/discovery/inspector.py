@@ -2,7 +2,8 @@
 
 from dataclasses import dataclass
 
-from lm_optimizer.api.client import LMStudioClient, LoadConfig, ModelInfo
+from lm_optimizer.domain.models import LoadConfiguration, ModelIdentity
+from lm_optimizer.services.lm_studio import LMStudioClient
 from lm_optimizer.config import config
 from lm_optimizer.logging_config import get_logger
 
@@ -36,7 +37,7 @@ class ModelDiscovery:
     def __init__(self, client: LMStudioClient):
         self.client = client
 
-    async def discover_all(self) -> list[ModelInfo]:
+    async def discover_all(self) -> list[ModelIdentity]:
         """Discover all available models."""
         return await self.client.list_models(force_refresh=True)
 
@@ -50,8 +51,8 @@ class ModelDiscovery:
 
         # Basic info from model listing
         capabilities.architecture = model_info.architecture
-        capabilities.context_length = model_info.context_length
-        capabilities.max_context_length = model_info.max_context_length or model_info.context_length
+        capabilities.context_length = model_info.context_limit
+        capabilities.max_context_length = model_info.context_limit
         capabilities.parameter_count = model_info.parameter_count
         capabilities.quantization = model_info.quantization
 
@@ -74,10 +75,10 @@ class ModelDiscovery:
 
         return capabilities
 
-    def _detect_moe(self, model_info: ModelInfo) -> bool:
+    def _detect_moe(self, model_info: ModelIdentity) -> bool:
         """Detect if model is Mixture of Experts."""
         arch = (model_info.architecture or "").lower()
-        model_type = (model_info.model_type or "").lower()
+        model_type = (getattr(model_info, "model_type", "") or "").lower()
         name = (model_info.name or "").lower()
 
         moe_indicators = [
@@ -95,7 +96,7 @@ class ModelDiscovery:
             for indicator in moe_indicators
         )
 
-    def _estimate_experts(self, model_info: ModelInfo) -> int | None:
+    def _estimate_experts(self, model_info: ModelIdentity) -> int | None:
         """Estimate number of experts for MoE models."""
         name = (model_info.name or "").lower()
 
@@ -121,7 +122,7 @@ class ModelDiscovery:
 
         return None
 
-    def _estimate_vram(self, model_info: ModelInfo) -> float | None:
+    def _estimate_vram(self, model_info: ModelIdentity) -> float | None:
         """Estimate VRAM requirement for model."""
         if not model_info.parameter_count:
             return None
@@ -156,13 +157,13 @@ class ModelDiscovery:
     ) -> None:
         """Probe model by loading with minimal config."""
         # Load with minimal context to inspect
-        probe_config = LoadConfig(context_length=512)
+        probe_config = LoadConfiguration(context_length=512)
         result = await self.client.load_model(model_id, probe_config)
 
-        if result.success and result.load_config:
+        if result.success and result.loaded_config:
             # Update capabilities based on actual load config
-            if result.load_config.context_length:
-                capabilities.context_length = result.load_config.context_length
+            if result.loaded_config.context_length:
+                capabilities.context_length = result.loaded_config.context_length
 
         # Always unload after probing
         await self.client.unload_model(model_id=model_id)

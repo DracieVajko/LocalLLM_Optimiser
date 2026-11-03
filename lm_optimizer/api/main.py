@@ -85,6 +85,13 @@ async def _require_token_for_remote_clients(request: Request, call_next):
         return JSONResponse({"detail": "invalid API token"}, status_code=401)
     return await call_next(request)
 
+
+@app.exception_handler(Exception)
+async def _unhandled_exception(request: Request, exc: Exception):
+    """One generic 500 boundary; details stay in the log, not the response."""
+    logger.exception("Unhandled API error", path=request.url.path)
+    return JSONResponse({"detail": "Internal server error"}, status_code=500)
+
 # API routes - manually include routes due to FastAPI 0.141.1 include_router bug
 # We need to recreate routes with proper prefix since include_router is broken
 from fastapi.routing import APIRoute

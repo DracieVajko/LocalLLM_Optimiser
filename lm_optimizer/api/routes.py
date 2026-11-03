@@ -16,7 +16,6 @@ from lm_optimizer.api.schemas import (
     SandboxResponse,
     ConfigurationResultResponse,
     ConfigurationsResponse,
-    GPUInfoSchema,
     HardwareInfoSchema,
     LoadConfigSchema,
     ModelIdentitySchema,
@@ -114,63 +113,15 @@ async def get_lm_client(echo_probe: bool = True) -> LMStudioClient:
 
 
 def _convert_model(m: ModelIdentity) -> ModelIdentitySchema:
-    return ModelIdentitySchema(
-        id=m.id,
-        name=m.name,
-        architecture=m.architecture,
-        parameter_count=m.parameter_count,
-        quantization=m.quantization,
-        context_limit=m.context_limit,
-        is_moe=m.is_moe,
-        num_experts=m.num_experts,
-        size_bytes=m.size_bytes,
-    )
+    return ModelIdentitySchema.model_validate(m)
 
 
 def _convert_hardware(h: HardwareInfo) -> HardwareInfoSchema:
-    return HardwareInfoSchema(
-        os=h.os,
-        cpu_name=h.cpu_name,
-        cpu_cores_physical=h.cpu_cores_physical,
-        cpu_cores_logical=h.cpu_cores_logical,
-        total_ram_gb=h.total_ram_gb,
-        gpu_count=h.gpu_count,
-        gpus=[
-            GPUInfoSchema(
-                index=g.index,
-                name=g.name,
-                vram_gb=g.vram_gb,
-                vendor=g.vendor,
-                driver_version=g.driver_version,
-                compute_capability=g.compute_capability,
-                shared_memory_gb=g.shared_memory_gb,
-            )
-            for g in h.gpus
-        ],
-        cuda_version=h.cuda_version,
-        metal_available=h.metal_available,
-        vulkan_available=h.vulkan_available,
-    )
+    return HardwareInfoSchema.model_validate(h)
 
 
 def _convert_config(c: LoadConfiguration) -> LoadConfigSchema:
-    return LoadConfigSchema(
-        context_length=c.context_length,
-        flash_attention=c.flash_attention,
-        offload_kv_cache_to_gpu=c.offload_kv_cache_to_gpu,
-        eval_batch_size=c.eval_batch_size,
-        physical_batch_size=c.physical_batch_size,
-        parallel=c.parallel,
-        context_checkpoints=c.context_checkpoints,
-        reasoning_budget_message=c.reasoning_budget_message,
-        num_experts=c.num_experts,
-        speculative_draft_max_tokens=c.speculative_draft_max_tokens,
-        speculative_draft_min_tokens=c.speculative_draft_min_tokens,
-        speculative_draft_min_continue_probability=c.speculative_draft_min_continue_probability,
-        speculative_draft_mtp=c.speculative_draft_mtp,
-        speculative_draft_simple=c.speculative_draft_simple,
-        speculative_draft_model=c.speculative_draft_model,
-    )
+    return LoadConfigSchema.model_validate(c)
 
 
 STALE_NONTERMINAL = frozenset({"running", "resumed"})
@@ -652,7 +603,7 @@ async def start_optimization(request: OptimizationRequest, background_tasks: Bac
                 await client.close()
             except Exception as exc:
                 log_best_effort("best-effort operation failed", exc)
-            raise HTTPException(status_code=500, detail=f"Could not start run: {str(e)[:200]}")
+            raise _internal_error("start run", e)
 
         _current_optimizer = optimizer
         _current_run_id = run.id
@@ -721,7 +672,7 @@ async def run_optimization_task(
         except Exception as exc:
             log_best_effort("best-effort operation failed", exc)
 @router.post("/optimize/{run_id}/pause")
-async def pause_optimization(run_id: UUID):
+def pause_optimization(run_id: UUID):
     """Pause current optimization."""
     global _current_optimizer
     if (
@@ -735,7 +686,7 @@ async def pause_optimization(run_id: UUID):
 
 
 @router.post("/optimize/{run_id}/resume")
-async def resume_optimization(run_id: UUID):
+def resume_optimization(run_id: UUID):
     """Resume paused optimization."""
     global _current_optimizer
     if (
@@ -749,7 +700,7 @@ async def resume_optimization(run_id: UUID):
 
 
 @router.post("/runs/{run_id}/pause")
-async def pause_run(run_id: UUID):
+def pause_run(run_id: UUID):
     """Pause any running optimization by run ID (creates pause flag for next safe boundary)."""
     run = run_repo.get(str(run_id))
     if not run:
@@ -766,7 +717,7 @@ async def pause_run(run_id: UUID):
         }
         flag.write_bytes(orjson.dumps(payload))
     except OSError as e:
-        raise HTTPException(status_code=500, detail=f"Cannot write pause flag: {e}")
+        raise _internal_error("write pause flag", e)
     
     return {"success": True, "message": "Pause requested; will take effect at next safe boundary"}
 
@@ -797,7 +748,7 @@ async def resume_run(run_id: UUID):
 
 
 @router.post("/optimize/{run_id}/cancel")
-async def cancel_optimization(run_id: UUID):
+def cancel_optimization(run_id: UUID):
     """Cancel current optimization (checkpoint is written before ack)."""
     global _current_optimizer
     if (
@@ -883,7 +834,7 @@ async def resume_run_task(optimizer: AdaptiveOptimizer, run_id: UUID):
         except Exception as exc:
             log_best_effort("best-effort operation failed", exc)
 @router.get("/checkpoints")
-async def list_checkpoints():
+def list_checkpoints():
     """List interrupt checkpoints."""
     from lm_optimizer.storage.run_checkpoint import list_checkpoints as _list
 
@@ -891,7 +842,7 @@ async def list_checkpoints():
 
 
 @router.get("/optimize/{run_id}/progress")
-async def get_optimization_progress(run_id: UUID):
+def get_optimization_progress(run_id: UUID):
     """Get live optimization progress (never fakes ETA)."""
     from datetime import datetime as _dt
 
@@ -1077,7 +1028,7 @@ def _enrich_config_detail(conv: dict, config, model_id: str) -> dict:
 
 
 @router.get("/runs", response_model=RunsResponse)
-async def list_runs(limit: int = 50, offset: int = 0, model_id: str | None = None):
+def list_runs(limit: int = 50, offset: int = 0, model_id: str | None = None):
     """List optimization runs (corrupt rows skipped, counted)."""
     if model_id:
         runs = run_repo.get_by_model(model_id, limit)
@@ -1101,7 +1052,7 @@ async def list_runs(limit: int = 50, offset: int = 0, model_id: str | None = Non
 
 
 @router.get("/runs/{run_id}", response_model=OptimizationRunResponse)
-async def get_run(run_id: UUID):
+def get_run(run_id: UUID):
     """Get optimization run details."""
     run = run_repo.get(str(run_id))
     if not run:
@@ -1115,7 +1066,7 @@ async def get_run(run_id: UUID):
 
 
 @router.get("/runs/{run_id}/configurations", response_model=ConfigurationsResponse)
-async def list_configurations(run_id: UUID):
+def list_configurations(run_id: UUID):
     """List all configurations for a run (corrupt rows skipped, counted)."""
     run = run_repo.get(str(run_id))
     if not run:
@@ -1133,7 +1084,7 @@ async def list_configurations(run_id: UUID):
 @router.get(
     "/runs/{run_id}/configurations/{config_id}", response_model=ConfigurationResultResponse
 )
-async def get_configuration(run_id: UUID, config_id: UUID):
+def get_configuration(run_id: UUID, config_id: UUID):
     """Get configuration result details (full outputs, per-test quality)."""
     config = config_repo.get(str(config_id))
     if not config or str(config.run_id) != str(run_id):
@@ -1150,7 +1101,7 @@ async def get_configuration(run_id: UUID, config_id: UUID):
 
 
 @router.get("/runs/{run_id}/pareto")
-async def get_pareto_frontier(run_id: UUID):
+def get_pareto_frontier(run_id: UUID):
     """Get Pareto frontier configurations."""
     run = run_repo.get(str(run_id))
     if not run:
@@ -1211,7 +1162,7 @@ async def restore_previous(model_id: str):
 
 
 @router.get("/presets")
-async def list_presets(model_id: str | None = None):
+def list_presets(model_id: str | None = None):
     """List saved presets."""
     if model_id:
         presets = preset_repo.list_by_model(model_id)
@@ -1221,7 +1172,7 @@ async def list_presets(model_id: str | None = None):
 
 
 @router.post("/presets")
-async def save_preset(preset: PresetSchema):
+def save_preset(preset: PresetSchema):
     """Save a preset."""
     preset_data = preset.dict()
     preset_data["id"] = str(preset.id)
@@ -1230,7 +1181,7 @@ async def save_preset(preset: PresetSchema):
 
 
 @router.delete("/presets/{preset_id}")
-async def delete_preset(preset_id: UUID):
+def delete_preset(preset_id: UUID):
     """Delete a preset."""
     success = preset_repo.delete(str(preset_id))
     if not success:
@@ -1261,14 +1212,14 @@ async def apply_preset(preset_id: UUID):
 
 
 @router.get("/settings", response_model=SettingsSchema)
-async def get_settings():
+def get_settings():
     """Get all settings."""
     settings = settings_repo.get_all()
     return SettingsSchema(**{k: v["value"] for k, v in settings.items()})
 
 
 @router.put("/settings")
-async def update_settings(settings: SettingsSchema):
+def update_settings(settings: SettingsSchema):
     """Update settings."""
     for key, value in settings.dict().items():
         settings_repo.set(key, str(value))
@@ -1281,7 +1232,7 @@ async def update_settings(settings: SettingsSchema):
 
 
 @router.get("/runs/{run_id}/export-config")
-async def export_lmstudio_config(run_id: UUID):
+def export_lmstudio_config(run_id: UUID):
     """Export the validated winner as a reusable load-config JSON."""
     from lm_optimizer.services.config_export import build_load_config_export
 
@@ -1295,7 +1246,7 @@ async def export_lmstudio_config(run_id: UUID):
 
 
 @router.get("/model-default")
-async def get_model_default(model_id: str):
+def get_model_default(model_id: str):
     """Inspect a model's current LM Studio defaults, fields and backups."""
     from lm_optimizer.services.lmstudio_defaults import (
         DefaultsError,
@@ -1336,7 +1287,7 @@ async def get_model_default(model_id: str):
 
 
 @router.post("/model-default/restore")
-async def restore_model_default(request: RestoreDefaultsRequest):
+def restore_model_default(request: RestoreDefaultsRequest):
     """Restore a model's LM Studio defaults from a backup."""
     from lm_optimizer.services.lmstudio_defaults import (
         DefaultsError,
@@ -1362,7 +1313,7 @@ async def restore_model_default(request: RestoreDefaultsRequest):
 
 
 @router.get("/runs/{run_id}/default-diff")
-async def get_run_default_diff(run_id: UUID):
+def get_run_default_diff(run_id: UUID):
     """Diff a run's validated winner against the model's current defaults."""
     from dataclasses import replace as _replace
 
@@ -1497,7 +1448,7 @@ async def save_lmstudio_default(run_id: UUID, dry_run: bool = False, verify: boo
 
 
 @router.get("/runs/{run_id}/export")
-async def export_run(run_id: UUID, format: str = "json"):
+def export_run(run_id: UUID, format: str = "json"):
     """Export run results."""
     run = run_repo.get(str(run_id))
     if not run:
@@ -1583,7 +1534,7 @@ def generate_markdown_report(run) -> str:
 
 
 @router.post("/compare", response_model=CompareResponse)
-async def start_compare(request: CompareRequest, background_tasks: BackgroundTasks):
+def start_compare(request: CompareRequest, background_tasks: BackgroundTasks):
     """Start an A/B comparison of two configs on the SAME tests."""
     import uuid
 
@@ -1602,7 +1553,7 @@ async def start_compare(request: CompareRequest, background_tasks: BackgroundTas
 
 
 @router.get("/compare/{compare_id}", response_model=CompareResponse)
-async def get_compare(compare_id: str):
+def get_compare(compare_id: str):
     """Poll an A/B comparison result."""
     job = _compare_jobs.get(compare_id)
     if not job:
@@ -1692,7 +1643,7 @@ async def start_sandbox(request: SandboxRequest, background_tasks: BackgroundTas
 
 
 @router.get("/generation-profiles")
-async def generation_profiles(model_id: str, architecture: str | None = None):
+def generation_profiles(model_id: str, architecture: str | None = None):
     """Measured benchmark settings + publisher recommendations per purpose."""
     from lm_optimizer.services.generation_profiles import profiles_for
 
@@ -1700,7 +1651,7 @@ async def generation_profiles(model_id: str, architecture: str | None = None):
 
 
 @router.get("/sandbox/{job_id}", response_model=SandboxResponse)
-async def get_sandbox(job_id: str):
+def get_sandbox(job_id: str):
     """Poll a sandbox duel result (in-memory first, history fallback)."""
     import json as _json
 
@@ -1726,7 +1677,7 @@ async def get_sandbox(job_id: str):
 
 
 @router.get("/duels")
-async def list_duels(limit: int = 50, offset: int = 0):
+def list_duels(limit: int = 50, offset: int = 0):
     """Duel history (summaries; full result via single get)."""
     import time as _time
 
@@ -1755,7 +1706,7 @@ async def list_duels(limit: int = 50, offset: int = 0):
 
 
 @router.get("/duels/{job_id}")
-async def get_duel(job_id: str):
+def get_duel(job_id: str):
     """Full duel record including result."""
     try:
         row = duel_repo.get(job_id)
@@ -1774,7 +1725,7 @@ def _duel_files_dir(job_id: str):
 
 
 @router.delete("/duels/{job_id}")
-async def delete_duel(job_id: str):
+def delete_duel(job_id: str):
     """Delete a duel record plus its generated files."""
     import shutil
 
@@ -1785,7 +1736,7 @@ async def delete_duel(job_id: str):
     try:
         gone = duel_repo.delete(job_id)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)[:160]}")
+        raise _internal_error("delete run", e)
     _sandbox_jobs.pop(job_id, None)
     if not gone:
         raise HTTPException(status_code=404, detail="Duel not found")
@@ -1793,12 +1744,12 @@ async def delete_duel(job_id: str):
 
 
 @router.delete("/runs/{run_id}")
-async def delete_run(run_id: UUID):
+def delete_run(run_id: UUID):
     """Delete a run (refuses live or fresh non-terminal runs)."""
     try:
         run = run_repo.get(str(run_id))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Lookup failed: {str(e)[:160]}")
+        raise _internal_error("lookup", e)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
     status_value = getattr(getattr(run, "status", None), "value", "")
@@ -1810,7 +1761,7 @@ async def delete_run(run_id: UUID):
     try:
         ok = run_repo.delete(str(run_id))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)[:160]}")
+        raise _internal_error("delete run", e)
     if not ok:
         raise HTTPException(status_code=404, detail="Run not found")
     try:
@@ -1823,7 +1774,7 @@ async def delete_run(run_id: UUID):
 
 
 @router.post("/runs/{run_id}/abandon")
-async def abandon_run(run_id: UUID, force: bool = False):
+def abandon_run(run_id: UUID, force: bool = False):
     """Mark a dead non-terminal run INTERRUPTED (keeps it in history).
 
     Refuses live runs (fresh checkpoint or current) and terminal states
@@ -1834,7 +1785,7 @@ async def abandon_run(run_id: UUID, force: bool = False):
     try:
         run = run_repo.get(str(run_id))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Lookup failed: {str(e)[:160]}")
+        raise _internal_error("lookup", e)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
     status_value = str(getattr(getattr(run, "status", None), "value", "")).lower()
@@ -1856,14 +1807,14 @@ async def abandon_run(run_id: UUID, force: bool = False):
                      + "abandoned: process gone, no fresh checkpoint")
         run_repo.save(run)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Abandon failed: {str(e)[:160]}")
+        raise _internal_error("abandon run", e)
     # Checkpoint is intentionally preserved: history + diagnostics + a possible
     # later resume must survive an abandon. Abandon is not deletion.
     return {"success": True, "id": str(run_id), "status": "interrupted"}
 
 
 @router.post("/runs/reconcile")
-async def reconcile_runs(apply: bool = False):
+def reconcile_runs(apply: bool = False):
     """Preview/apply stale-running reconciliation (idempotent, non-destructive).
 
     Default preview only; pass ``?apply=true`` to mark stale runs interrupted.
@@ -2019,7 +1970,7 @@ async def judge_submit(request: JudgeRequest, background: BackgroundTasks, wait:
 
 
 @router.get("/judge/{judge_id}", response_model=JudgeVerdictResponse)
-async def judge_get(judge_id: str):
+def judge_get(judge_id: str):
     """Get judge verdict by ID."""
     # First check in-memory jobs (for pending/running)
     job = _judge_jobs.get(judge_id)
@@ -2061,7 +2012,7 @@ async def judge_get(judge_id: str):
 
 
 @router.get("/judge/history", response_model=list[JudgeHistoryItem])
-async def judge_history(limit: int = 20):
+def judge_history(limit: int = 20):
     """Get recent judge verdicts from database."""
     from lm_optimizer.database.manager import DatabaseManager
     from lm_optimizer.config import config
@@ -2097,7 +2048,7 @@ async def judge_history(limit: int = 20):
 
 
 @router.get("/lab/recommend")
-async def lab_recommend(
+def lab_recommend(
     min_tps: float = 5.0,
     min_context: int = 8192,
     vram_only: bool = False,
@@ -2164,7 +2115,7 @@ async def lab_recommend(
 
 
 @router.get("/lab/quality-tasks")
-async def lab_quality_tasks():
+def lab_quality_tasks():
     """The deterministic quality task library (P3)."""
     from lm_optimizer.services.quality_lab import default_tasks
 
@@ -2184,7 +2135,7 @@ async def lab_quality_tasks():
 
 
 @router.get("/lab/duel-types")
-async def lab_duel_types():
+def lab_duel_types():
     """Available duel types and their task sets (P4)."""
     from lm_optimizer.services.duel import DUEL_TASKS, DuelType
 
@@ -2196,7 +2147,7 @@ async def lab_duel_types():
 
 
 @router.get("/lab/sandbox-tasks")
-async def lab_sandbox_tasks():
+def lab_sandbox_tasks():
     """Sandbox task definitions with their acceptance criteria (P4)."""
     from lm_optimizer.services.sandbox_lab import SANDBOX_TASKS
 
@@ -2227,7 +2178,7 @@ async def lab_sandbox_tasks():
 
 
 @router.post("/lab/sandbox-run")
-async def lab_sandbox_run(payload: dict, background: BackgroundTasks):
+def lab_sandbox_run(payload: dict, background: BackgroundTasks):
     """Start a sandbox task in the background (P4).
 
     Body: {"task": "web_dashboard", "model": "publisher/model"}.
@@ -2251,7 +2202,7 @@ async def lab_sandbox_run(payload: dict, background: BackgroundTasks):
 
 
 @router.get("/lab/sandbox-run/{job_id}")
-async def lab_sandbox_status(job_id: str):
+def lab_sandbox_status(job_id: str):
     """Poll a sandbox job."""
     job = _sandbox_jobs.get(job_id)
     if job is None:
@@ -2437,6 +2388,12 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 
+def _internal_error(action: str, exc: Exception) -> HTTPException:
+    """Log the real exception and return a generic 500 response."""
+    logger.exception("API internal error", action=action)
+    return HTTPException(status_code=500, detail="Internal server error")
+
+
 def _audit_config_change(action: str, **fields) -> None:
     """Emit a structured audit event for state-changing config operations."""
     payload = {key: value for key, value in fields.items() if value is not None}
@@ -2451,7 +2408,7 @@ class _OllamaRestoreRequest(_OllamaBaseModel):
     dry_run: bool = False
 
 @router.get("/ollama-default")
-async def get_ollama_default(model_id: str):
+def get_ollama_default(model_id: str):
     from lm_optimizer.services.ollama_defaults import resolve_ollama_defaults_path
     try:
         path = resolve_ollama_defaults_path(model_id)
@@ -2470,7 +2427,7 @@ async def get_ollama_default(model_id: str):
     return {"model_id": model_id, "path": str(path), "exists": existed, "fields": fields}
 
 @router.post("/runs/{run_id}/save-ollama-default")
-async def save_ollama_default(run_id: UUID, dry_run: bool = False):
+def save_ollama_default(run_id: UUID, dry_run: bool = False):
     from lm_optimizer.services.ollama_defaults import DefaultsError, save_run_ollama_defaults
     run = run_repo.get(str(run_id))
     if not run:
@@ -2491,7 +2448,7 @@ async def save_ollama_default(run_id: UUID, dry_run: bool = False):
 # --- Ollama restore + diff (missing from batch 1 review) ---
 
 @router.post("/ollama-default/restore")
-async def restore_ollama_default(request: RestoreDefaultsRequest):
+def restore_ollama_default(request: RestoreDefaultsRequest):
     from lm_optimizer.services.ollama_defaults import DefaultsError, restore_ollama_defaults
     try:
         result = restore_ollama_defaults(
@@ -2509,7 +2466,7 @@ async def restore_ollama_default(request: RestoreDefaultsRequest):
 
 
 @router.get("/runs/{run_id}/ollama-default-diff")
-async def get_run_ollama_default_diff(run_id: UUID):
+def get_run_ollama_default_diff(run_id: UUID):
     from dataclasses import replace as _replace
     run = run_repo.get(str(run_id))
     if not run:
@@ -2563,7 +2520,7 @@ async def verify_ollama_default(run_id: UUID):
 # --- Monitoring / profiling helper routes ---
 
 @router.get("/monitor/gpu-status")
-async def get_gpu_status():
+def get_gpu_status():
     from lm_optimizer.services.gpu_monitor import should_run_tests
     return should_run_tests()
 
@@ -2571,13 +2528,13 @@ async def get_gpu_status():
 # --- Speculative decoding + KV cache helpers exposed via routes ---
 
 @router.post("/runs/{run_id}/auto-tune-speculative")
-async def auto_tune_speculative_for_run(run_id: UUID):
+def auto_tune_speculative_for_run(run_id: UUID):
     from lm_optimizer.api.routes import auto_tune_speculative
     return auto_tune_speculative(None)
 
 
 @router.post("/runs/{run_id}/auto-tune-kv-cache")
-async def auto_tune_kv_cache_for_run(run_id: UUID, gpu_vram_gb: float = 8.0):
+def auto_tune_kv_cache_for_run(run_id: UUID, gpu_vram_gb: float = 8.0):
     from lm_optimizer.api.routes import auto_tune_kv_cache
     return auto_tune_kv_cache(None, gpu_vram_gb)
 
