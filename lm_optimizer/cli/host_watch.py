@@ -10,7 +10,7 @@ import typer
 from rich.console import Console
 
 from lm_optimizer.logging_config import get_logger, setup_logging
-from lm_optimizer.services.foreign_watchdog import (
+from lm_optimizer.services.host.foreign_watchdog import (
     BACKEND_LMSTUDIO,
     BACKEND_OLLAMA,
     ForeignModelWatchdog,
@@ -83,7 +83,7 @@ def host_watch(
     async def _one_pass() -> dict:
         from lm_optimizer.backends.ollama.client import OllamaClient
         from lm_optimizer.config import config
-        from lm_optimizer.services.lm_studio import LMStudioClient
+        from lm_optimizer.services.host.lm_studio import LMStudioClient
 
         if normalized == BACKEND_OLLAMA:
             client = OllamaClient(base_url=config.ollama_base_url)

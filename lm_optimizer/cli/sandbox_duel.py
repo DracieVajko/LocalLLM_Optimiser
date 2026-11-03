@@ -19,7 +19,7 @@ from lm_optimizer.domain.models import (
 )
 from lm_optimizer.logging_config import get_logger, setup_logging
 from lm_optimizer.services.benchmark import BenchmarkService
-from lm_optimizer.services.lm_studio import LMStudioClient
+from lm_optimizer.services.host.lm_studio import LMStudioClient
 from lm_optimizer.services.quality import QualityConfig, QualityEvaluator
 
 logger = get_logger(__name__)
@@ -382,7 +382,7 @@ def sandbox_duel(
         table.add_row(metric, "", "", f"{who} (+{v['margin_pct']}%)")
     console.print(table)
 
-    from lm_optimizer.services.hardware import hardware_detector
+    from lm_optimizer.services.host.hardware import hardware_detector
 
     hw = hardware_detector.detect()
     env = {
@@ -395,7 +395,7 @@ def sandbox_duel(
 
 
 def _safe_lms_version() -> str:
-    from lm_optimizer.services import lms_cli
+    from lm_optimizer.services.host import lms_cli
 
     try:
         return lms_cli.lms_version()

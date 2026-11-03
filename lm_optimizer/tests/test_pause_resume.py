@@ -14,7 +14,7 @@ from lm_optimizer.domain.models import (
     OptimizationRun,
     QualityScore,
 )
-from lm_optimizer.services.optimizer import AdaptiveOptimizer, OptimizationState
+from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer, OptimizationState
 from lm_optimizer.services.search_space import SearchSpace
 
 
@@ -129,7 +129,7 @@ class TestPausePhases:
     def test_pause_during_speed(self, tmp_path, monkeypatch):
         import pytest
 
-        from lm_optimizer.services.optimizer import PauseRequested
+        from lm_optimizer.services.orchestration.optimizer import PauseRequested
 
         _no_db(monkeypatch)
         _patch_ckpt_dir(tmp_path, monkeypatch)
@@ -147,7 +147,7 @@ class TestPausePhases:
     def test_pause_during_quality(self, tmp_path, monkeypatch):
         import pytest
 
-        from lm_optimizer.services.optimizer import PauseRequested
+        from lm_optimizer.services.orchestration.optimizer import PauseRequested
 
         _no_db(monkeypatch)
         _patch_ckpt_dir(tmp_path, monkeypatch)
@@ -172,7 +172,7 @@ class TestPausePhases:
     def test_pause_during_recovery(self, tmp_path, monkeypatch):
         import pytest
 
-        from lm_optimizer.services.optimizer import PauseRequested
+        from lm_optimizer.services.orchestration.optimizer import PauseRequested
 
         _no_db(monkeypatch)
         _patch_ckpt_dir(tmp_path, monkeypatch)
@@ -191,7 +191,7 @@ class TestPausePhases:
     def test_pause_during_final_validation(self, tmp_path, monkeypatch):
         import pytest
 
-        from lm_optimizer.services.optimizer import PauseRequested
+        from lm_optimizer.services.orchestration.optimizer import PauseRequested
 
         _no_db(monkeypatch)
         _patch_ckpt_dir(tmp_path, monkeypatch)
@@ -209,7 +209,7 @@ class TestPauseDurability:
     def test_pause_persists_checkpoint(self, tmp_path, monkeypatch):
         import pytest
 
-        from lm_optimizer.services.optimizer import PauseRequested
+        from lm_optimizer.services.orchestration.optimizer import PauseRequested
         from lm_optimizer.storage import run_checkpoint as rc
 
         _no_db(monkeypatch)
@@ -243,7 +243,7 @@ class TestPauseDurability:
         front = {"winner": first, "finalists": [first, second], "contrarian": None}
         import pytest
 
-        from lm_optimizer.services.optimizer import PauseRequested
+        from lm_optimizer.services.orchestration.optimizer import PauseRequested
 
         with pytest.raises(PauseRequested):
             asyncio.run(opt._phase_quality(front))
@@ -259,7 +259,7 @@ class TestPauseDurability:
     def test_current_in_progress_not_falsely_complete(self, tmp_path, monkeypatch):
         import pytest
 
-        from lm_optimizer.services.optimizer import PauseRequested
+        from lm_optimizer.services.orchestration.optimizer import PauseRequested
 
         _no_db(monkeypatch)
         _patch_ckpt_dir(tmp_path, monkeypatch)
@@ -296,7 +296,7 @@ class TestPauseResumeWiring:
         assert rc.save_checkpoint(seeder.state, reason="paused:user_requested") is not None
 
     def test_resume_from_paused_run(self, tmp_path, monkeypatch):
-        from lm_optimizer.services.optimizer import AdaptiveOptimizer
+        from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer
 
         run = self._seed_run(monkeypatch, phase_ab={"phase": "speed"})
         _patch_ckpt_dir(tmp_path, monkeypatch)
@@ -314,7 +314,7 @@ class TestPauseResumeWiring:
         assert str(out.id) == str(run.id)
 
     def test_pause_and_resume_same_run_id(self, tmp_path, monkeypatch):
-        from lm_optimizer.services.optimizer import AdaptiveOptimizer
+        from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer
 
         run = self._seed_run(monkeypatch, phase_ab={"phase": "speed"})
         _patch_ckpt_dir(tmp_path, monkeypatch)

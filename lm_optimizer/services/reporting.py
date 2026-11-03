@@ -917,7 +917,7 @@ def save_best_report(
             f"- Best balanced (profile {run.profile.value}): "
             f"ctx {best.context_length}, score {_score_str(best.score)}"
         )
-        from lm_optimizer.services.run_summary import speed_range as _speed_range
+        from lm_optimizer.services.orchestration.run_summary import speed_range as _speed_range
 
         _range = _speed_range(tested)
         if _range is not None:

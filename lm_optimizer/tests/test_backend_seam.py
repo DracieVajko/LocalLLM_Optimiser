@@ -6,7 +6,7 @@ from lm_optimizer.backends.base import assert_conforms
 from lm_optimizer.backends.ollama.client import OllamaClient
 from lm_optimizer.cli.main import get_backend_client
 from lm_optimizer.config import config
-from lm_optimizer.services.lm_studio import LMStudioClient
+from lm_optimizer.services.host.lm_studio import LMStudioClient
 
 
 def test_lm_studio_conforms_to_backend_client():

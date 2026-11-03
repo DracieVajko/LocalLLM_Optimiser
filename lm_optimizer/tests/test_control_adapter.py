@@ -159,7 +159,7 @@ class TestEstimatePrune:
 
 class TestEstimateFor:
     def test_parses_numbers(self, monkeypatch):
-        from lm_optimizer.services import lms_cli
+        from lm_optimizer.services.host import lms_cli
 
         monkeypatch.setattr(lms_cli, "lms_available", lambda: True)
         monkeypatch.setattr(
@@ -175,7 +175,7 @@ class TestEstimateFor:
         assert out["confidence"] == "high" and out["returncode"] == 0
 
     def test_unavailable_or_refused(self, monkeypatch):
-        from lm_optimizer.services import lms_cli
+        from lm_optimizer.services.host import lms_cli
 
         monkeypatch.setattr(lms_cli, "lms_available", lambda: False)
         out = lms_cli.estimate_for("m")

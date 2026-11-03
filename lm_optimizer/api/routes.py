@@ -56,15 +56,15 @@ from lm_optimizer.domain.models import (
     RunStatus,
 )
 from lm_optimizer.services.advanced_settings import AdvancedSettings
-from lm_optimizer.services.optimization_workflow import build_optimizer
-from lm_optimizer.services.hardware import hardware_detector
+from lm_optimizer.services.orchestration.optimization_workflow import build_optimizer
+from lm_optimizer.services.host.hardware import hardware_detector
 from lm_optimizer.services.joblock import JobBusyError, acquire_lock, release_lock
-from lm_optimizer.services.lm_studio import LMStudioClient, create_client
+from lm_optimizer.services.host.lm_studio import LMStudioClient, create_client
 from lm_optimizer.storage.run_checkpoint import checkpoint_dir, load_checkpoint
 from pathlib import Path
 from datetime import datetime
 import orjson
-from lm_optimizer.services.optimizer import AdaptiveOptimizer
+from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer
 from lm_optimizer.services.best_effort import log_best_effort
 
 router = APIRouter()
@@ -159,7 +159,7 @@ def _winner_metrics(r) -> dict:
     configs = list(getattr(r, "configurations", []) or [])
     if configs:
         try:
-            from lm_optimizer.services.run_summary import final_recommendation
+            from lm_optimizer.services.orchestration.run_summary import final_recommendation
 
             best = final_recommendation(configs, r)
         except Exception:
@@ -556,7 +556,7 @@ async def start_optimization(request: OptimizationRequest, background_tasks: Bac
 
         # Granular modes: compose the skip set the same way the CLI does, so
         # the web endpoint honours --speed-only/--quality-only/... too.
-        from lm_optimizer.services.optimizer import compose_granular_skips
+        from lm_optimizer.services.orchestration.optimizer import compose_granular_skips
 
         if any(
             adv.get(key)
@@ -569,7 +569,7 @@ async def start_optimization(request: OptimizationRequest, background_tasks: Bac
         # Scheduled artifact test: validate before any run is created so an
         # unknown task fails fast instead of being silently disabled.
         if adv.get("artifact_test_id"):
-            from lm_optimizer.services.optimizer import validate_artifact_test_id
+            from lm_optimizer.services.orchestration.optimizer import validate_artifact_test_id
 
             try:
                 adv["artifact_test_id"] = validate_artifact_test_id(
@@ -857,7 +857,7 @@ def get_optimization_progress(run_id: UUID):
     ):
         from lm_optimizer.services.failure_states import is_terminal_failure
 
-        from lm_optimizer.services.optimizer import _display_total
+        from lm_optimizer.services.orchestration.optimizer import _display_total
 
         state = _current_optimizer.state
         total = _display_total(state)
@@ -2067,7 +2067,7 @@ def lab_recommend(
         RecommenderRequest,
         UseCase,
     )
-    from lm_optimizer.services.hardware import hardware_detector
+    from lm_optimizer.services.host.hardware import hardware_detector
 
     try:
         hw_info = hardware_detector.detect()
@@ -2523,7 +2523,7 @@ async def verify_ollama_default(run_id: UUID):
 
 @router.get("/monitor/gpu-status")
 def get_gpu_status():
-    from lm_optimizer.services.gpu_monitor import should_run_tests
+    from lm_optimizer.services.host.gpu_monitor import should_run_tests
     return should_run_tests()
 
 
@@ -2559,7 +2559,7 @@ def auto_tune_kv_cache(config, gpu_vram_gb=8.0):
 
 def wire_monitoring(test_manager_instance):
     """Wire hw_monitor into test_manager for real-time profiling."""
-    from lm_optimizer.services.hardware import HardwareDetector
+    from lm_optimizer.services.host.hardware import HardwareDetector
     detector = HardwareDetector()
     info = detector.detect()
     gpus = getattr(info, "gpus", None) or []

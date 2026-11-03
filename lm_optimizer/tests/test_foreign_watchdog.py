@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from lm_optimizer.services.foreign_watchdog import (
+from lm_optimizer.services.host.foreign_watchdog import (
     BACKEND_LMSTUDIO,
     BACKEND_OLLAMA,
     ForeignModelWatchdog,

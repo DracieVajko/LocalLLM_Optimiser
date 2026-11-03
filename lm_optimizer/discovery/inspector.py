@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 
 from lm_optimizer.domain.models import LoadConfiguration, ModelIdentity
-from lm_optimizer.services.lm_studio import LMStudioClient
+from lm_optimizer.services.host.lm_studio import LMStudioClient
 from lm_optimizer.config import config
 from lm_optimizer.logging_config import get_logger
 

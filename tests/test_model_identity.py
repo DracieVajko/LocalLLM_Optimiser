@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from lm_optimizer.services.lm_studio import LMStudioClient
+from lm_optimizer.services.host.lm_studio import LMStudioClient
 
 
 API_MODELS = {

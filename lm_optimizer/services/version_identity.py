@@ -149,7 +149,7 @@ def identity_from_version_string(
 
 def lms_identity(cli_performs_loads: bool = False) -> VersionIdentity:
     """Normalized identity of the local ``lms`` CLI."""
-    from lm_optimizer.services import lms_cli
+    from lm_optimizer.services.host import lms_cli
 
     try:
         text = lms_cli.lms_version()

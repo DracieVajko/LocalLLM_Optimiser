@@ -187,7 +187,7 @@ app.mount("/static", StaticFiles(directory="lm_optimizer/ui/static"), name="stat
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     """Main dashboard."""
-    from lm_optimizer.services.hardware import hardware_detector
+    from lm_optimizer.services.host.hardware import hardware_detector
 
     hardware = hardware_detector.detect()
     return templates.TemplateResponse(

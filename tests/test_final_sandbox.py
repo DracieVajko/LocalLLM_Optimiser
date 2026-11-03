@@ -183,7 +183,7 @@ def test_run_manual_prompt_never_synthesises_a_score(tmp_path):
 # --- optimizer sandbox stage ------------------------------------------------
 
 def _optimizer_for_sandbox(run, tmp_path):
-    from lm_optimizer.services.optimizer import AdaptiveOptimizer, OptimizationState
+    from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer, OptimizationState
 
     opt = AdaptiveOptimizer.__new__(AdaptiveOptimizer)
     opt.client = MagicMock()
@@ -226,7 +226,7 @@ def _run(**kw):
 
 @pytest.fixture(autouse=True)
 def _no_repo_writes(monkeypatch):
-    from lm_optimizer.services import optimizer as _opt
+    from lm_optimizer.services.orchestration import optimizer as _opt
 
     monkeypatch.setattr(_opt.run_repo, "save", lambda r: str(r.id))
 

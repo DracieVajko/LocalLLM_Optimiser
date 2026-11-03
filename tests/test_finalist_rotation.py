@@ -1,6 +1,6 @@
 """Finalist rotation tests (spec 7.3: ABC/BCA/CAB)."""
 
-from lm_optimizer.services.optimizer import AdaptiveOptimizer
+from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer
 
 
 def test_rotate_no_offset_is_identity():

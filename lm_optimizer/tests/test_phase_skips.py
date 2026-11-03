@@ -19,7 +19,7 @@ from lm_optimizer.domain.models import (
     OptimizationProfile,
     OptimizationRun,
 )
-from lm_optimizer.services.optimizer import (
+from lm_optimizer.services.orchestration.optimizer import (
     PHASE_SKIP_NAMES,
     AdaptiveOptimizer,
     OptimizationState,
@@ -87,7 +87,7 @@ class TestParsePhaseSkips:
 
 class TestRunPhaseAbSkips:
     def _wire(self, opt, monkeypatch):
-        import lm_optimizer.services.optimizer as _optmod
+        import lm_optimizer.services.orchestration.optimizer as _optmod
 
         monkeypatch.setattr(_optmod, "run_repo", MagicMock())
         opt._phase_speed = AsyncMock(return_value={"winner": None, "finalists": [], "contrarian": None})
@@ -336,7 +336,7 @@ class TestApplyResumeSkips:
         assert again.benchmark_params["skip_phases"] == ["context", "speed"]
 
     def test_run_skip_phases_db_fallback(self):
-        from lm_optimizer.services.optimizer import run_skip_phases
+        from lm_optimizer.services.orchestration.optimizer import run_skip_phases
 
         run = self._seed()
         run.advanced_settings = {}

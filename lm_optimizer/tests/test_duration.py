@@ -41,7 +41,7 @@ def _metric(gen=40.0):
 
 
 def _optimizer(bench_behavior):
-    from lm_optimizer.services.optimizer import AdaptiveOptimizer, OptimizationState
+    from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer, OptimizationState
     from lm_optimizer.services.search_space import SearchSpace
 
     opt = AdaptiveOptimizer.__new__(AdaptiveOptimizer)
@@ -78,7 +78,7 @@ def _optimizer(bench_behavior):
 
 
 def _clock(monkeypatch, start=100.0, end=100.5):
-    import lm_optimizer.services.optimizer as _opt
+    import lm_optimizer.services.orchestration.optimizer as _opt
 
     vals = itertools.chain([start, end], itertools.repeat(end))
     monkeypatch.setattr(_opt.time, "perf_counter", lambda: next(vals))

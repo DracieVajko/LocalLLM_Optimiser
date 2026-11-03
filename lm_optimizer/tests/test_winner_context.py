@@ -37,7 +37,7 @@ def _best(outer_ctx=32768, nested_ctx=32768, score=0.9):
 
 
 def _optimizer_with_best(best):
-    from lm_optimizer.services import optimizer as _opt
+    from lm_optimizer.services.orchestration import optimizer as _opt
     from lm_optimizer.domain.models import (
         HardwareInfo, ModelIdentity, OptimizationProfile, OptimizationRun,
     )
@@ -97,7 +97,7 @@ class TestValidationCopyUsesOuterContext:
         assert best.context_length == 32768
 
     def test_failed_quality_never_winner(self):
-        from lm_optimizer.services.run_summary import best_passed
+        from lm_optimizer.services.orchestration.run_summary import best_passed
 
         good = _best(outer_ctx=4096, nested_ctx=4096, score=0.4)
         bad = _best(outer_ctx=32768, nested_ctx=32768, score=None)
@@ -106,8 +106,8 @@ class TestValidationCopyUsesOuterContext:
         assert best_passed([good, bad]) is good
 
     def test_skip_quality_never_validated_winner(self):
-        from lm_optimizer.services.optimizer import phase_skips_of
-        from lm_optimizer.services.run_summary import final_recommendation
+        from lm_optimizer.services.orchestration.optimizer import phase_skips_of
+        from lm_optimizer.services.orchestration.run_summary import final_recommendation
 
         assert "quality" in phase_skips_of({"skip_phases": ["quality"]})
         # Scoreless speed probe alone can never become the final recommendation.

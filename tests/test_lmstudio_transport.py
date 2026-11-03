@@ -4,7 +4,7 @@ import asyncio
 
 import httpx
 
-from lm_optimizer.services.lm_studio import LMStudioClient
+from lm_optimizer.services.host.lm_studio import LMStudioClient
 
 
 def _models_payload():

@@ -10,7 +10,7 @@ from lm_optimizer.domain.models import ConfigurationResult
 
 
 def _opt_with_state():
-    from lm_optimizer.services import optimizer as _opt
+    from lm_optimizer.services.orchestration import optimizer as _opt
 
     opt = _opt.AdaptiveOptimizer.__new__(_opt.AdaptiveOptimizer)
     state = MagicMock()
@@ -26,7 +26,7 @@ def _opt_with_state():
 
 class TestReconcile:
     def test_db_newer_log_wins(self, monkeypatch):
-        from lm_optimizer.services import optimizer as _opt
+        from lm_optimizer.services.orchestration import optimizer as _opt
 
         opt, _ = _opt_with_state()
         monkeypatch.setattr(_opt.run_repo, "save", lambda r: "r1")
@@ -39,7 +39,7 @@ class TestReconcile:
         assert out["recovery_cursor"]["step"] == 3
 
     def test_checkpoint_newer_cursor_only(self, monkeypatch):
-        from lm_optimizer.services import optimizer as _opt
+        from lm_optimizer.services.orchestration import optimizer as _opt
 
         opt, _ = _opt_with_state()
         monkeypatch.setattr(_opt.run_repo, "save", lambda r: "r1")
@@ -52,7 +52,7 @@ class TestReconcile:
         assert out["recovery_cursor"]["step"] == 7  # greater cursor kept
 
     def test_stale_checkpoint_cannot_erase(self, monkeypatch):
-        from lm_optimizer.services import optimizer as _opt
+        from lm_optimizer.services.orchestration import optimizer as _opt
 
         opt, _ = _opt_with_state()
         monkeypatch.setattr(_opt.run_repo, "save", lambda r: "r1")
@@ -67,7 +67,7 @@ class TestReconcile:
         from lm_optimizer.domain.models import (
             ConfigurationResult, ConfigurationStatus, LoadConfiguration,
         )
-        from lm_optimizer.services import optimizer as _opt
+        from lm_optimizer.services.orchestration import optimizer as _opt
 
         opt = _opt.AdaptiveOptimizer.__new__(_opt.AdaptiveOptimizer)
         state = MagicMock()
@@ -123,7 +123,7 @@ class TestReconcile:
         assert "run-1" in out["failed"]
 
     def test_legacy_checkpoint_readable(self):
-        from lm_optimizer.services.optimizer import AdaptiveOptimizer
+        from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer
 
         opt = AdaptiveOptimizer.__new__(AdaptiveOptimizer)
         state = MagicMock()
@@ -168,7 +168,7 @@ class TestResumeMenuListing:
         from typer.testing import CliRunner
 
         from lm_optimizer.cli import main as _cli
-        from lm_optimizer.services import optimizer as _opt
+        from lm_optimizer.services.orchestration import optimizer as _opt
 
         runs = self._runs()
         monkeypatch.setattr(_opt.run_repo, "list_all", lambda limit=20: runs)
@@ -201,7 +201,7 @@ class TestResumeMenuListing:
         from typer.testing import CliRunner
 
         from lm_optimizer.cli import main as _cli
-        from lm_optimizer.services import optimizer as _opt
+        from lm_optimizer.services.orchestration import optimizer as _opt
 
         runs = self._runs()
         monkeypatch.setattr(_opt.run_repo, "list_all", lambda limit=20: runs)
@@ -234,7 +234,7 @@ class TestResumeLoopSkipsCompleted:
         from lm_optimizer.domain.models import (
             ConfigurationResult, ConfigurationStatus, LoadConfiguration,
         )
-        from lm_optimizer.services import optimizer as _opt
+        from lm_optimizer.services.orchestration import optimizer as _opt
 
         dims = dict(
             context_length=8192, flash_attention=True,
@@ -412,7 +412,7 @@ class TestPhaseTransitionCrashRecovery:
             OptimizationStage,
             RunStatus,
         )
-        from lm_optimizer.services import optimizer as _opt
+        from lm_optimizer.services.orchestration import optimizer as _opt
         from lm_optimizer.storage import run_checkpoint as _rc
         from uuid import uuid4
 
@@ -608,7 +608,7 @@ class TestPhaseTransitionCrashRecovery:
             RunStatus,
             GPUInfo,
         )
-        from lm_optimizer.services import optimizer as _opt
+        from lm_optimizer.services.orchestration import optimizer as _opt
         from lm_optimizer.services.search_space import SearchSpace
         from uuid import uuid4
 
@@ -650,7 +650,7 @@ class TestPhaseTransitionCrashRecovery:
             OptimizationStage,
             GPUInfo,
         )
-        from lm_optimizer.services import optimizer as _opt
+        from lm_optimizer.services.orchestration import optimizer as _opt
         from lm_optimizer.services.search_space import SearchSpace
         from uuid import uuid4
 
@@ -688,7 +688,7 @@ class TestPhaseTransitionCrashRecovery:
         all have checkpoint(:start) before run_repo.save().
         """
         import inspect
-        from lm_optimizer.services import optimizer as _opt
+        from lm_optimizer.services.orchestration import optimizer as _opt
 
         for method_name in ["_phase_speed", "_phase_quality", "_run_recovery",
                             "_phase_final_validation", "_phase_context_optional"]:

@@ -127,13 +127,13 @@ def _result():
 
 @pytest.fixture(autouse=True)
 def _no_repo_writes(monkeypatch):
-    from lm_optimizer.services import optimizer as _opt
+    from lm_optimizer.services.orchestration import optimizer as _opt
 
     monkeypatch.setattr(_opt.run_repo, "save", lambda r: str(r.id))
 
 
 def test_final_validation_keeps_loaded_between_reps():
-    from lm_optimizer.services.optimizer import AdaptiveOptimizer, OptimizationState
+    from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer, OptimizationState
 
     run = _run()
     best = _result()

@@ -140,7 +140,7 @@ def test_run_manual_prompt_unloads_after_generation_error(tmp_path):
 # --- sequential, registry-ordered execution --------------------------------
 
 def _optimizer(run):
-    from lm_optimizer.services.optimizer import AdaptiveOptimizer, OptimizationState
+    from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer, OptimizationState
 
     opt = AdaptiveOptimizer.__new__(AdaptiveOptimizer)
     opt.client = MagicMock()
@@ -155,7 +155,7 @@ def _optimizer(run):
 
 
 def test_all_mode_runs_tasks_sequentially_in_registry_order(monkeypatch):
-    from lm_optimizer.services import optimizer as _opt
+    from lm_optimizer.services.orchestration import optimizer as _opt
     from lm_optimizer.services import sandbox_runner
 
     monkeypatch.setattr(_opt.run_repo, "save", lambda r: str(r.id))
@@ -192,7 +192,7 @@ def test_all_mode_runs_tasks_sequentially_in_registry_order(monkeypatch):
 
 
 def test_sandbox_mode_off_does_nothing(monkeypatch):
-    from lm_optimizer.services import optimizer as _opt
+    from lm_optimizer.services.orchestration import optimizer as _opt
     from lm_optimizer.services import sandbox_runner
 
     monkeypatch.setattr(_opt.run_repo, "save", lambda r: str(r.id))

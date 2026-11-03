@@ -18,7 +18,7 @@ import contextlib
 from enum import StrEnum
 
 from lm_optimizer.domain.models import LoadConfiguration
-from lm_optimizer.services import lms_cli
+from lm_optimizer.services.host import lms_cli
 from lm_optimizer.services.parameter_registry import (
     SCHEMA_KNOWN,
     SUPPORTED,

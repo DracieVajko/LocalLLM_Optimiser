@@ -17,7 +17,7 @@ from lm_optimizer.domain.models import (
     LoadConfiguration,
 )
 from lm_optimizer.logging_config import get_logger
-from lm_optimizer.services.lm_studio import LMStudioClient
+from lm_optimizer.services.host.lm_studio import LMStudioClient
 from lm_optimizer.services.best_effort import log_best_effort
 
 logger = get_logger(__name__)
@@ -59,7 +59,7 @@ VALID_STYLES = ("precise", "balanced", "creative")
 def _sample_mem() -> dict:
     """One VRAM/RAM snapshot; {} when unavailable (never fabricated)."""
     try:
-        from lm_optimizer.services.hostguard import gpu_free_mb, mem_free_gb
+        from lm_optimizer.services.host.hostguard import gpu_free_mb, mem_free_gb
 
         out: dict = {}
         try:
@@ -90,7 +90,7 @@ def _collect_thermal() -> dict:
     measurement.
     """
     try:
-        from lm_optimizer.services.metrics_providers import collect_metrics
+        from lm_optimizer.services.host.metrics_providers import collect_metrics
 
         metrics = collect_metrics()
     except Exception:

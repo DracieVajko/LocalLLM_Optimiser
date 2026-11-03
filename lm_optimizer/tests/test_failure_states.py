@@ -30,7 +30,7 @@ def _hw():
 
 
 def _optimizer(bench_result=None):
-    from lm_optimizer.services.optimizer import AdaptiveOptimizer, OptimizationState
+    from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer, OptimizationState
     from lm_optimizer.services.search_space import SearchSpace
 
     opt = AdaptiveOptimizer.__new__(AdaptiveOptimizer)
@@ -197,7 +197,7 @@ class TestQualityFailed:
         assert opt.state.best_config is None
 
     def test_quality_failed_never_winner(self):
-        from lm_optimizer.services.run_summary import best_passed
+        from lm_optimizer.services.orchestration.run_summary import best_passed
 
         good = _bench(status="passed", gen=30.0)
         good.status = ConfigurationStatus.PASSED

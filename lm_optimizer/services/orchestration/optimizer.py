@@ -40,14 +40,14 @@ from lm_optimizer.scoring.normalization import (
 )
 from lm_optimizer.services.advanced_settings import AdvancedSettings
 from lm_optimizer.services.benchmark import BenchmarkService
-from lm_optimizer.services.foreign_watchdog import BACKEND_LMSTUDIO, ForeignModelWatchdog
+from lm_optimizer.services.host.foreign_watchdog import BACKEND_LMSTUDIO, ForeignModelWatchdog
 from lm_optimizer.services.fingerprint import (
     compute_fingerprint,
     fingerprint_diff,
     hardware_fingerprint,
     filter_configs_for_revalidation,
 )
-from lm_optimizer.services.lm_studio import LMStudioClient
+from lm_optimizer.services.host.lm_studio import LMStudioClient
 from lm_optimizer.services.quality import QualityEvaluator
 from lm_optimizer.services.search_space import SearchSpace, SearchSpaceGenerator
 from lm_optimizer.services.best_effort import log_best_effort
@@ -986,7 +986,7 @@ class AdaptiveOptimizer:
         run.benchmark_params["resolved_settings"] = build_resolved_settings(run)
 
         # Compute and store fingerprint for this run
-        from lm_optimizer.services import lms_cli as _lms_cli
+        from lm_optimizer.services.host import lms_cli as _lms_cli
         from lm_optimizer.benchmark.suite_version import BENCHMARK_SUITE_VERSION
 
         lms_version = "unknown"
@@ -1214,7 +1214,7 @@ class AdaptiveOptimizer:
         w = getattr(self, "_watchdog", None)
         if w is None:
             try:
-                from lm_optimizer.services.foreign_watchdog import build_watchdog
+                from lm_optimizer.services.host.foreign_watchdog import build_watchdog
 
                 self._watchdog = w = build_watchdog(
                     self.client,
@@ -2320,7 +2320,7 @@ class AdaptiveOptimizer:
         new_score = result.score
 
         # Authoritative 5% non-inferiority selection (services/selection.py).
-        from lm_optimizer.services.selection import SelectionConfig, select_by_score
+        from lm_optimizer.services.orchestration.selection import SelectionConfig, select_by_score
 
         try:
             threshold = float(
@@ -3434,7 +3434,7 @@ class AdaptiveOptimizer:
     ) -> tuple[ConfigurationResult | None, str | None]:
         """Bounded causal rollback: reconfirm, then single-param rollbacks."""
         from lm_optimizer.services.config_delta import config_delta, rank_delta
-        from lm_optimizer.services.recovery import (
+        from lm_optimizer.services.orchestration.recovery import (
             RECOVERY_BUDGET_DEFAULT,
             pairwise_allowed,
             plan_recovery,
@@ -3446,7 +3446,7 @@ class AdaptiveOptimizer:
         # Checkpoint BEFORE DB save so checkpoint phase >= DB stage on crash
         self._checkpoint("phase:recovery:start")
         run_repo.save(self.state.run)
-        from lm_optimizer.services.recovery import rank_failed_tests
+        from lm_optimizer.services.orchestration.recovery import rank_failed_tests
 
         qbt = (failed_result.generation or {}).get("quality_by_test") or {}
         # Explicit severity ordering; None-safe (null checks = unavailable
@@ -3587,7 +3587,7 @@ class AdaptiveOptimizer:
         """One rollback probe: recheck failed tests, admit on recovery."""
         from dataclasses import asdict
 
-        from lm_optimizer.services.recovery import RecoveryAttempt
+        from lm_optimizer.services.orchestration.recovery import RecoveryAttempt
 
         old_value = getattr(last_good, suspect, None)
         rolled = self._rolled_config(failed_result, {suspect: old_value})
@@ -3839,7 +3839,7 @@ class AdaptiveOptimizer:
         ref_kind: str = "safe",
     ) -> tuple[list, LoadConfiguration | None]:
         """Run bounded recovery for each failed finalist (skips without ref)."""
-        from lm_optimizer.services.recovery import RECOVERY_BUDGET_DEFAULT
+        from lm_optimizer.services.orchestration.recovery import RECOVERY_BUDGET_DEFAULT
 
         try:
             _budget = int(
@@ -3997,7 +3997,7 @@ class AdaptiveOptimizer:
 
     async def _finalize(self) -> None:
         """Finalize optimization run with comparison to baseline."""
-        from lm_optimizer.services.run_summary import classify_run, final_status_for_run
+        from lm_optimizer.services.orchestration.run_summary import classify_run, final_status_for_run
 
         self.state.run.configurations = self.state.tested_configs
         # Only validated PASSED configs may win.
@@ -4346,7 +4346,7 @@ class AdaptiveOptimizer:
 
         # Fingerprint-based revalidation: if fingerprint changed, revalidate affected configs
         if revalidate_fingerprint:
-            from lm_optimizer.services import lms_cli as _lms_cli
+            from lm_optimizer.services.host import lms_cli as _lms_cli
             from lm_optimizer.benchmark.suite_version import BENCHMARK_SUITE_VERSION
 
             lms_version = "unknown"
@@ -4384,7 +4384,7 @@ class AdaptiveOptimizer:
             # compare honestly instead of treating absence as a mismatch.
             try:
                 from lm_optimizer.benchmark.suite_version import BENCHMARK_SUITE_VERSION
-                from lm_optimizer.services import lms_cli as _lms_cli
+                from lm_optimizer.services.host import lms_cli as _lms_cli
 
                 try:
                     lms_version = _lms_cli.lms_version()
@@ -5006,7 +5006,7 @@ class AdaptiveOptimizer:
             # Partial GPU offload requires the verified CLI channel (REST
             # cannot set gpu_ratio).
             try:
-                from lm_optimizer.services import lms_cli as _lms_cli
+                from lm_optimizer.services.host import lms_cli as _lms_cli
 
                 cli_channel = bool(
                     getattr(self.benchmark, "gpu_via_cli", False)

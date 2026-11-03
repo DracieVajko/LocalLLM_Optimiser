@@ -11,7 +11,7 @@ import statistics
 
 from lm_optimizer.domain.models import LoadConfiguration
 from lm_optimizer.logging_config import get_logger
-from lm_optimizer.services.hostguard import gpu_free_mb
+from lm_optimizer.services.host.hostguard import gpu_free_mb
 
 logger = get_logger(__name__)
 

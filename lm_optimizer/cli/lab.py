@@ -431,7 +431,7 @@ def _detect_hardware_fingerprint():
     value is unknown the recommender falls back to a conservative estimate
     and the recommendation says so.
     """
-    from lm_optimizer.services.hardware import hardware_detector
+    from lm_optimizer.services.host.hardware import hardware_detector
     from lm_optimizer.services.recommender import HardwareFingerprint
 
     try:

@@ -12,7 +12,7 @@ def _opt():
         HardwareInfo, ModelIdentity, OptimizationProfile, OptimizationRun,
         OptimizationStage, RunStatus,
     )
-    from lm_optimizer.services import optimizer as _opt
+    from lm_optimizer.services.orchestration import optimizer as _opt
 
     opt = _opt.AdaptiveOptimizer.__new__(_opt.AdaptiveOptimizer)
     run = OptimizationRun(
@@ -44,7 +44,7 @@ def _opt():
 
 class TestPauseContract:
     def test_pause_point_raises_when_flag_set(self):
-        from lm_optimizer.services.optimizer import PauseRequested
+        from lm_optimizer.services.orchestration.optimizer import PauseRequested
 
         opt, _ = _opt()
         opt.state.should_pause = True
@@ -62,8 +62,8 @@ class TestPauseContract:
 
     def test_pause_now_persists_and_marks_paused(self, monkeypatch, tmp_path):
         from lm_optimizer.domain.models import RunStatus
-        from lm_optimizer.services import optimizer as _optmod
-        from lm_optimizer.services.optimizer import PauseRequested
+        from lm_optimizer.services.orchestration import optimizer as _optmod
+        from lm_optimizer.services.orchestration.optimizer import PauseRequested
 
         opt, _ = _opt()
         monkeypatch.setattr(_optmod.run_repo, "save", lambda r: "r1")
@@ -85,7 +85,7 @@ class TestPauseContract:
     def test_phases_contain_pause_checks(self):
         import inspect
 
-        from lm_optimizer.services.optimizer import AdaptiveOptimizer
+        from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer
 
         for fn in ("_phase_speed", "_phase_quality", "_recover_failed",
                    "_phase_final_validation"):
@@ -95,7 +95,7 @@ class TestPauseContract:
     def test_resume_keeps_same_id_no_new_run(self):
         import inspect
 
-        from lm_optimizer.services.optimizer import AdaptiveOptimizer
+        from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer
 
         src = inspect.getsource(AdaptiveOptimizer.resume_from_checkpoint)
         assert "OptimizationRun(" not in src  # rebuilds from DB, same id

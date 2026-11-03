@@ -20,17 +20,17 @@ from lm_optimizer.domain.models import (
 )
 from lm_optimizer.logging_config import get_logger, setup_logging
 from lm_optimizer.services.advanced_settings import AdvancedSettings
-from lm_optimizer.services.optimization_workflow import build_optimizer
+from lm_optimizer.services.orchestration.optimization_workflow import build_optimizer
 from lm_optimizer.services.fingerprint import (
     compute_fingerprint,
     fingerprint_diff,
     hardware_fingerprint,
 )
 from lm_optimizer.services.joblock import JobBusyError, acquire_lock, release_lock
-from lm_optimizer.services.lm_studio import LMStudioClient
+from lm_optimizer.services.host.lm_studio import LMStudioClient
 from lm_optimizer.services.model_eligibility import partition_models
 from lm_optimizer.services.version_identity import VersionIdentity, lms_identity
-from lm_optimizer.services import lms_cli as _lms_cli
+from lm_optimizer.services.host import lms_cli as _lms_cli
 from lm_optimizer.benchmark.suite_version import BENCHMARK_SUITE_VERSION
 from lm_optimizer.services.best_effort import log_best_effort
 
@@ -659,7 +659,7 @@ def _auto_run_body(
         return
 
     # Detect hardware
-    from lm_optimizer.services.hardware import hardware_detector
+    from lm_optimizer.services.host.hardware import hardware_detector
     hardware = hardware_detector.detect()
 
     # Build plan

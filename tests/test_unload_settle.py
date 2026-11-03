@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from lm_optimizer.services.lm_studio import LMStudioClient
+from lm_optimizer.services.host.lm_studio import LMStudioClient
 
 
 def _client(instances_seq):
@@ -35,7 +35,7 @@ def _client(instances_seq):
 @pytest.fixture(autouse=True)
 def _no_sleep(monkeypatch):
     monkeypatch.setattr(
-        "lm_optimizer.services.lm_studio.asyncio.sleep", AsyncMock()
+        "lm_optimizer.services.host.lm_studio.asyncio.sleep", AsyncMock()
     )
 
 

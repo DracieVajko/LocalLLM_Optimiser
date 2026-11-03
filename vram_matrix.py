@@ -10,8 +10,8 @@ import argparse
 import asyncio
 import sys
 
-from lm_optimizer.services.hostguard import format_snapshot, prepare_host
-from lm_optimizer.services.lm_studio import LMStudioClient
+from lm_optimizer.services.host.hostguard import format_snapshot, prepare_host
+from lm_optimizer.services.host.lm_studio import LMStudioClient
 from lm_optimizer.services.matrix import (
     DEFAULT_CONTEXTS,
     MAX_TOKENS,

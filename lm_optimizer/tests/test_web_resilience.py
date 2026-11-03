@@ -265,7 +265,7 @@ class TestThinkingPlumbing:
         import asyncio
         from unittest.mock import AsyncMock
 
-        from lm_optimizer.services.lm_studio import LMStudioClient
+        from lm_optimizer.services.host.lm_studio import LMStudioClient
 
         client = LMStudioClient(base_url="http://127.0.0.1:1234")
 
@@ -340,8 +340,8 @@ class TestCapabilityCache:
         import asyncio
         from unittest.mock import AsyncMock
 
-        from lm_optimizer.services import lm_studio as mod
-        from lm_optimizer.services.lm_studio import LMStudioClient
+        from lm_optimizer.services.host import lm_studio as mod
+        from lm_optimizer.services.host.lm_studio import LMStudioClient
 
         mod._CAPS_CACHE.clear()
         calls = {"post": 0}
@@ -498,7 +498,7 @@ class TestFlashLessonPersists:
         from unittest.mock import MagicMock
 
         from lm_optimizer.domain.models import ModelIdentity, OptimizationRun
-        from lm_optimizer.services.optimizer import AdaptiveOptimizer, OptimizationState
+        from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer, OptimizationState
         from lm_optimizer.services.search_space import SearchSpace
 
         opt = AdaptiveOptimizer.__new__(AdaptiveOptimizer)
@@ -567,17 +567,17 @@ class TestDisplayTotal:
                                planned_total=planned, search_space=space)
 
     def test_prefers_planned(self):
-        from lm_optimizer.services.optimizer import _display_total
+        from lm_optimizer.services.orchestration.optimizer import _display_total
 
         assert _display_total(self._state(5, 25)) == 25
 
     def test_never_below_tested(self):
-        from lm_optimizer.services.optimizer import _display_total
+        from lm_optimizer.services.orchestration.optimizer import _display_total
 
         assert _display_total(self._state(30, 25)) == 30
 
     def test_legacy_falls_back_to_estimate(self):
-        from lm_optimizer.services.optimizer import _display_total
+        from lm_optimizer.services.orchestration.optimizer import _display_total
 
         assert _display_total(self._state(2, 0)) == 5040
         assert _display_total(self._state(0, 0, estimate=0)) == 1
@@ -585,7 +585,7 @@ class TestDisplayTotal:
     def test_completed_run_reports_full_bar(self):
         # End-of-run display contract: CLI sets the bar to 100 explicitly;
         # _display_total never exceeds tested reality mid-run.
-        from lm_optimizer.services.optimizer import _display_total
+        from lm_optimizer.services.orchestration.optimizer import _display_total
 
         assert _display_total(self._state(25, 30)) == 30
 
@@ -733,7 +733,7 @@ class TestUnifiedMemory:
     def test_darwin_reports_unified_without_nvidia(self, monkeypatch):
         import platform as _platform
 
-        import lm_optimizer.services.hostguard as hg
+        import lm_optimizer.services.host.hostguard as hg
 
         def _no_subprocess(*a, **k):
             raise AssertionError("nvidia-smi must not run on Darwin")
@@ -746,7 +746,7 @@ class TestUnifiedMemory:
         assert any("unified" in line.lower() for line in lines)
 
     def test_nvidia_path_unchanged(self, monkeypatch):
-        import lm_optimizer.services.hostguard as hg
+        import lm_optimizer.services.host.hostguard as hg
 
         snap = hg.gpu_free_mb()
         assert isinstance(snap, list)

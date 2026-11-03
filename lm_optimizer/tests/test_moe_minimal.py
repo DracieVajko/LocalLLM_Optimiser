@@ -9,7 +9,7 @@ no verified REST/CLI channel exists, so it is never auto-probed.
 from unittest.mock import MagicMock
 
 from lm_optimizer.domain.models import LoadConfiguration, ModelIdentity
-from lm_optimizer.services.lm_studio import LMStudioCapabilities
+from lm_optimizer.services.host.lm_studio import LMStudioCapabilities
 from lm_optimizer.services.search_space import SearchSpaceGenerator
 from lm_optimizer.services.speed_search import SpeedCaps, build_speed_plan
 

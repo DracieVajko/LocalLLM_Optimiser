@@ -3,7 +3,7 @@
 TDD: pure planning logic; the measured loop lives in the optimizer.
 """
 
-from lm_optimizer.services.recovery import (
+from lm_optimizer.services.orchestration.recovery import (
     RECOVERY_BUDGET_DEFAULT,
     RecoveryAttempt,
     pairwise_allowed,

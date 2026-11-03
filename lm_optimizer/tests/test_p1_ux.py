@@ -101,7 +101,7 @@ def _run(configs=None):
 
 
 def _optimizer_with_state(configs=None):
-    from lm_optimizer.services.optimizer import AdaptiveOptimizer, OptimizationState
+    from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer, OptimizationState
     from lm_optimizer.services.search_space import SearchSpace
 
     opt = AdaptiveOptimizer.__new__(AdaptiveOptimizer)
@@ -204,7 +204,7 @@ class TestCheckpoint:
 
 class TestFinalStates:
     def test_zero_success_is_failed(self):
-        from lm_optimizer.services.run_summary import classify_run, best_passed
+        from lm_optimizer.services.orchestration.run_summary import classify_run, best_passed
 
         cfgs = [
             _cfg_result(status=ConfigurationStatus.FAILED, err="load refused"),
@@ -217,13 +217,13 @@ class TestFinalStates:
         assert info["failure_classes"]["oom"] == 1
 
     def test_zero_pass_never_offers_winner(self):
-        from lm_optimizer.services.run_summary import best_passed
+        from lm_optimizer.services.orchestration.run_summary import best_passed
 
         cfgs = [_cfg_result(status=ConfigurationStatus.FAILED, err="timeout x")]
         assert best_passed(cfgs) is None
 
     def test_validated_winner_with_failed_candidates_is_success(self):
-        from lm_optimizer.services.run_summary import classify_run, best_passed
+        from lm_optimizer.services.orchestration.run_summary import classify_run, best_passed
 
         cfgs = [
             _cfg_result(ctx=4096, gen=50, score=0.8),
@@ -240,7 +240,7 @@ class TestFinalStates:
         assert best.context_length == 4096
 
     def test_failed_config_never_wins(self):
-        from lm_optimizer.services.run_summary import best_passed
+        from lm_optimizer.services.orchestration.run_summary import best_passed
 
         good = _cfg_result(ctx=4096, gen=30, score=0.4)
         bad = _cfg_result(
@@ -249,7 +249,7 @@ class TestFinalStates:
         assert best_passed([good, bad]).context_length == 4096
 
     def test_final_status_mapping(self):
-        from lm_optimizer.services.run_summary import final_status_for_run
+        from lm_optimizer.services.orchestration.run_summary import final_status_for_run
 
         assert final_status_for_run(_run([_cfg_result()])) == RunStatus.SUCCESS
         # Winner + a failed candidate => still SUCCESS (not partial).
@@ -272,7 +272,7 @@ class TestFinalStates:
         assert RunStatus.SUCCESS.value == "success"
 
     def test_failure_breakdown_counts(self):
-        from lm_optimizer.services.run_summary import failure_breakdown
+        from lm_optimizer.services.orchestration.run_summary import failure_breakdown
 
         cfgs = [
             _cfg_result(status=ConfigurationStatus.OOM, err="OOM"),
@@ -287,7 +287,7 @@ class TestFinalStates:
         assert fb["unsupported_parameters"] == 1
 
     def test_recommendation_crowns(self):
-        from lm_optimizer.services.run_summary import alternatives, why_text
+        from lm_optimizer.services.orchestration.run_summary import alternatives, why_text
 
         cfgs = [
             _cfg_result(ctx=4096, gen=50, score=0.9, vram=4.0),
@@ -448,7 +448,7 @@ class TestResume:
     def test_resume_skips_completed(self, tmp_path, monkeypatch):
         _patch_results_dir(tmp_path, monkeypatch)
         from lm_optimizer.database import repositories as _repo
-        from lm_optimizer.services.optimizer import AdaptiveOptimizer
+        from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer
         from lm_optimizer.services.search_space import SearchSpace
 
         # Build a persisted run with one completed config.
@@ -538,7 +538,7 @@ class TestResume:
 
 class TestMicroStage:
     def test_micro_stage_bounded_and_profile_aware(self):
-        from lm_optimizer.services.optimizer import AdaptiveOptimizer
+        from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer
         import inspect
 
         src = inspect.getsource(AdaptiveOptimizer._stage_micro_refinement)
@@ -596,7 +596,7 @@ class TestCli:
 
 class TestProgressCallback:
     def test_report_progress_calls_cb(self):
-        from lm_optimizer.services.optimizer import AdaptiveOptimizer, OptimizationState
+        from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer, OptimizationState
         from lm_optimizer.services.search_space import SearchSpace
         from lm_optimizer.domain.models import (
             HardwareInfo,
@@ -634,7 +634,7 @@ class TestProgressCallback:
         assert seen and seen[0][0] == "discovery" and seen[0][2] > 0
 
     def test_report_progress_none_is_safe(self):
-        from lm_optimizer.services.optimizer import AdaptiveOptimizer
+        from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer
 
         opt = AdaptiveOptimizer.__new__(AdaptiveOptimizer)
         opt.state = None
@@ -644,7 +644,7 @@ class TestProgressCallback:
     def test_optimize_accepts_progress_cb(self):
         import inspect
 
-        from lm_optimizer.services.optimizer import AdaptiveOptimizer
+        from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer
 
         assert "progress_cb" in inspect.signature(AdaptiveOptimizer.optimize).parameters
 

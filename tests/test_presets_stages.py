@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from lm_optimizer.services.optimizer import (
+from lm_optimizer.services.orchestration.optimizer import (
     PRESET_DEFINITIONS,
     VALID_CONTEXT_STRATEGIES,
     VALID_PRESETS,
@@ -184,7 +184,7 @@ def test_preflight_rejects_invalid_choices(kwargs, needle):
 # --- prepare_run honours the resolved plan ---------------------------------
 
 def _prepared_run(monkeypatch, advanced):
-    from lm_optimizer.services import optimizer as _opt
+    from lm_optimizer.services.orchestration import optimizer as _opt
 
     client = MagicMock()
     client.capabilities = None
@@ -204,7 +204,7 @@ def _prepared_run(monkeypatch, advanced):
     monkeypatch.setattr(_opt, "compute_fingerprint", lambda *a, **k: "fp")
     monkeypatch.setattr(_opt, "hardware_fingerprint", lambda h: "hwfp")
     monkeypatch.setattr(
-        "lm_optimizer.services.lms_cli.lms_version", lambda: "test"
+        "lm_optimizer.services.host.lms_cli.lms_version", lambda: "test"
     )
 
     from lm_optimizer.domain.models import (

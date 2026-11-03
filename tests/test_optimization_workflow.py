@@ -1,7 +1,7 @@
 """Shared optimization workflow composition and delegation."""
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 from lm_optimizer.domain.models import (
     HardwareInfo,
@@ -10,7 +10,7 @@ from lm_optimizer.domain.models import (
     OptimizationRun,
     RunStatus,
 )
-from lm_optimizer.services import optimization_workflow
+from lm_optimizer.services.orchestration import optimization_workflow
 
 
 def _run() -> OptimizationRun:

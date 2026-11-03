@@ -6,7 +6,7 @@ marks the run `is_experimental = True` with a reason string.
 """
 
 from lm_optimizer.domain.models import ModelIdentity, OptimizationRun
-from lm_optimizer.services.optimizer import (
+from lm_optimizer.services.orchestration.optimizer import (
     apply_experimental_mark,
     parse_experimental_flags,
     resolve_experimental_optins,
@@ -185,7 +185,7 @@ class TestYesNonInteractiveFlags:
 
 class TestExperimentalDetail:
     def test_detail_shape_requested_resolved_applied(self):
-        from lm_optimizer.services.optimizer import build_experimental_detail
+        from lm_optimizer.services.orchestration.optimizer import build_experimental_detail
 
         detail = build_experimental_detail(
             {"enable_rope": True, "enable_cpu_moe": None, "enable_speculative": False},
@@ -203,7 +203,7 @@ class TestExperimentalDetail:
         assert detail["skipped"] == {}
 
     def test_speculative_without_draft_skipped_never_exercised(self):
-        from lm_optimizer.services.optimizer import build_experimental_detail
+        from lm_optimizer.services.orchestration.optimizer import build_experimental_detail
 
         detail = build_experimental_detail(
             {"enable_rope": False, "enable_cpu_moe": False, "enable_speculative": True},
@@ -215,7 +215,7 @@ class TestExperimentalDetail:
         assert detail["skipped"]["enable_speculative"] == "no usable draft model"
 
     def test_speculative_with_draft_stays_applied(self):
-        from lm_optimizer.services.optimizer import build_experimental_detail
+        from lm_optimizer.services.orchestration.optimizer import build_experimental_detail
 
         detail = build_experimental_detail(
             {"enable_speculative": True},
@@ -230,7 +230,7 @@ class TestExperimentalDetail:
         from unittest.mock import MagicMock
 
         from lm_optimizer.domain.models import HardwareInfo, ModelIdentity, OptimizationProfile
-        from lm_optimizer.services import optimizer as _opt
+        from lm_optimizer.services.orchestration import optimizer as _opt
 
         monkeypatch.setattr(_opt.hardware_repo, "save", lambda h: "hw1")
         monkeypatch.setattr(_opt.model_repo, "save", lambda m: "m1")

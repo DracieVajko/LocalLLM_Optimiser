@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock
 
 from lm_optimizer.domain.models import HardwareInfo, GPUInfo, ModelIdentity, OptimizationProfile
-from lm_optimizer.services.lm_studio import LMStudioCapabilities
+from lm_optimizer.services.host.lm_studio import LMStudioCapabilities
 from lm_optimizer.services.search_space import SearchSpaceGenerator
 
 

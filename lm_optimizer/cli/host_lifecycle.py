@@ -13,7 +13,7 @@ from rich.console import Console
 
 from lm_optimizer.config import config
 from lm_optimizer.logging_config import get_logger
-from lm_optimizer.services.hostguard import (
+from lm_optimizer.services.host.hostguard import (
     HostBusyTimeout,
     HostUnreachableError,
     is_connection_error,

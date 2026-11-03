@@ -12,7 +12,7 @@ from lm_optimizer.domain.models import (
     OptimizationProfile,
     OptimizationRun,
 )
-from lm_optimizer.services.optimizer import AdaptiveOptimizer, OptimizationState
+from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer, OptimizationState
 
 
 def _run(context_limit=32768):
@@ -49,10 +49,10 @@ def _optimizer(run, monkeypatch):
     opt._pause_point = AsyncMock()
     opt._sync_phase_params = lambda: None
     monkeypatch.setattr(
-        "lm_optimizer.services.optimizer.run_repo.save", lambda *a, **k: None
+        "lm_optimizer.services.orchestration.optimizer.run_repo.save", lambda *a, **k: None
     )
     monkeypatch.setattr(
-        "lm_optimizer.services.optimizer.config_repo.save", lambda *a, **k: None
+        "lm_optimizer.services.orchestration.optimizer.config_repo.save", lambda *a, **k: None
     )
     return opt
 
@@ -168,7 +168,7 @@ def test_both_execution_paths_call_the_context_speed_phase():
     """Fresh runs and resumed runs must measure the same ladder."""
     import inspect
 
-    from lm_optimizer.services.optimizer import AdaptiveOptimizer
+    from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer
 
     fresh = inspect.getsource(AdaptiveOptimizer._run_phase_ab)
     resumed = inspect.getsource(AdaptiveOptimizer._resume_phase_pipeline)
@@ -178,7 +178,7 @@ def test_both_execution_paths_call_the_context_speed_phase():
 
 
 def test_context_speed_is_a_named_skip_phase():
-    from lm_optimizer.services.optimizer import (
+    from lm_optimizer.services.orchestration.optimizer import (
         PHASE_SKIP_NAMES,
         compose_granular_skips,
         parse_phase_skips,

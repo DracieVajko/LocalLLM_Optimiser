@@ -14,7 +14,7 @@ from lm_optimizer.domain.models import (
     ModelIdentity,
     OptimizationRun,
 )
-from lm_optimizer.services.optimizer import AdaptiveOptimizer, OptimizationState
+from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer, OptimizationState
 from lm_optimizer.services.search_space import SearchSpace
 
 
@@ -188,7 +188,7 @@ class TestBug1NullChecks:
         assert q.no_malformed < 1.0
 
     def test_failed_test_ranking_never_compares_none(self):
-        from lm_optimizer.services.recovery import rank_failed_tests
+        from lm_optimizer.services.orchestration.recovery import rank_failed_tests
 
         qbt = {
             "short_instruction": {"overall": 1.0, "checks_passed": 6, "checks_total": 6},
@@ -481,7 +481,7 @@ class TestBug5S5Visibility:
 
 class TestBug6Traceback:
     def test_diagnostic_preserves_traceback(self):
-        from lm_optimizer.services.optimizer import format_diagnostic
+        from lm_optimizer.services.orchestration.optimizer import format_diagnostic
 
         try:
             raise ValueError("boom-test-marker")

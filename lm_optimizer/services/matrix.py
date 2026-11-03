@@ -9,7 +9,7 @@ import time
 
 from lm_optimizer.domain.models import LoadConfiguration
 from lm_optimizer.logging_config import get_logger
-from lm_optimizer.services.lm_studio import LMStudioClient
+from lm_optimizer.services.host.lm_studio import LMStudioClient
 
 logger = get_logger(__name__)
 

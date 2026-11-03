@@ -16,13 +16,13 @@ from lm_optimizer.domain.models import (
     OptimizationRun,
     RunStatus,
 )
-from lm_optimizer.services.optimizer import (
+from lm_optimizer.services.orchestration.optimizer import (
     PERSISTED_RUN_SETTINGS,
     apply_persisted_run_settings,
     build_resolved_settings,
     run_skip_phases,
 )
-from lm_optimizer.services.run_summary import (
+from lm_optimizer.services.orchestration.run_summary import (
     classify_run,
     final_recommendation,
     final_status_for_run,
@@ -185,7 +185,7 @@ def test_full_run_with_validated_winner_is_success():
 # --- prepare_run persists the snapshot -------------------------------------
 
 def test_prepare_run_persists_resolved_settings(monkeypatch):
-    from lm_optimizer.services import optimizer as _opt
+    from lm_optimizer.services.orchestration import optimizer as _opt
 
     client = MagicMock()
     client.capabilities = None
@@ -203,7 +203,7 @@ def test_prepare_run_persists_resolved_settings(monkeypatch):
     monkeypatch.setattr(_opt.run_repo, "save", lambda r: str(r.id))
     monkeypatch.setattr(_opt, "compute_fingerprint", lambda *a, **k: "fp")
     monkeypatch.setattr(_opt, "hardware_fingerprint", lambda h: "hwfp")
-    monkeypatch.setattr("lm_optimizer.services.lms_cli.lms_version", lambda: "test")
+    monkeypatch.setattr("lm_optimizer.services.host.lms_cli.lms_version", lambda: "test")
 
     hw = HardwareInfo(
         os="w", cpu_name="c", cpu_cores_physical=1,

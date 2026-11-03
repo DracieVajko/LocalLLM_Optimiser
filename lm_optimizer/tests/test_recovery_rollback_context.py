@@ -28,7 +28,7 @@ from lm_optimizer.domain.models import (
     LoadConfiguration,
     QualityScore,
 )
-from lm_optimizer.services.optimizer import AdaptiveOptimizer
+from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer
 
 FAILED_CTX = 32768
 GOOD_CTX = 4096

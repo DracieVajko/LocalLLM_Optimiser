@@ -9,7 +9,7 @@ from lm_optimizer.domain.models import (
     LoadConfiguration,
     QualityScore,
 )
-from lm_optimizer.services.selection import (
+from lm_optimizer.services.orchestration.selection import (
     DEFAULT_PREFERENCE_THRESHOLD,
     SelectionConfig,
     is_non_inferior,
@@ -177,7 +177,7 @@ class TestPairwise:
 
 class TestOptimizerIntegration:
     def test_update_best_uses_band(self):
-        from lm_optimizer.services.optimizer import AdaptiveOptimizer, OptimizationState
+        from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer, OptimizationState
         from lm_optimizer.services.search_space import SearchSpace
         from lm_optimizer.domain.models import (
             HardwareInfo,

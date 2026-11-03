@@ -3,8 +3,8 @@
 import asyncio
 
 from lm_optimizer.domain.models import LoadConfiguration
-from lm_optimizer.services import lm_studio
-from lm_optimizer.services.lm_studio import LMStudioClient
+from lm_optimizer.services.host import lm_studio
+from lm_optimizer.services.host.lm_studio import LMStudioClient
 
 
 class _SlowClient(LMStudioClient):

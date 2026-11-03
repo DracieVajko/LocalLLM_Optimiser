@@ -55,7 +55,7 @@ def _best(gen: float, *, prompt: float = 100.0, status=ConfigurationStatus.PASSE
 
 
 def _optimizer(best, run):
-    from lm_optimizer.services.optimizer import AdaptiveOptimizer, OptimizationState
+    from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer, OptimizationState
 
     opt = AdaptiveOptimizer.__new__(AdaptiveOptimizer)
     opt.state = OptimizationState(run=run, search_space=MagicMock())
@@ -83,7 +83,7 @@ def _run(**kw):
 
 @pytest.fixture(autouse=True)
 def _no_repo_writes(monkeypatch):
-    from lm_optimizer.services import optimizer as _opt
+    from lm_optimizer.services.orchestration import optimizer as _opt
 
     monkeypatch.setattr(_opt.run_repo, "save", lambda r: str(r.id))
 
@@ -261,11 +261,11 @@ def test_zero_token_success_sample_is_zero_speed():
 # --- low anchor does not abort ---------------------------------------------
 
 def test_low_s0_does_not_cancel_the_search():
-    from lm_optimizer.services.optimizer import AdaptiveOptimizer
+    from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer
 
     opt = AdaptiveOptimizer.__new__(AdaptiveOptimizer)
     run = _run()
-    from lm_optimizer.services.optimizer import OptimizationState
+    from lm_optimizer.services.orchestration.optimizer import OptimizationState
 
     opt.state = OptimizationState(run=run, search_space=MagicMock())
     opt.state.should_cancel = False

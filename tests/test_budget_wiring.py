@@ -23,7 +23,7 @@ from lm_optimizer.domain.models import (
     OptimizationProfile,
     OptimizationRun,
 )
-from lm_optimizer.services.optimizer import (
+from lm_optimizer.services.orchestration.optimizer import (
     AdaptiveOptimizer,
     OptimizationState,
 )
@@ -63,7 +63,7 @@ def _run(**kw):
 
 @pytest.fixture(autouse=True)
 def _no_repo_writes(monkeypatch):
-    from lm_optimizer.services import optimizer as _opt
+    from lm_optimizer.services.orchestration import optimizer as _opt
 
     monkeypatch.setattr(_opt.run_repo, "save", lambda r: str(r.id))
 
@@ -71,7 +71,7 @@ def _no_repo_writes(monkeypatch):
 # --- speed probe cap --------------------------------------------------------
 
 def test_phase_speed_respects_max_speed_probes(monkeypatch):
-    from lm_optimizer.services import optimizer as _opt
+    from lm_optimizer.services.orchestration import optimizer as _opt
 
     run = _run(benchmark_params={"max_speed_probes": 3})
     opt = AdaptiveOptimizer.__new__(AdaptiveOptimizer)
@@ -120,7 +120,7 @@ def test_phase_speed_respects_max_speed_probes(monkeypatch):
 
 
 def test_phase_speed_without_cap_keeps_full_plan(monkeypatch):
-    from lm_optimizer.services import optimizer as _opt
+    from lm_optimizer.services.orchestration import optimizer as _opt
 
     run = _run(benchmark_params={})
     opt = AdaptiveOptimizer.__new__(AdaptiveOptimizer)
@@ -212,7 +212,7 @@ def test_final_validation_honours_max_bound(monkeypatch):
 # --- preset repetitions reach the service ----------------------------------
 
 def test_prepare_run_applies_preset_repetitions(monkeypatch):
-    from lm_optimizer.services import optimizer as _opt
+    from lm_optimizer.services.orchestration import optimizer as _opt
 
     client = MagicMock()
     client.capabilities = None
@@ -231,7 +231,7 @@ def test_prepare_run_applies_preset_repetitions(monkeypatch):
     monkeypatch.setattr(_opt.run_repo, "save", lambda r: str(r.id))
     monkeypatch.setattr(_opt, "compute_fingerprint", lambda *a, **k: "fp")
     monkeypatch.setattr(_opt, "hardware_fingerprint", lambda h: "hwfp")
-    monkeypatch.setattr("lm_optimizer.services.lms_cli.lms_version", lambda: "test")
+    monkeypatch.setattr("lm_optimizer.services.host.lms_cli.lms_version", lambda: "test")
 
     hw = HardwareInfo(
         os="w", cpu_name="c", cpu_cores_physical=1,
@@ -311,7 +311,7 @@ def test_context_strategies_run_before_the_run_is_marked_complete():
     """
     import inspect
 
-    from lm_optimizer.services.optimizer import AdaptiveOptimizer
+    from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer
 
     phase_ab = inspect.getsource(AdaptiveOptimizer._run_phase_ab)
     finalize = inspect.getsource(AdaptiveOptimizer._finalize)
@@ -324,7 +324,7 @@ def test_context_strategies_run_before_the_run_is_marked_complete():
 # --- quality context default ------------------------------------------------
 
 def test_quality_context_defaults_to_8k_despite_32k_max():
-    from lm_optimizer.services.optimizer import resolve_phase_contexts
+    from lm_optimizer.services.orchestration.optimizer import resolve_phase_contexts
 
     speed, quality = resolve_phase_contexts(
         {"max_context": 32768, "quality_context": 8192}, 32768
@@ -335,14 +335,14 @@ def test_quality_context_defaults_to_8k_despite_32k_max():
 
 
 def test_quality_context_legacy_without_explicit_value():
-    from lm_optimizer.services.optimizer import resolve_phase_contexts
+    from lm_optimizer.services.orchestration.optimizer import resolve_phase_contexts
 
     _speed, quality = resolve_phase_contexts({"max_context": 32768}, 32768)
     assert quality == 32768  # old derivation retained when not provided
 
 
 def test_quality_context_clamps_and_never_below_speed():
-    from lm_optimizer.services.optimizer import resolve_phase_contexts
+    from lm_optimizer.services.orchestration.optimizer import resolve_phase_contexts
 
     assert resolve_phase_contexts(
         {"max_context": 32768, "quality_context": 4096}, 32768

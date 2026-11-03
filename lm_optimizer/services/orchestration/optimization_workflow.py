@@ -18,7 +18,7 @@ from lm_optimizer.domain.models import (
 )
 from lm_optimizer.services.advanced_settings import AdvancedSettings
 from lm_optimizer.services.benchmark import BenchmarkConfig, build_benchmark_service
-from lm_optimizer.services.optimizer import AdaptiveOptimizer
+from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer
 from lm_optimizer.services.quality import QualityConfig, QualityEvaluator
 from lm_optimizer.services.search_space import SearchSpaceGenerator
 

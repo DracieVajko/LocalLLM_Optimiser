@@ -3,7 +3,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from lm_optimizer.api.main import app
-from lm_optimizer.services.optimizer import compose_granular_skips
+from lm_optimizer.services.orchestration.optimizer import compose_granular_skips
 
 
 @pytest.fixture(scope="module")

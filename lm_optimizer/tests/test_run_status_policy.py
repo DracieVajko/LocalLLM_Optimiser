@@ -21,7 +21,7 @@ from lm_optimizer.domain.models import (
     QualityScore,
     RunStatus,
 )
-from lm_optimizer.services.run_summary import (
+from lm_optimizer.services.orchestration.run_summary import (
     best_passed,
     classify_run,
     final_status_for_run,

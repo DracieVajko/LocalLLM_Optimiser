@@ -77,7 +77,7 @@ class TestManager:
     def _wire_monitoring(self):
         """Wire HardwareDetector into TestManager for real-time VRAM profiling."""
         try:
-            from lm_optimizer.services.hardware import HardwareDetector
+            from lm_optimizer.services.host.hardware import HardwareDetector
             detector = HardwareDetector()
             info = detector.detect()
             gpus = getattr(info, "gpus", None) or []
@@ -121,7 +121,7 @@ class TestManager:
     def estimate_vram_needed(self, model_id: str) -> int:
         """Real VRAM estimation using hardware detector; falls back to 1GB placeholder."""
         try:
-            from lm_optimizer.services.hardware import HardwareDetector
+            from lm_optimizer.services.host.hardware import HardwareDetector
             detector = HardwareDetector()
             info = detector.detect()
             # Use first GPU's VRAM if available; otherwise fall back to conservative estimate.
@@ -224,7 +224,7 @@ class TestManager:
         result["monitoring"] = self._monitoring_info
 
         # 15-minute calm trigger: only proceed when GPU/CPU is calm for scheduling.
-        from lm_optimizer.services.gpu_monitor import should_run_tests
+        from lm_optimizer.services.host.gpu_monitor import should_run_tests
         current_check = should_run_tests()
         if current_check.get("gpu_busy") or current_check.get("cpu_busy"):
             result["pending"] = True

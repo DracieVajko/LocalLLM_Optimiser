@@ -21,7 +21,7 @@ from lm_optimizer.domain.models import (
     OptimizationProfile,
     OptimizationRun,
 )
-from lm_optimizer.services.optimizer import AdaptiveOptimizer, OptimizationState
+from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer, OptimizationState
 from lm_optimizer.services.search_space import SearchSpace
 from lm_optimizer.services.speed_search import SpeedPlanItem
 

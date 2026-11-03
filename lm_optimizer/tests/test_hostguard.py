@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from lm_optimizer.services.hostguard import (
+from lm_optimizer.services.host.hostguard import (
     HostBusyTimeout,
     HostUnreachableError,
     ensure_exclusive_access,

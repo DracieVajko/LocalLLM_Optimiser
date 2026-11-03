@@ -167,7 +167,7 @@ class TestFailedReport:
 
 class TestSpeedRange:
     def test_fastest_slowest(self):
-        from lm_optimizer.services.run_summary import speed_range
+        from lm_optimizer.services.orchestration.run_summary import speed_range
 
         cfgs = [
             _result(ctx=8192, gen=31.2, score=0.7),
@@ -179,7 +179,7 @@ class TestSpeedRange:
         assert slow.context_length == 16384
 
     def test_empty_or_unscored(self):
-        from lm_optimizer.services.run_summary import speed_range
+        from lm_optimizer.services.orchestration.run_summary import speed_range
 
         assert speed_range([]) is None
         bad = _result()
@@ -309,7 +309,7 @@ class TestStorageDetection:
     def test_deviceid_casing_and_friendly_fallback(self, monkeypatch):
         import json as _json
 
-        from lm_optimizer.services import hostguard as _hg
+        from lm_optimizer.services.host import hostguard as _hg
 
         payload = _json.dumps(
             [
@@ -338,7 +338,7 @@ class TestStorageDetection:
     def test_pagefile_fallback_usage_class(self, monkeypatch):
         import json as _json
 
-        from lm_optimizer.services import hostguard as _hg
+        from lm_optimizer.services.host import hostguard as _hg
 
         calls = []
 
@@ -383,7 +383,7 @@ class TestPerTestSection:
         import asyncio
         from unittest.mock import AsyncMock, MagicMock
 
-        from lm_optimizer.services.optimizer import AdaptiveOptimizer, OptimizationState
+        from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer, OptimizationState
         from lm_optimizer.services.search_space import SearchSpace
 
         bench_result = _result()

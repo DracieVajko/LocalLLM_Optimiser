@@ -36,10 +36,10 @@ from lm_optimizer.services.benchmark import VALID_STYLES, BenchmarkService, buil
 from lm_optimizer.services.context_sweep import format_report as _ctx_format
 from lm_optimizer.services.context_sweep import geometric_contexts as _ctx_ladder
 from lm_optimizer.services.context_sweep import sweep as _ctx_sweep
-from lm_optimizer.services.hardware import hardware_detector
+from lm_optimizer.services.host.hardware import hardware_detector
 from lm_optimizer.services.fit import ladder as ctx_ladder
 from lm_optimizer.services.generation_defaults import lookup as generation_lookup
-from lm_optimizer.services.hostguard import (
+from lm_optimizer.services.host.hostguard import (
     HostBusyTimeout,
     HostUnreachableError,
     format_snapshot,
@@ -55,7 +55,7 @@ from lm_optimizer.services.model_recommendations import (
 )
 from lm_optimizer.services.reporting import save_best_report, save_failed_report, save_fit_report
 from lm_optimizer.services.unload_guard import UnloadNotClean, assert_unloaded
-from lm_optimizer.services.optimizer import AdaptiveOptimizer
+from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer
 from lm_optimizer.services.quality import QualityConfig, QualityEvaluator
 from lm_optimizer.services.search_space import SearchSpaceGenerator
 from lm_optimizer.services.best_effort import log_best_effort
@@ -85,12 +85,12 @@ from lm_optimizer.cli.host_lifecycle import (  # noqa: E402
 
 if TYPE_CHECKING:
     from lm_optimizer.backends.ollama.client import OllamaClient
-    from lm_optimizer.services.lm_studio import LMStudioClient
+    from lm_optimizer.services.host.lm_studio import LMStudioClient
 
 
 def _lm_studio_client(base_url: str | None = None) -> "LMStudioClient":
     """Construct an LM Studio client (legacy behavior: validate + build)."""
-    from lm_optimizer.services.lm_studio import LMStudioClient
+    from lm_optimizer.services.host.lm_studio import LMStudioClient
 
     # Validate URL if provided
     if base_url:
@@ -212,7 +212,7 @@ async def _execute_optimization_workflow(
     max_tokens_scale: float = 1.0,
 ):
     """Shared optimize flow for the optimize/auto commands. Returns the run."""
-    from lm_optimizer.services import lms_cli as _lms
+    from lm_optimizer.services.host import lms_cli as _lms
 
     gpu_via_cli = bool(advanced.get("gpu_via_cli", False)) and _lms.lms_available()
     if advanced.get("gpu_via_cli") and not _lms.lms_available():
@@ -225,7 +225,7 @@ async def _execute_optimization_workflow(
             "[yellow]max-tokens scaled to "
             f"{max_tokens_scale}: faster, but truncation may fail quality gates.[/yellow]"
         )
-    from lm_optimizer.services.optimization_workflow import run_optimization_workflow
+    from lm_optimizer.services.orchestration.optimization_workflow import run_optimization_workflow
 
     return await run_optimization_workflow(
         client,
@@ -245,7 +245,7 @@ async def _execute_optimization_workflow(
 def _host_info_dict(hardware, note: str | None = None) -> dict:
     """Host facts for reports (KV quant is a GUI preset, REST cannot read it)."""
     try:
-        from lm_optimizer.services.hostguard import storage_info as _storage_info
+        from lm_optimizer.services.host.hostguard import storage_info as _storage_info
 
         _storage = _storage_info()
     except Exception:
@@ -273,7 +273,7 @@ def _host_info_dict(hardware, note: str | None = None) -> dict:
 @lru_cache(maxsize=1)
 def _version_info() -> dict:
     """LM Studio version + backend (one subprocess survey per process)."""
-    from lm_optimizer.services import lms_cli
+    from lm_optimizer.services.host import lms_cli
 
     backend = "unknown"
     try:
@@ -394,7 +394,7 @@ def _ask_experimental(question: str) -> bool:
 
 def _prompt_experimental_optins() -> dict:
     """Interactive experimental opt-in (default: all off). Never raises."""
-    from lm_optimizer.services.optimizer import resolve_experimental_optins
+    from lm_optimizer.services.orchestration.optimizer import resolve_experimental_optins
 
     return resolve_experimental_optins(
         {"enable_rope": None, "enable_cpu_moe": None, "enable_speculative": None},
@@ -432,7 +432,7 @@ def _resolve_experimental_flags(
     probes fail inside their own stage and never abort the run). Explicit
     ``--no-enable-*`` flags still force them OFF.
     """
-    from lm_optimizer.services.optimizer import resolve_experimental_optins
+    from lm_optimizer.services.orchestration.optimizer import resolve_experimental_optins
 
     requested = {
         "enable_rope": True if enable_rope is None else enable_rope,
@@ -505,7 +505,7 @@ def _print_phase_dry_run(
 ) -> None:
     """Phase A/B plan preview (no Cartesian estimate, no server writes)."""
     from lm_optimizer.domain.models import LoadConfiguration
-    from lm_optimizer.services.optimizer import resolve_phase_contexts
+    from lm_optimizer.services.orchestration.optimizer import resolve_phase_contexts
     from lm_optimizer.services.speed_search import SpeedCaps, build_speed_plan
 
     speed_ctx, quality_ctx = resolve_phase_contexts(
@@ -1106,7 +1106,7 @@ def _preflight_optimize(
     if quality_context < 256:
         console.print("[red]Invalid --quality-context (must be >= 256)[/red]")
         sys.exit(2)
-    from lm_optimizer.services.optimizer import validate_artifact_test_id
+    from lm_optimizer.services.orchestration.optimizer import validate_artifact_test_id
 
     try:
         artifact_test_id = validate_artifact_test_id(artifact_test_id)
@@ -1136,7 +1136,7 @@ def _preflight_optimize(
 
     skips: list[str] = []
     if skip_phases:
-        from lm_optimizer.services.optimizer import parse_phase_skips
+        from lm_optimizer.services.orchestration.optimizer import parse_phase_skips
 
         try:
             skips = sorted(parse_phase_skips(skip_phases))
@@ -2366,7 +2366,7 @@ def recommend(
             recs = recommend_for_vram(models, budget)[:limit]
             estimates: dict[str, dict] = {}
             if estimate:
-                from lm_optimizer.services import lms_cli
+                from lm_optimizer.services.host import lms_cli
 
                 console.print("[dim]Requesting lms memory estimates (no loading)...[/dim]")
                 for r in recs:
@@ -2481,7 +2481,7 @@ def _preflight_auto(
     # Parse skip-phases
     auto_skips: list[str] = []
     if skip_phases:
-        from lm_optimizer.services.optimizer import parse_phase_skips
+        from lm_optimizer.services.orchestration.optimizer import parse_phase_skips
         try:
             auto_skips = sorted(parse_phase_skips(skip_phases))
         except ValueError as e:
@@ -3487,7 +3487,7 @@ def ctx(
             svc = BenchmarkService(client)
             # Estimate-before-load (§12): lms estimate prunes escalation;
             # boundary candidates are still empirically loaded via precheck.
-            from lm_optimizer.services import lms_cli as _lms
+            from lm_optimizer.services.host import lms_cli as _lms
 
             _use_estimate = _lms.lms_available() and not dry_run
             _est_cache: dict[int, dict] = {}
@@ -4013,7 +4013,7 @@ def _apply_resume_skips(run, skip_phases: str | None) -> None:
         skip_phases = getattr(skip_phases, "default", None)
     if not skip_phases or not isinstance(skip_phases, str):
         return
-    from lm_optimizer.services.optimizer import parse_phase_skips
+    from lm_optimizer.services.orchestration.optimizer import parse_phase_skips
 
     try:
         skips = sorted(parse_phase_skips(skip_phases))
@@ -4662,7 +4662,7 @@ def _display_optimization_result(run):
     never an Apply offer). Partial runs are labeled and only PASSED configs
     may win. Successful runs show exactly ONE primary + ALTERNATIVES crowns.
     """
-    from lm_optimizer.services.run_summary import (
+    from lm_optimizer.services.orchestration.run_summary import (
         alternatives,
         classify_run,
         failure_reason_text,
@@ -4717,7 +4717,7 @@ def _display_optimization_result(run):
             console.print(tbl)
         return  # never offer Apply
 
-    from lm_optimizer.services.run_summary import final_recommendation
+    from lm_optimizer.services.orchestration.run_summary import final_recommendation
 
     best = final_recommendation(list(run.configurations), run)
     if best is None:
@@ -4848,7 +4848,7 @@ def _display_optimization_result(run):
         "failed configurations never enter the winner set.[/dim]"
     )
     try:
-        from lm_optimizer.services.run_summary import speed_range as _speed_range
+        from lm_optimizer.services.orchestration.run_summary import speed_range as _speed_range
 
         _range = _speed_range(list(run.configurations))
         if _range is not None:

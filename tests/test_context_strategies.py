@@ -15,7 +15,7 @@ from lm_optimizer.domain.models import (
     LMStudioCapabilities,
     ModelIdentity,
 )
-from lm_optimizer.services.optimizer import (
+from lm_optimizer.services.orchestration.optimizer import (
     AdaptiveOptimizer,
     VALID_CONTEXT_STRATEGIES,
 )
@@ -96,12 +96,12 @@ def test_system_spillover_requires_verified_cli_channel(monkeypatch):
     assert _build(_opt(gpu_via_cli=False), base, "system_spillover") is None
 
     monkeypatch.setattr(
-        "lm_optimizer.services.lms_cli.lms_available", lambda: False
+        "lm_optimizer.services.host.lms_cli.lms_available", lambda: False
     )
     assert _build(_opt(gpu_via_cli=True), base, "system_spillover") is None
 
     monkeypatch.setattr(
-        "lm_optimizer.services.lms_cli.lms_available", lambda: True
+        "lm_optimizer.services.host.lms_cli.lms_available", lambda: True
     )
     cfg = _build(_opt(gpu_via_cli=True), base, "system_spillover")
     assert cfg is not None
@@ -112,7 +112,7 @@ def test_requested_vs_applied_is_recorded_by_the_client():
     # The strategy config is only a request; LM StudioClient.load_model
     # returns echo_mismatches which the run stores. This pins that the
     # client API exposes the verification channel the optimizer relies on.
-    from lm_optimizer.services.lm_studio import LMStudioClient
+    from lm_optimizer.services.host.lm_studio import LMStudioClient
 
     assert hasattr(LMStudioClient, "_compare_echo")
     assert hasattr(LMStudioClient, "_read_echo_config")

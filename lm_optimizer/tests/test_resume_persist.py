@@ -16,7 +16,7 @@ from lm_optimizer.domain.models import (
     OptimizationRun,
     QualityScore,
 )
-from lm_optimizer.services.optimizer import AdaptiveOptimizer, OptimizationState
+from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer, OptimizationState
 from lm_optimizer.services.search_space import SearchSpace
 
 
@@ -223,7 +223,7 @@ class TestCheckpointReconcile:
         """Every recovery_log.append in the recovery path is followed by persist."""
         import inspect
 
-        from lm_optimizer.services import optimizer as opt_mod
+        from lm_optimizer.services.orchestration import optimizer as opt_mod
 
         src = inspect.getsource(opt_mod.AdaptiveOptimizer._run_recovery)
         src += inspect.getsource(opt_mod.AdaptiveOptimizer._try_rollback_suspect)

@@ -1,7 +1,7 @@
 """Cross-platform metrics provider tests (spec §17)."""
 import pytest
 
-from lm_optimizer.services.metrics_providers import (
+from lm_optimizer.services.host.metrics_providers import (
     GpuMetrics,
     LinuxMetricsProvider,
     MacOSMetricsProvider,
@@ -93,7 +93,7 @@ def test_collect_metrics_never_raises():
 
 def test_windows_provider_reports_unavailable_gpu_gracefully(monkeypatch):
     """With no nvidia-smi the provider reports unavailable, not zeros."""
-    import lm_optimizer.services.metrics_providers as mod
+    import lm_optimizer.services.host.metrics_providers as mod
 
     monkeypatch.setattr(mod, "_run", lambda *a, **k: None)
     metrics = WindowsMetricsProvider().collect()

@@ -10,7 +10,7 @@ from lm_optimizer.domain.models import (
 
 
 def _heavy_state():
-    from lm_optimizer.services.optimizer import OptimizationState
+    from lm_optimizer.services.orchestration.optimizer import OptimizationState
     from lm_optimizer.services.search_space import SearchSpace
 
     hw = HardwareInfo(os="T", cpu_name="C", cpu_cores_physical=1,

@@ -18,7 +18,7 @@ import urllib.request
 from typing import Any
 
 from lm_optimizer.domain.models import LoadConfiguration
-from lm_optimizer.services.lm_studio import LMStudioClient
+from lm_optimizer.services.host.lm_studio import LMStudioClient
 
 LM_STUDIO_URL = "http://127.0.0.1:1234"
 HTTP_TIMEOUT_S = 15

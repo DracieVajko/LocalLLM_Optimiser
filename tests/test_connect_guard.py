@@ -7,7 +7,7 @@ import pytest
 
 from lm_optimizer.cli import host_lifecycle
 from lm_optimizer.cli import main as cli_main
-from lm_optimizer.services.hostguard import HostUnreachableError
+from lm_optimizer.services.host.hostguard import HostUnreachableError
 
 
 class _FakeClient:

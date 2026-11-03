@@ -135,7 +135,7 @@ def test_user_skip_phases_merge_with_granular():
 # --- Pure helper: frontier for quality-only / reasoning-only runs ---
 
 def test_granular_quality_frontier_variants():
-    from lm_optimizer.services.optimizer import granular_quality_frontier
+    from lm_optimizer.services.orchestration.optimizer import granular_quality_frontier
 
     sentinel = object()
     adv = {"quality_only": True}
@@ -206,7 +206,7 @@ async def test_granular_baseline_fallback_keeps_quality_candidates():
     candidate alive for granular modes, and stay None for plain campaigns."""
     from types import SimpleNamespace
 
-    from lm_optimizer.services.optimizer import AdaptiveOptimizer
+    from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer
 
     svc = AdaptiveOptimizer.__new__(AdaptiveOptimizer)
     svc.client = _fake_client()  # get_model -> None: cold server

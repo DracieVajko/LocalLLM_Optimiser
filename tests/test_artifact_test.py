@@ -18,7 +18,7 @@ from lm_optimizer.domain.models import (
     OptimizationProfile,
     OptimizationRun,
 )
-from lm_optimizer.services.optimizer import (
+from lm_optimizer.services.orchestration.optimizer import (
     AdaptiveOptimizer,
     OptimizationState,
     build_resolved_settings,
@@ -121,7 +121,7 @@ def _optimizer(run, best):
 
 @pytest.fixture(autouse=True)
 def _no_repo_writes(monkeypatch):
-    from lm_optimizer.services import optimizer as _opt
+    from lm_optimizer.services.orchestration import optimizer as _opt
 
     monkeypatch.setattr(_opt.run_repo, "save", lambda r: str(r.id))
 

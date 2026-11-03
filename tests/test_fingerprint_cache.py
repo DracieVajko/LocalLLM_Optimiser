@@ -23,7 +23,7 @@ from lm_optimizer.services.fingerprint import (
     hardware_fingerprint,
     should_revalidate_config,
 )
-from lm_optimizer.services.optimizer import AdaptiveOptimizer
+from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer
 
 
 def _hw(vram=24.0, ram=64.0, gpus=None):

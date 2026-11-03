@@ -260,7 +260,7 @@ class TestPersistence:
     def test_search_space_workload_aware(self):
         from unittest.mock import MagicMock
         from lm_optimizer.domain.models import ModelIdentity, HardwareInfo, OptimizationProfile
-        from lm_optimizer.services.lm_studio import LMStudioCapabilities
+        from lm_optimizer.services.host.lm_studio import LMStudioCapabilities
         from lm_optimizer.services.search_space import SearchSpaceGenerator
 
         client = MagicMock()

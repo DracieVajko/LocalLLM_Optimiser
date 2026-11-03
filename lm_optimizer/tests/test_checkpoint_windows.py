@@ -25,7 +25,7 @@ def _patch_results_dir(tmp_path, monkeypatch):
 
 
 def _state(run_id=None):
-    from lm_optimizer.services.optimizer import OptimizationState
+    from lm_optimizer.services.orchestration.optimizer import OptimizationState
     from lm_optimizer.services.search_space import SearchSpace
 
     hw = HardwareInfo(

@@ -23,7 +23,7 @@ from lm_optimizer.scoring.normalization import (
     normalize_lower_better,
     score_result_breakdown,
 )
-from lm_optimizer.services.lm_studio import LMStudioCapabilities
+from lm_optimizer.services.host.lm_studio import LMStudioCapabilities
 from lm_optimizer.services.quality import QualityEvaluator as SvcQualityEvaluator
 from lm_optimizer.services.search_space import SearchSpaceGenerator
 
@@ -556,7 +556,7 @@ class TestParetoFrontier:
             gen=40, ctx=8192, vram=5, quality=0.98
         )  # dominated by r2? r2 has higher gen and same ctx but more vram, so not strictly dominated if vram considered
         # For test, just ensure no exception and frontier includes nondominated
-        from lm_optimizer.services.optimizer import AdaptiveOptimizer
+        from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer
 
         MagicMock()
         optimizer = AdaptiveOptimizer.__new__(AdaptiveOptimizer)

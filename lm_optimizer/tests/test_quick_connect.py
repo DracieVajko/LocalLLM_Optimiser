@@ -3,7 +3,7 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from lm_optimizer.services.lm_studio import LMStudioClient
+from lm_optimizer.services.host.lm_studio import LMStudioClient
 
 
 def _client():
@@ -46,7 +46,7 @@ class TestQuickConnect:
     def test_lms_output_decoding_never_crashes(self, monkeypatch):
         import subprocess as _sp
 
-        from lm_optimizer.services import lms_cli
+        from lm_optimizer.services.host import lms_cli
 
         seen = {}
 

@@ -14,7 +14,7 @@ from lm_optimizer.domain.models import (
     OptimizationRun,
     QualityScore,
 )
-from lm_optimizer.services.optimizer import AdaptiveOptimizer, OptimizationState
+from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer, OptimizationState
 from lm_optimizer.services.search_space import SearchSpace
 
 
