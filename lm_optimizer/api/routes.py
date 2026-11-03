@@ -989,13 +989,13 @@ def _safe_convert_config(c):
         return None
 
 
-def _enrich_config_detail(conv: dict, config, model_id: str) -> dict:
-    """Single-config detail: full outputs + recomputed per-test quality.
+def _present_config_detail(config, model_id: str) -> dict:
+    """Single-config detail: convert once, then add full outputs/per-test quality.
 
-    Heuristic quality is deterministic, so per-test scores are recomputed
-    from stored outputs (only aggregates are persisted). Never raises:
-    on any failure the truncated list view is kept.
+    This is the only presenter for the detail resource: it owns conversion
+    and enrichment so list and detail endpoints cannot drift.
     """
+    conv = _convert_config_result(config).model_dump()
     try:
         from lm_optimizer.services.quality import QualityEvaluator
 
@@ -1089,7 +1089,6 @@ def get_configuration(run_id: UUID, config_id: UUID):
     config = config_repo.get(str(config_id))
     if not config or str(config.run_id) != str(run_id):
         raise HTTPException(status_code=404, detail="Configuration not found")
-    conv = _convert_config_result(config)
     model_id = ""
     try:
         run = run_repo.get(str(run_id))
@@ -1097,7 +1096,7 @@ def get_configuration(run_id: UUID, config_id: UUID):
             model_id = run.model.id or ""
     except Exception as exc:
         log_best_effort("best-effort operation failed", exc)
-    return _enrich_config_detail(conv.model_dump(), config, model_id)
+    return _present_config_detail(config, model_id)
 
 
 @router.get("/runs/{run_id}/pareto")
