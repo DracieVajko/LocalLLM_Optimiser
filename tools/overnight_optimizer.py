@@ -56,6 +56,8 @@ COMMON = [
 def log(message: str) -> None:
     line = f"[{datetime.now().isoformat(timespec='seconds')}] {message}"
     print(line, flush=True)
+    with LOG.open("a", encoding="utf-8") as handle:
+        handle.write(line + "\n")
 
 
 def _cli(args: list[str], timeout: int) -> int:
