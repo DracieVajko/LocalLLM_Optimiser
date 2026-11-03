@@ -666,6 +666,115 @@ def _context_trio(tested: list) -> dict:
     }
 
 
+def _tested_configs_rows(configs, ordered, pareto, tested, best) -> list[str]:
+    """Render the passed-configs table and winner-transparency note."""
+    lines = [
+        "## Tested configurations (passed)",
+        "",
+        "| # | ctx | flash | KV | batch | phys | par | gen tok/s | prompt tok/s | "
+        "TTFT ms | VRAM GB | quality | score | status |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for i, c in enumerate(ordered, 1):
+        q = f"{c.quality_score.overall:.3f}" if c.quality_score else "N/A"
+        vram = f"{c.peak_vram_gb:.1f}" if c.peak_vram_gb is not None else "?"
+        lines.append(
+            f"| {i} | {c.context_length} | {_fmt(c.config.flash_attention)} | "
+            f"{'GPU' if c.config.offload_kv_cache_to_gpu else 'CPU'} | "
+            f"{_fmt(c.config.eval_batch_size)} | {_fmt(c.config.physical_batch_size)} | "
+            f"{_fmt(c.config.parallel)} | {c.get_avg_generation_tok_s():.1f} | "
+            f"{c.get_avg_prompt_tok_s():.0f} | {c.get_avg_estimated_ttft_ms():.0f} | "
+            f"{vram} | {q} | {_score_str(c.score)} | PASS |"
+        )
+    if len(pareto) != len(tested):
+        lines += ["", f"Pareto-optimal: {len(pareto)} of {len(tested)} passed."]
+    else:
+        lines += ["", "Pareto-optimal: all tested configurations are non-dominated."]
+    better = [
+        c
+        for c in configs
+        if c.id != best.id
+        and c.status.value == "passed"
+        and c.score is not None
+        and best.score is not None
+        and c.score > best.score * 1.05
+    ]
+    if better:
+        top = max(better, key=lambda c: c.score)
+        lines += [
+            "",
+            f"NOTE: config {top.id} closed with a higher recomputed score "
+            f"({top.score:.3f} vs winner {best.score:.3f}); winner was "
+            "selected under running bounds during the search (winner remains "
+            "the median of its final validation).",
+        ]
+    lines += [""]
+    return lines
+
+
+def _failed_configs_rows(failed) -> list[str]:
+    """Render failed configurations with their reasons."""
+    if not failed:
+        return []
+    lines = [
+        "## Failed configurations (with reasons)",
+        "",
+        "| ctx | flash | KV | batch | status | reason |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    for c in failed:
+        lines.append(
+            f"| {c.context_length} | {_fmt(c.config.flash_attention)} | "
+            f"{'GPU' if c.config.offload_kv_cache_to_gpu else 'CPU'} | "
+            f"{_fmt(c.config.eval_batch_size)} | {c.status.value} | "
+            f"{(c.error or '')[:200]} |"
+        )
+    lines += [""]
+    return lines
+
+
+def _tried_values_rows(configs, best, bc) -> list[str]:
+    """Render the per-dimension tried/best table."""
+    lines = [
+        "## Tried values per dimension (all attempts, incl. failed)",
+        "",
+        "| Dimension | Tried | Best |",
+        "| --- | --- | --- |",
+    ]
+    dim_specs = [
+        ("context_length", lambda c: c.context_length),
+        ("flash_attention", lambda c: c.config.flash_attention),
+        ("kv_cache (GPU=True)", lambda c: c.config.offload_kv_cache_to_gpu),
+        ("eval_batch_size", lambda c: c.config.eval_batch_size),
+        ("physical_batch_size", lambda c: c.config.physical_batch_size),
+        ("parallel", lambda c: c.config.parallel),
+        ("context_checkpoints", lambda c: c.config.context_checkpoints),
+    ]
+    best_getters = {
+        "context_length": best.context_length,
+        "flash_attention": bc.flash_attention,
+        "kv_cache (GPU=True)": bc.offload_kv_cache_to_gpu,
+        "eval_batch_size": bc.eval_batch_size,
+        "physical_batch_size": bc.physical_batch_size,
+        "parallel": bc.parallel,
+        "context_checkpoints": bc.context_checkpoints,
+    }
+    server_defaults = {
+        "physical_batch_size": 512,
+        "parallel": 4,
+        "context_checkpoints": 32,
+    }
+    for name, get in dim_specs:
+        vals = _tried(configs, get)
+        shown = ", ".join(map(str, vals)) if vals else "none"
+        best_val = best_getters[name]
+        if best_val is None and name in server_defaults:
+            best_val = f"server default ({server_defaults[name]})"
+        lines.append(f"| {name} | {shown} | {best_val} |")
+    lines += [""]
+    return lines
+
+
 def save_best_report(
     run: OptimizationRun,
     out_dir: str | Path = "results",
@@ -943,100 +1052,11 @@ def save_best_report(
             f"- Fastest measured context: {ctx_speed.get('max_speed_context') or 'none'}",
             "",
         ]
-    lines += ["## Tested configurations (passed)", ""]
-    lines += [
-        "| # | ctx | flash | KV | batch | phys | par | gen tok/s | prompt tok/s | "
-        "TTFT ms | VRAM GB | quality | score | status |"
-    ]
-    lines += [
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
-    ]
-    for i, c in enumerate(ordered, 1):
-        q = f"{c.quality_score.overall:.3f}" if c.quality_score else "N/A"
-        vram = f"{c.peak_vram_gb:.1f}" if c.peak_vram_gb is not None else "—"
-        lines.append(
-            f"| {i} | {c.context_length} | {_fmt(c.config.flash_attention)} | "
-            f"{'GPU' if c.config.offload_kv_cache_to_gpu else 'CPU'} | "
-            f"{_fmt(c.config.eval_batch_size)} | {_fmt(c.config.physical_batch_size)} | "
-            f"{_fmt(c.config.parallel)} | {c.get_avg_generation_tok_s():.1f} | "
-            f"{c.get_avg_prompt_tok_s():.0f} | {c.get_avg_estimated_ttft_ms():.0f} | "
-            f"{vram} | {q} | {_score_str(c.score)} | PASS |"
-        )
-    if len(pareto) != len(tested):
-        lines += ["", f"Pareto-optimal: {len(pareto)} of {len(tested)} passed."]
-    else:
-        lines += ["", "Pareto-optimal: all tested configurations are non-dominated."]
-    # Winner transparency (audit): the winner is chosen progressively during
-    # the run under then-current score bounds and is finalized as the median
-    # validated copy of its config. A different eligible config may end the
-    # run with a higher recomputed score; surface that explicitly.
-    better = [
-        c
-        for c in configs
-        if c.id != best.id
-        and c.status.value == "passed"
-        and c.score is not None
-        and best.score is not None
-        and c.score > best.score * 1.05
-    ]
-    if better:
-        top = max(better, key=lambda c: c.score)
-        lines += [
-            "",
-            f"NOTE: config {top.id} closed with a higher recomputed score "
-            f"({top.score:.3f} vs winner {best.score:.3f}); winner was "
-            "selected under running bounds during the search (winner remains "
-            "the median of its final validation).",
-        ]
-    lines += [""]
+    lines += _tested_configs_rows(configs, ordered, pareto, tested, best)
 
-    if failed:
-        lines += ["## Failed configurations (with reasons)", ""]
-        lines += ["| ctx | flash | KV | batch | status | reason |"]
-        lines += ["| --- | --- | --- | --- | --- | --- |"]
-        for c in failed:
-            lines.append(
-                f"| {c.context_length} | {_fmt(c.config.flash_attention)} | "
-                f"{'GPU' if c.config.offload_kv_cache_to_gpu else 'CPU'} | "
-                f"{_fmt(c.config.eval_batch_size)} | {c.status.value} | "
-                f"{(c.error or '')[:200]} |"
-            )
-        lines += [""]
+    lines += _failed_configs_rows(failed)
 
-    lines += ["## Tried values per dimension (all attempts, incl. failed)", ""]
-    lines += ["| Dimension | Tried | Best |"]
-    lines += ["| --- | --- | --- |"]
-    dim_specs = [
-        ("context_length", lambda c: c.context_length),
-        ("flash_attention", lambda c: c.config.flash_attention),
-        ("kv_cache (GPU=True)", lambda c: c.config.offload_kv_cache_to_gpu),
-        ("eval_batch_size", lambda c: c.config.eval_batch_size),
-        ("physical_batch_size", lambda c: c.config.physical_batch_size),
-        ("parallel", lambda c: c.config.parallel),
-        ("context_checkpoints", lambda c: c.config.context_checkpoints),
-    ]
-    best_getters = {
-        "context_length": best.context_length,
-        "flash_attention": bc.flash_attention,
-        "kv_cache (GPU=True)": bc.offload_kv_cache_to_gpu,
-        "eval_batch_size": bc.eval_batch_size,
-        "physical_batch_size": bc.physical_batch_size,
-        "parallel": bc.parallel,
-        "context_checkpoints": bc.context_checkpoints,
-    }
-    server_defaults = {
-        "physical_batch_size": 512,
-        "parallel": 4,
-        "context_checkpoints": 32,
-    }
-    for name, get in dim_specs:
-        vals = _tried(configs, get)
-        shown = ", ".join(map(str, vals)) if vals else "none"
-        best_val = best_getters[name]
-        if best_val is None and name in server_defaults:
-            best_val = f"server default ({server_defaults[name]})"
-        lines.append(f"| {name} | {shown} | {best_val} |")
-    lines += [""]
+    lines += _tried_values_rows(configs, best, bc)
 
     lines += [
         "## Control channels (per parameter, registry-driven)",
