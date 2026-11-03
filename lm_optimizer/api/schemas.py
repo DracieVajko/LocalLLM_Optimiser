@@ -108,6 +108,9 @@ class AdvancedSettingsSchema(BaseModel):
     enable_rope: bool = False  # Experimental, disabled by default. Must be explicitly enabled.
     enable_rope_scaling: bool | None = None  # alias
     workload_type: str = "interactive"  # interactive | throughput
+    style: str = "balanced"  # precise | balanced | creative
+    max_tokens_scale: float = Field(default=1.0, ge=0.25, le=1.0)
+    min_speed: float = Field(default=0.0, ge=0.0)
     selection_threshold: float = Field(default=0.05, ge=0.0, lt=1.0)
     optimize_context: bool = False  # Phase B opt-in: max-context on frozen winner
     min_context_speed: float = Field(default=1.0, ge=0.0)  # Phase B speed floor

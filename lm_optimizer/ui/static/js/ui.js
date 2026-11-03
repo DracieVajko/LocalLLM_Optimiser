@@ -411,6 +411,86 @@ export const UI = {
                     <label for="optimize-context">Optimize Maximum Context (Phase B, optional - runs after the runtime winner is final, runtime settings stay frozen)</label>
                 </div>
 
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="form-label">Benchmark style</label>
+                        <select id="style" class="form-input form-select">
+                            <option value="precise">Precise (deterministic)</option>
+                            <option value="balanced" selected>Balanced</option>
+                            <option value="creative">Creative</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Workload</label>
+                        <select id="workload-type" class="form-input form-select">
+                            <option value="interactive" selected>Interactive (TTFT-first)</option>
+                            <option value="throughput">Throughput</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="form-label">Max tokens scale (0.25-1.0)</label>
+                        <input type="number" id="max-tokens-scale" value="1" step="0.05" min="0.25" max="1" class="form-input">
+                    </div>
+                    <div>
+                        <label class="form-label">Min accepted speed (tok/s)</label>
+                        <input type="number" id="min-speed" value="0" step="0.1" min="0" class="form-input">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="form-label">Physical batch sizes (comma-separated)</label>
+                    <input type="text" id="physical-batches" value="" placeholder="256,512,1024" class="form-input">
+                </div>
+
+                <div>
+                    <label class="form-label">Context strategy modes</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="form-checkbox"><input type="checkbox" id="ctxstrat-winner" checked class="form-checkbox-input"><label for="ctxstrat-winner">winner</label></div>
+                        <div class="form-checkbox"><input type="checkbox" id="ctxstrat-gpu" class="form-checkbox-input"><label for="ctxstrat-gpu">gpu_resident</label></div>
+                        <div class="form-checkbox"><input type="checkbox" id="ctxstrat-modelfirst" class="form-checkbox-input"><label for="ctxstrat-modelfirst">model_first_kv_cpu</label></div>
+                        <div class="form-checkbox"><input type="checkbox" id="ctxstrat-spillover" class="form-checkbox-input"><label for="ctxstrat-spillover">system_spillover</label></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="enable-rope" class="form-checkbox-input">
+                        <label for="enable-rope">Enable RoPE probes (experimental)</label>
+                    </div>
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="enable-cpu-moe" class="form-checkbox-input">
+                        <label for="enable-cpu-moe">Enable CPU-MoE probes (experimental)</label>
+                    </div>
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="enable-speculative" class="form-checkbox-input">
+                        <label for="enable-speculative">Enable speculative probes (experimental)</label>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="form-label">Scheduled artifact test</label>
+                    <select id="artifact-test" class="form-input form-select">
+                        <option value="">None</option>
+                        <option value="web_dashboard">web_dashboard</option>
+                        <option value="blender_skyblock">blender_skyblock</option>
+                        <option value="research_synthesis">research_synthesis</option>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="form-label">Max speed probes</label>
+                        <input type="number" id="max-speed-probes" value="" placeholder="preset default" class="form-input" min="1">
+                    </div>
+                    <div>
+                        <label class="form-label">Max finalists</label>
+                        <input type="number" id="max-finalists" value="" placeholder="preset default" class="form-input" min="1">
+                    </div>
+                </div>
+
                 <div>
                     <label class="form-label">Phase B minimum generation tok/s (stops the max-context search)</label>
                     <input type="number" id="min-context-speed" value="1" step="0.1" min="0" class="form-input">

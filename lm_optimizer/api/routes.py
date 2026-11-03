@@ -592,6 +592,9 @@ async def start_optimization(request: OptimizationRequest, background_tasks: Bac
         adv = request.advanced_settings.dict() if request.advanced_settings else {}
         adv.setdefault("workload_type", normalize_workload(request.workload_type))
         adv["workload_type"] = normalize_workload(adv.get("workload_type"))
+        adv.setdefault("style", "balanced")
+        adv.setdefault("max_tokens_scale", 1.0)
+        adv.setdefault("min_speed", 0.0)
         # Top-level request fields are authoritative for the speed floor and
         # preset; advanced_settings defaults must not silently override them.
         adv["min_generation_tok_s"] = float(request.min_generation_tok_s)
@@ -631,6 +634,7 @@ async def start_optimization(request: OptimizationRequest, background_tasks: Bac
         # Create services
         benchmark_service = BenchmarkService(
             client,
+            style=str(adv.get("style", "balanced")),
             speed_only=bool(adv.get("speed_only")),
             quality_only=bool(adv.get("quality_only")),
             speed_context=adv.get("speed_context"),
@@ -645,6 +649,12 @@ async def start_optimization(request: OptimizationRequest, background_tasks: Bac
                 )
             except (TypeError, ValueError):
                 pass
+        try:
+            benchmark_service.config.max_tokens_scale = float(
+                adv.get("max_tokens_scale", 1.0)
+            )
+        except (TypeError, ValueError):
+            pass
         quality_evaluator = QualityEvaluator(QualityConfig(minimum_score=request.quality_threshold))
         search_generator = SearchSpaceGenerator(client)
         optimizer = AdaptiveOptimizer(

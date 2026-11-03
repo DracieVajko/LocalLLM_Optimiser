@@ -433,6 +433,8 @@ const App = {
     getAdvancedSettings() {
         const skip_phases = ['speed', 'quality', 'recovery', 'validation', 'context']
             .filter((phase) => document.getElementById(`skip-${phase}`)?.checked === true);
+        const context_strategy_modes = ['winner', 'gpu_resident', 'model_first_kv_cpu', 'system_spillover']
+            .filter((m, i) => document.getElementById(['ctxstrat-winner','ctxstrat-gpu','ctxstrat-modelfirst','ctxstrat-spillover'][i])?.checked === true);
         return {
             min_context: parseInt(document.getElementById('min-context')?.value || '2048'),
             max_context: parseInt(document.getElementById('max-context')?.value || '32768'),
@@ -453,6 +455,19 @@ const App = {
             skip_phases,
             warmup_runs: Math.min(5, Math.max(0,
                 parseInt(document.getElementById('warmup-runs')?.value || '1', 10) || 0)),
+            style: document.getElementById('style')?.value || 'balanced',
+            workload_type: document.getElementById('workload-type')?.value || 'interactive',
+            max_tokens_scale: parseFloat(document.getElementById('max-tokens-scale')?.value || '1') || 1,
+            min_speed: parseFloat(document.getElementById('min-speed')?.value || '0') || 0,
+            physical_batches: (document.getElementById('physical-batches')?.value || '')
+                .split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isFinite(n) && n > 0),
+            context_strategy_modes,
+            enable_rope: document.getElementById('enable-rope')?.checked === true,
+            enable_cpu_moe: document.getElementById('enable-cpu-moe')?.checked === true,
+            enable_speculative: document.getElementById('enable-speculative')?.checked === true,
+            artifact_test_id: document.getElementById('artifact-test')?.value || null,
+            max_speed_probes: parseInt(document.getElementById('max-speed-probes')?.value || '', 10) || null,
+            max_finalists: parseInt(document.getElementById('max-finalists')?.value || '', 10) || null,
         };
     },
 
