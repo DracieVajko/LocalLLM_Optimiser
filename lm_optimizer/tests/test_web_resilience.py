@@ -251,11 +251,10 @@ class TestConfigDetailShape:
         assert out.score is None
 
     def test_enrich_adds_full_output_and_per_test_quality(self):
-        from lm_optimizer.api.routes import _convert_config_result, _enrich_config_detail
+        from lm_optimizer.api.routes import _present_config_detail
 
         cfg = self._cfg()
-        out = _convert_config_result(cfg)
-        enriched = _enrich_config_detail(out.model_dump(), cfg, "test-model")
+        enriched = _present_config_detail(cfg, "test-model")
         m = enriched["metrics"][0]
         assert m["output_text"] == cfg.metrics[0].output_text, "full output, not truncated"
         assert "quality_overall" in m, "per-test quality recomputed"

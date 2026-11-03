@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from enum import Enum
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -431,3 +432,16 @@ class RunsResponse(BaseModel):
 class ConfigurationsResponse(BaseModel):
     configurations: list[ConfigurationResultResponse]
     skipped: int = 0
+
+
+class CheckpointsResponse(BaseModel):
+    checkpoints: list[dict[str, Any]]
+
+
+class PresetsResponse(BaseModel):
+    presets: list[PresetSchema]
+
+
+class SavePresetResponse(BaseModel):
+    id: str
+    success: bool = True

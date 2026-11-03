@@ -256,8 +256,7 @@ async def config_json_page(request: Request, run_id: str, config_id: str):
     from fastapi import HTTPException as _HE
 
     from lm_optimizer.api.routes import (
-        _convert_config_result,
-        _enrich_config_detail,
+        _present_config_detail,
         config_repo,
         run_repo,
     )
@@ -272,8 +271,7 @@ async def config_json_page(request: Request, run_id: str, config_id: str):
             model_id = run.model.id or ""
     except Exception as exc:
         log_best_effort("best-effort operation failed", exc)
-    conv = _convert_config_result(config)
-    enriched = _enrich_config_detail(conv.model_dump(mode="json"), config, model_id)
+    enriched = _present_config_detail(config, model_id)
     payload = _json.dumps(enriched, indent=1, ensure_ascii=False, default=str)
     return templates.TemplateResponse(
         request,

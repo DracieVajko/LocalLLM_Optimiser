@@ -16,6 +16,7 @@ from lm_optimizer.api.schemas import (
     SandboxResponse,
     ConfigurationResultResponse,
     ConfigurationsResponse,
+    CheckpointsResponse,
     HardwareInfoSchema,
     LoadConfigSchema,
     ModelIdentitySchema,
@@ -24,8 +25,10 @@ from lm_optimizer.api.schemas import (
     OptimizationRequest,
     OptimizationRunResponse,
     PresetSchema,
+    PresetsResponse,
     RestoreDefaultsRequest,
     RunsResponse,
+    SavePresetResponse,
     ProfileWeightsSchema,
     SettingsSchema,
     StatsResponse,
@@ -833,7 +836,7 @@ async def resume_run_task(optimizer: AdaptiveOptimizer, run_id: UUID):
             release_lock()
         except Exception as exc:
             log_best_effort("best-effort operation failed", exc)
-@router.get("/checkpoints")
+@router.get("/checkpoints", response_model=CheckpointsResponse)
 def list_checkpoints():
     """List interrupt checkpoints."""
     from lm_optimizer.storage.run_checkpoint import list_checkpoints as _list
@@ -1160,7 +1163,7 @@ async def restore_previous(model_id: str):
 # ============================================================
 
 
-@router.get("/presets")
+@router.get("/presets", response_model=PresetsResponse)
 def list_presets(model_id: str | None = None):
     """List saved presets."""
     if model_id:
@@ -1170,7 +1173,7 @@ def list_presets(model_id: str | None = None):
     return {"presets": [_convert_preset(p) for p in presets]}
 
 
-@router.post("/presets")
+@router.post("/presets", response_model=SavePresetResponse)
 def save_preset(preset: PresetSchema):
     """Save a preset."""
     preset_data = preset.dict()
