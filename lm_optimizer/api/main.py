@@ -1,10 +1,11 @@
 """FastAPI application for LM Studio Auto Optimizer."""
 
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -60,6 +61,29 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+_LOOPBACK_CLIENTS = {"127.0.0.1", "::1", "localhost"}
+
+
+@app.middleware("http")
+async def _require_token_for_remote_clients(request: Request, call_next):
+    """Require ``X-API-Token`` on mutations from non-loopback clients.
+
+    Local UI/CLI traffic is unchanged. Remote mode is refused at startup
+    without ``LM_OPTIMIZER_API_TOKEN``; this middleware is the matching
+    request-time check.
+    """
+    token = os.environ.get("LM_OPTIMIZER_API_TOKEN")
+    client_host = request.client.host if request.client else ""
+    if (
+        token
+        and client_host not in _LOOPBACK_CLIENTS
+        and request.method.upper() in _MUTATING_METHODS
+        and request.headers.get("x-api-token") != token
+    ):
+        return JSONResponse({"detail": "invalid API token"}, status_code=401)
+    return await call_next(request)
 
 # API routes - manually include routes due to FastAPI 0.141.1 include_router bug
 # We need to recreate routes with proper prefix since include_router is broken

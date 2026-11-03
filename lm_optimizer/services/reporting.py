@@ -676,6 +676,10 @@ def save_best_report(
 ) -> Path | None:
     """Save a per-model .md file with the best settings. Returns path or None.
 
+    Side effects: creates ``out_dir``, writes one Markdown report atomically,
+    and renders the winner, alternatives, context-speed ladder, generation
+    presets, host facts and failure diagnostics sections.
+
     Filename and every identity claim derive from the run's own stored
     model_id (never execution order or selection state). `generation`:
     recommended sampling settings {temperature, top_p, top_k, min_p,

@@ -185,11 +185,13 @@ Experiment Builder under one entry), **Settings**. API under single `/api` prefi
 + websocket progress. Dark mode follows the OS (toggle in nav). Read endpoints
 are load-free and degrade gracefully when LM Studio is down.
 
-**Security model:** the web UI has no user authentication and is intended for
+**Security model:** the web UI has no user login and is intended for
 loopback use only. It binds `127.0.0.1` by default; `web_main` refuses a
-non-loopback bind unless `LM_OPTIMIZER_ALLOW_REMOTE=1` is set, and CORS is
-restricted to localhost origins. Do not expose it to an untrusted network without
-putting an authenticating reverse proxy in front of it.
+non-loopback bind unless `LM_OPTIMIZER_ALLOW_REMOTE=1` **and**
+`LM_OPTIMIZER_API_TOKEN` are set, and CORS is restricted to localhost origins.
+In remote mode, mutating requests from non-loopback clients must send
+`X-API-Token: <token>`; the local UI is unaffected. For a browser UI on a
+remote network, put an authenticating reverse proxy in front of it.
 
 **Pause/Resume (v1.5.2):** Running and paused runs show **Pause** / **Resume** buttons
 on the Results page. History page has **Resume All Pending** to bulk-resume paused runs.

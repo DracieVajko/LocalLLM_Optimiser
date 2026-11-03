@@ -2039,6 +2039,10 @@ class AdaptiveOptimizer:
     ) -> ConfigurationResult | None:
         """Test a single configuration through the strict phase machine.
 
+        Side effects: loads the candidate into the host, runs the benchmark
+        and quality gate, persists the configuration result, and may unload
+        the model unless ``keep_loaded``/``assume_loaded`` is set.
+
         CREATED -> LOAD_REQUESTED -> LOADED -> VERIFIED -> PREHEATED ->
         BENCHMARKED -> QUALITY_EVALUATED -> SCORED -> CANDIDATE_ELIGIBLE.
         Any phase failure returns the result with a terminal failure status
