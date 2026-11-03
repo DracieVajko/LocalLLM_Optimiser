@@ -333,6 +333,24 @@ def save_failed_report(
         lines += [
             f"- Config: {closest.id} (ctx {closest.context_length})",
             "",
+        ]
+        metrics = list(getattr(closest, "metrics", None) or [])
+        if metrics:
+            lines += [
+                "| Test | Success | Gen tok/s | Error | Output (truncated) |",
+                "| --- | --- | --- | --- | --- |",
+            ]
+            for m in metrics:
+                error = (getattr(m, "error", "") or "")[:200]
+                output = (getattr(m, "output_text", "") or "").replace("\n", " ")[:120]
+                speeds = f"{getattr(m, 'generation_tok_s', 0.0):.1f}"
+                lines.append(
+                    f"| {getattr(m, 'test_name', '?')} | "
+                    f"{'PASS' if getattr(m, 'success', False) else 'FAIL'} | "
+                    f"{speeds} | {error} | {output} |"
+                )
+            lines += [""]
+        lines += [
             "| Test | Overall | Checks |",
             "| --- | --- | --- |",
         ]
@@ -346,6 +364,9 @@ def save_failed_report(
                 lines.append(f"| {name} | n/a | n/a |")
         lines += ["", "## Full failed-test outputs (closest config)", ""]
         failed_names = set()
+        for m in metrics:
+            if not getattr(m, "success", False):
+                failed_names.add(getattr(m, "test_name", ""))
         for name, entry in qbt.items():
             try:
                 if float((entry or {}).get("overall", 1.0)) <= 0.0:

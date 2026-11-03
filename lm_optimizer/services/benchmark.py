@@ -1094,12 +1094,20 @@ class BenchmarkService:
             successful = [m for m in test_metrics if m.success]
             if not successful:
                 all_passed = False
+                first_error = next(
+                    (
+                        getattr(m, "error", None)
+                        for m in test_metrics
+                        if getattr(m, "error", None)
+                    ),
+                    "All runs failed",
+                )
                 aggregated.append(
                     BenchmarkMetrics(
                         test_name=test_name,
                         category=test_metrics[0].category,
                         success=False,
-                        error="All runs failed",
+                        error=str(first_error)[:300],
                     )
                 )
                 continue
