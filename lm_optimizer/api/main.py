@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from lm_optimizer.api.routes import router as api_router
+from lm_optimizer.api.state import registry
 from lm_optimizer.api.websocket import ws_router
 from lm_optimizer.config import config
 from lm_optimizer.logging_config import get_logger, setup_logging
@@ -27,6 +28,7 @@ templates = Jinja2Templates(directory="lm_optimizer/ui/templates")
 async def lifespan(app: FastAPI):
     """Application lifespan handler (shutdown writes checkpoint first)."""
     logger.info("Starting LM Studio Auto Optimizer")
+    registry.clear()
     try:
         from lm_optimizer.api import routes as _routes
 
@@ -37,12 +39,13 @@ async def lifespan(app: FastAPI):
     try:
         from lm_optimizer.api import routes as _routes
 
-        opt = _routes._current_optimizer
+        opt = registry.optimizer
         if opt is not None and opt.state is not None:
             opt.checkpoint_now(reason="shutdown")
             logger.info("Shutdown checkpoint saved", run_id=str(opt.state.run.id))
     except Exception as e:
         logger.info("Shutdown checkpoint failed", error=str(e))
+    registry.clear()
     logger.info("Shutting down LM Studio Auto Optimizer")
 
 

@@ -66,12 +66,11 @@ from datetime import datetime
 import orjson
 from lm_optimizer.services.orchestration.optimizer import AdaptiveOptimizer
 from lm_optimizer.services.best_effort import log_best_effort
+from lm_optimizer.api.state import registry
 
 router = APIRouter()
 
-# Global optimizer instance for current run
-_current_optimizer: AdaptiveOptimizer | None = None
-_current_run_id: UUID | None = None
+# Current run is held in the small API RunRegistry, not raw globals.
 
 # In-memory A/B compare jobs (short-lived; polling via GET /compare/{id}).
 _compare_jobs: dict[str, dict] = {}
@@ -490,12 +489,11 @@ async def get_model(model_id: str):
 @router.post("/optimize", response_model=OptimizationRunResponse)
 async def start_optimization(request: OptimizationRequest, background_tasks: BackgroundTasks):
     """Start an optimization run."""
-    global _current_optimizer, _current_run_id
 
     if (
-        _current_optimizer
-        and _current_optimizer.state
-        and not _current_optimizer.state.run.completed_at
+        registry.optimizer
+        and registry.optimizer.state
+        and not registry.optimizer.state.run.completed_at
     ):
         raise HTTPException(status_code=409, detail="Optimization already running")
 
@@ -608,8 +606,8 @@ async def start_optimization(request: OptimizationRequest, background_tasks: Bac
                 log_best_effort("best-effort operation failed", exc)
             raise _internal_error("start run", e)
 
-        _current_optimizer = optimizer
-        _current_run_id = run.id
+        registry.optimizer = optimizer
+        registry.run_id = run.id
 
         # Run in background from the prepared state (never re-prepares).
         background_tasks.add_task(
@@ -667,9 +665,8 @@ async def run_optimization_task(
         except Exception as exc:
             log_best_effort("best-effort operation failed", exc)
     finally:
-        global _current_optimizer, _current_run_id
-        _current_optimizer = None
-        _current_run_id = None
+        registry.optimizer = None
+        registry.run_id = None
         try:
             release_lock()
         except Exception as exc:
@@ -677,13 +674,12 @@ async def run_optimization_task(
 @router.post("/optimize/{run_id}/pause")
 def pause_optimization(run_id: UUID):
     """Pause current optimization."""
-    global _current_optimizer
     if (
-        _current_optimizer
-        and _current_optimizer.state
-        and _current_optimizer.state.run.id == run_id
+        registry.optimizer
+        and registry.optimizer.state
+        and registry.optimizer.state.run.id == run_id
     ):
-        _current_optimizer.pause()
+        registry.optimizer.pause()
         return {"success": True}
     raise HTTPException(status_code=404, detail="Run not found or not running")
 
@@ -691,13 +687,12 @@ def pause_optimization(run_id: UUID):
 @router.post("/optimize/{run_id}/resume")
 def resume_optimization(run_id: UUID):
     """Resume paused optimization."""
-    global _current_optimizer
     if (
-        _current_optimizer
-        and _current_optimizer.state
-        and _current_optimizer.state.run.id == run_id
+        registry.optimizer
+        and registry.optimizer.state
+        and registry.optimizer.state.run.id == run_id
     ):
-        _current_optimizer.resume()
+        registry.optimizer.resume()
         return {"success": True}
     raise HTTPException(status_code=404, detail="Run not found or not running")
 
@@ -753,14 +748,13 @@ async def resume_run(run_id: UUID):
 @router.post("/optimize/{run_id}/cancel")
 def cancel_optimization(run_id: UUID):
     """Cancel current optimization (checkpoint is written before ack)."""
-    global _current_optimizer
     if (
-        _current_optimizer
-        and _current_optimizer.state
-        and _current_optimizer.state.run.id == run_id
+        registry.optimizer
+        and registry.optimizer.state
+        and registry.optimizer.state.run.id == run_id
     ):
-        _current_optimizer.checkpoint_now(reason="api-cancel")
-        _current_optimizer.cancel()
+        registry.optimizer.checkpoint_now(reason="api-cancel")
+        registry.optimizer.cancel()
         return {"success": True, "checkpoint": True}
     # Also allow cancelling a persisted RESUMED/RUNNING run record.
     run = run_repo.get(str(run_id))
@@ -777,8 +771,7 @@ def cancel_optimization(run_id: UUID):
 @router.post("/optimize/{run_id}/resume-run")
 async def resume_run_from_checkpoint(run_id: UUID, background_tasks: BackgroundTasks):
     """Resume an interrupted/cancelled run from its checkpoint (no re-runs)."""
-    global _current_optimizer
-    if _current_optimizer and _current_optimizer.state:
+    if registry.optimizer and registry.optimizer.state:
         raise HTTPException(status_code=409, detail="Another optimization is running")
     try:
         acquire_lock(f"resume:{run_id}")
@@ -809,7 +802,7 @@ async def resume_run_from_checkpoint(run_id: UUID, background_tasks: BackgroundT
         optimizer = build_optimizer(
             client, run.advanced_settings or {}, quality_threshold=run.quality_threshold
         )
-        _current_optimizer = optimizer
+        registry.optimizer = optimizer
         background_tasks.add_task(resume_run_task, optimizer, run_id)
     except Exception:
         try:
@@ -823,7 +816,6 @@ async def resume_run_from_checkpoint(run_id: UUID, background_tasks: BackgroundT
 
 async def resume_run_task(optimizer: AdaptiveOptimizer, run_id: UUID):
     """Background resume task."""
-    global _current_optimizer
     try:
         await optimizer.resume_from_checkpoint(run_id)
     except asyncio.CancelledError:
@@ -831,7 +823,7 @@ async def resume_run_task(optimizer: AdaptiveOptimizer, run_id: UUID):
     except Exception as e:
         logger.error("Resume task failed", error=str(e))
     finally:
-        _current_optimizer = None
+        registry.optimizer = None
         try:
             release_lock()
         except Exception as exc:
@@ -849,17 +841,16 @@ def get_optimization_progress(run_id: UUID):
     """Get live optimization progress (never fakes ETA)."""
     from datetime import datetime as _dt
 
-    global _current_optimizer
     if (
-        _current_optimizer
-        and _current_optimizer.state
-        and _current_optimizer.state.run.id == run_id
+        registry.optimizer
+        and registry.optimizer.state
+        and registry.optimizer.state.run.id == run_id
     ):
         from lm_optimizer.services.failure_states import is_terminal_failure
 
         from lm_optimizer.services.orchestration.optimizer import _display_total
 
-        state = _current_optimizer.state
+        state = registry.optimizer.state
         total = _display_total(state)
         tested = len(state.tested_configs)
         passed = sum(1 for c in state.tested_configs if c.status == ConfigurationStatus.PASSED)
@@ -1755,7 +1746,7 @@ def delete_run(run_id: UUID):
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
     status_value = getattr(getattr(run, "status", None), "value", "")
-    if str(run_id) == str(_current_run_id) or (
+    if str(run_id) == str(registry.run_id) or (
         str(status_value).lower() in ("running", "resumed")
         and not _is_stale_run(str(run_id), status_value)
     ):
@@ -1795,7 +1786,7 @@ def abandon_run(run_id: UUID, force: bool = False):
     if terminal and not force:
         raise HTTPException(status_code=409, detail=f"Run is already {status_value}")
     if not force and (
-        str(run_id) == str(_current_run_id)
+        str(run_id) == str(registry.run_id)
         or (
             status_value in ("running", "resumed")
             and not _is_stale_run(str(run_id), status_value)
@@ -1824,7 +1815,7 @@ def reconcile_runs(apply: bool = False):
     """
     from lm_optimizer.services.run_reconcile import reconcile_stale_runs
 
-    return reconcile_stale_runs(dry_run=not apply, current_run_id=_current_run_id)
+    return reconcile_stale_runs(dry_run=not apply, current_run_id=registry.run_id)
 
 
 def _persist_duel(job_id: str, request: SandboxRequest, status: str,

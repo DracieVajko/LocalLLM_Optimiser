@@ -154,7 +154,7 @@ def test_web_optimize_refuses_with_holder_409():
     import lm_optimizer.api.routes as routes
     from lm_optimizer.api.main import app
 
-    assert routes._current_optimizer is None
+    assert routes.registry.optimizer is None
     acquire_lock("other-job")
     try:
         with TestClient(app, raise_server_exceptions=False) as c:
@@ -194,5 +194,5 @@ async def test_web_run_task_releases_lock():
     from lm_optimizer.services.joblock import _default_lock_path
 
     assert not _default_lock_path().exists()
-    assert routes._current_optimizer is None
-    assert routes._current_run_id is None
+    assert routes.registry.optimizer is None
+    assert routes.registry.run_id is None
