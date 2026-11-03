@@ -155,8 +155,8 @@ use the `unit`/`integration` markers to run one side.
 |`param-matrix [--record]`|parameter control matrix (+ DB snapshot)|no|
 |`apply / restore / presets / runs`|presets and history management|apply/restore yes|
 |`cleanup_test_runs`|remove test runs|no|
-|`python hw_monitor.py [--model M]`|VRAM/RAM/swap snapshot; optional tok/s probe|only with `--model`|
-|`python vram_matrix.py <model>`|12-config ctx×flash×KV fit/speed matrix|yes|
+|`python tools/hw_monitor.py [--model M]`|VRAM/RAM/swap snapshot; optional tok/s probe|only with `--model`|
+|`python tools/vram_matrix.py <model>`|12-config ctx×flash×KV fit/speed matrix|yes|
 |`resume-menu [--status] [--limit]`|interactive menu to resume paused/incomplete runs|no|
 |`judge <run_id> [--priority] [--vram-limit]`|AI-assisted model selection (second opinion)|no|
 |`lab context-explorer <model>`|1.5x context ladder + fill ratios + needle retrieval|yes|
@@ -471,7 +471,7 @@ lm_optimizer/
                 lms_cli, parameter_registry, speculative, compare, sandbox
   storage/      resumable run checkpoint store
   ui/           templates + static JS (dark mode, status poller, duel UI)
-hw_monitor.py vram_matrix.py run-*.bat run-*.sh scripts/ docs/ results/ (gitignored)
+tools/ run-*.bat run-*.sh scripts/ docs/ results/ (gitignored)
 ```
 
 Runtime data (`data/*.db`, `logs/`, `results/`) is gitignored and
