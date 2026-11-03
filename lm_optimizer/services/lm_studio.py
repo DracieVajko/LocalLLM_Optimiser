@@ -1,9 +1,8 @@
 """LM Studio service with capability discovery.
 
-Error contract: transport/HTTP failures raise ``LMStudioError`` (or a
-subclass); callers that can tolerate a failure wrap the call in
-``best_effort`` or translate it into an outcome object. Read-only helpers
-return ``None``/empty results when the host is unreachable.
+Error contract: transport/HTTP failures raise ``httpx.HTTPError`` (after
+retries); read-only helpers return ``None``/empty results when the host is
+unreachable, and per-case benchmark failures are recorded instead of raised.
 
 Live-verified contract (2026-09-19, LM Studio bundled server, `lms` commit 69d945a):
 - GET /api/v1/models -> {"models": [{key, display_name, architecture,
@@ -154,9 +153,15 @@ class LMStudioClient:
     # BackendClient seam identifier (no behavior change).
     backend_name: str = "lm-studio"
 
-    def __init__(self, base_url: str | None = None, timeout: float | None = None):
+    def __init__(
+        self,
+        base_url: str | None = None,
+        timeout: float | None = None,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ):
         self.base_url = (base_url or config.lm_studio.base_url).rstrip("/")
         self.timeout = timeout or config.lm_studio.timeout
+        self._transport = transport
         self._client: httpx.AsyncClient | None = None
         self._capabilities: LMStudioCapabilities | None = None
         self._models_cache: list[ModelIdentity] = []
@@ -203,6 +208,7 @@ class LMStudioClient:
             base_url=self.base_url,
             timeout=httpx.Timeout(self.timeout),
             limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+            transport=self._transport,
         )
 
         await self._detect_capabilities()
