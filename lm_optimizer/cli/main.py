@@ -43,8 +43,6 @@ from lm_optimizer.services.hostguard import (
     HostBusyTimeout,
     HostUnreachableError,
     format_snapshot,
-    is_connection_error,
-    prepare_host,
 )
 from lm_optimizer.services.joblock import JobBusyError, acquire_lock, release_lock
 from lm_optimizer.services.matrix import build_matrix, recommendation_line, run_one
@@ -76,6 +74,14 @@ app.add_typer(_lab.app, name="lab")
 
 console = Console()
 logger = get_logger(__name__)
+
+from lm_optimizer.cli.host_lifecycle import (  # noqa: E402
+    client_base_url as _client_base_url,
+    connect_guarded as _connect_guarded,
+    connect_guarded_or_abort as _connect_guarded_or_abort,
+    handle_connection_error as _handle_connection_error,
+    print_host_busy_paused as _print_host_busy_paused,
+)
 
 if TYPE_CHECKING:
     from lm_optimizer.backends.ollama.client import OllamaClient
@@ -141,19 +147,6 @@ def get_backend_client(
     raise NotImplementedError("llama.cpp backend is phase 2")
 
 
-def _handle_connection_error(url: str, error: Exception) -> None:
-    """User-friendly connection error without exposing secrets."""
-    console.print("\n[red]Cannot connect to LM Studio at:[/red]")
-    console.print(f"  {url}")
-    console.print("\n[bold]Check:[/bold]")
-    console.print("  - LM Studio is running")
-    console.print("  - Developer API is enabled (LM Studio -> Settings -> Developer)")
-    console.print("  - URL/port is correct")
-    console.print("  - Network access is allowed (firewall/VPN)")
-    console.print(f"\n[dim]Details: {type(error).__name__}[/dim]")
-    # Do not log full URL with credentials or stack trace containing secrets
-
-
 def _acquire_run_lock(purpose: str) -> None:
     """Claim the cross-process optimizer job lock for this run.
 
@@ -167,96 +160,6 @@ def _acquire_run_lock(purpose: str) -> None:
         console.print("[red]Another optimizer job is already running:[/red]")
         console.print(f"  pid {holder.get('pid')} purpose {holder.get('purpose')!r}")
         console.print("Run one job at a time; retry when it finishes.")
-        sys.exit(1)
-
-
-def _client_base_url(client) -> str:
-    """Backend URL for messages (never raises)."""
-    return getattr(client, "base_url", None) or config.lm_studio.base_url
-
-
-def _busy_blockers(exc: HostBusyTimeout) -> str:
-    """Blocker model ids for messages (never empty)."""
-    return ", ".join(str(b) for b in (exc.blocker or [])) or "unknown model"
-
-
-def _print_host_busy_abort(exc: HostBusyTimeout) -> None:
-    """Clear abort message for a persistently busy host."""
-    console.print(f"[red]Host busy: {_busy_blockers(exc)} still loaded; aborting.[/red]")
-    console.print(f"  {exc}")
-    console.print("Unload the model in LM Studio (disable Keep Model in Memory) and retry.")
-
-
-def _print_host_busy_paused(model: str, exc: HostBusyTimeout) -> None:
-    """Pause-framed busy message for optimize, with a resume hint.
-
-    Nothing started (no run id, no checkpoint), so "pause" here means the
-    pre-start wait budget ran out: free the host and re-run; in-progress
-    runs resume via the normal checkpoint flow.
-    """
-    console.print(
-        f"[yellow]Host busy: {_busy_blockers(exc)} still loaded "
-        "- pausing before start.[/yellow]"
-    )
-    console.print(f"  {exc}")
-    console.print("Nothing was started, so no checkpoint was needed.")
-    console.print("Unload the model in LM Studio (disable Keep Model in Memory),")
-    console.print(f"then re-run: lm-optimizer optimize {model}")
-    console.print("In-progress runs resume with: lm-optimizer resume <run-id>")
-    console.print("  (list them with: lm-optimizer checkpoints)")
-
-
-async def _connect_guarded(
-    client, purpose: str, wait_interval_s: float = 60.0, max_waits: int = 30
-):
-    """Connect + exclusive-access guard with typed failures.
-
-    Raises HostUnreachableError when the backend cannot be reached (caller
-    shows the friendly connection message) or HostBusyTimeout when a foreign
-    model never leaves (caller pauses or aborts). Other errors propagate.
-    """
-    try:
-        # Load-free first: a leftover/foreign model blocks the echo-probe load
-        # behind it (observed live 2026-11-03: a stale Bonsai kept the probe
-        # waiting until the load timeout). Clean the host, then probe.
-        await client.connect(echo_probe=False)
-    except Exception as e:
-        if is_connection_error(e):
-            raise HostUnreachableError(
-                f"Cannot reach backend at {_client_base_url(client)}", cause=e
-            ) from e
-        raise
-    snapshot = await prepare_host(
-        client,
-        purpose=purpose,
-        wait_interval_s=wait_interval_s,
-        max_waits=max_waits,
-    )
-    try:
-        # Upgrade to the echo probe only on a clean host. The run's own loads
-        # verify configs too, so a probe failure is logged, never fatal.
-        await client.connect()
-    except Exception as e:
-        logger.warning("Echo probe after host cleanup failed", error=str(e)[:160])
-    return snapshot
-
-
-async def _connect_guarded_or_abort(
-    client, purpose: str, wait_interval_s: float = 60.0, max_waits: int = 30
-):
-    """_connect_guarded that aborts (exit 1) with a clear message.
-
-    Shared by every command except optimize (which pauses with a resume
-    hint instead). Unreachable shows the friendly connection message, busy
-    shows the abort message; never the twain.
-    """
-    try:
-        return await _connect_guarded(client, purpose, wait_interval_s, max_waits)
-    except HostBusyTimeout as e:
-        _print_host_busy_abort(e)
-        sys.exit(1)
-    except HostUnreachableError as e:
-        _handle_connection_error(_client_base_url(client), e.cause or e)
         sys.exit(1)
 
 

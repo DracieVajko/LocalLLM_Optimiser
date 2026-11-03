@@ -5,6 +5,7 @@ import asyncio
 import httpx
 import pytest
 
+from lm_optimizer.cli import host_lifecycle
 from lm_optimizer.cli import main as cli_main
 from lm_optimizer.services.hostguard import HostUnreachableError
 
@@ -30,7 +31,7 @@ def test_connect_is_load_free_before_host_cleanup(monkeypatch):
         events.append(("prepare", client.calls[-1]))
         return {"verified_empty": True}
 
-    monkeypatch.setattr(cli_main, "prepare_host", fake_prepare)
+    monkeypatch.setattr(host_lifecycle, "prepare_host", fake_prepare)
 
     snap = asyncio.run(cli_main._connect_guarded(client, "optimize"))
 
@@ -46,7 +47,7 @@ def test_echo_probe_failure_is_logged_not_fatal(monkeypatch):
     async def fake_prepare(c, **kwargs):
         return {"verified_empty": True}
 
-    monkeypatch.setattr(cli_main, "prepare_host", fake_prepare)
+    monkeypatch.setattr(host_lifecycle, "prepare_host", fake_prepare)
 
     snap = asyncio.run(cli_main._connect_guarded(client, "auto"))
 
@@ -64,7 +65,7 @@ def test_connection_failure_is_wrapped(monkeypatch):
     async def fake_prepare(c, **kwargs):  # pragma: no cover - must not run
         raise AssertionError("prepare_host must not run when connect fails")
 
-    monkeypatch.setattr(cli_main, "prepare_host", fake_prepare)
+    monkeypatch.setattr(host_lifecycle, "prepare_host", fake_prepare)
 
     with pytest.raises(HostUnreachableError):
         asyncio.run(cli_main._connect_guarded(_Down(), "optimize"))
