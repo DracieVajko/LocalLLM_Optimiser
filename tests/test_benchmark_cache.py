@@ -1,13 +1,9 @@
 """Benchmark case cache: hit avoids a second chat, failures are not cached."""
 
-import os
-import tempfile
-from pathlib import Path
 
 import pytest
 
 from lm_optimizer.domain.models import BenchmarkCase, BenchmarkMetrics
-from lm_optimizer.services import benchmark_cache
 from lm_optimizer.services.benchmark_cache import get_cached, store_cached
 
 
@@ -78,7 +74,6 @@ def test_different_reasoning_is_a_miss(cache_dir):
 def test_corrupt_entry_returns_none(cache_dir):
     case = _case()
     cfg = _config()
-    path = list(cache_dir.glob("*.json"))[0] if False else None
     # write garbage under the expected key by storing then corrupting
     store_cached("m", case, 2048, "off", cfg, _metrics())
     for p in cache_dir.glob("*.json"):

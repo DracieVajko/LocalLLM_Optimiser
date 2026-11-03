@@ -2,8 +2,6 @@
 
 import asyncio
 
-import pytest
-
 from lm_optimizer.domain.models import LoadConfiguration
 from lm_optimizer.services import lm_studio
 from lm_optimizer.services.lm_studio import LMStudioClient

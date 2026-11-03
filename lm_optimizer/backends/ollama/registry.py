@@ -109,26 +109,30 @@ def ollama_space(
     options = dict(advanced or {})
 
     cap = context_length_from_show(model_info)
-    if isinstance(options.get("num_ctx"), list) and options["num_ctx"]:
-        num_ctx = sorted(set(options["num_ctx"]))
+    num_ctx_val = options.get("num_ctx")
+    if isinstance(num_ctx_val, list) and num_ctx_val:
+        num_ctx = sorted(set(num_ctx_val))
     elif cap is None or cap <= 0:
         num_ctx = list(_DEFAULT_NUM_CTX)
     else:
         num_ctx = [c for c in _DEFAULT_NUM_CTX if c <= cap] or [cap]
 
+    num_batch_val = options.get("num_batch")
     num_batch = (
-        sorted(set(options["num_batch"]))
-        if isinstance(options.get("num_batch"), list) and options["num_batch"]
+        sorted(set(num_batch_val))
+        if isinstance(num_batch_val, list) and num_batch_val
         else list(_DEFAULT_NUM_BATCH)
     )
+    num_thread_val = options.get("num_thread")
     num_thread = (
-        sorted(set(options["num_thread"]))
-        if isinstance(options.get("num_thread"), list) and options["num_thread"]
+        sorted(set(num_thread_val))
+        if isinstance(num_thread_val, list) and num_thread_val
         else _num_thread_default(hardware)
     )
+    num_gpu_val = options.get("num_gpu")
     num_gpu = (
-        sorted(set(options["num_gpu"]))
-        if isinstance(options.get("num_gpu"), list) and options["num_gpu"]
+        sorted(set(num_gpu_val))
+        if isinstance(num_gpu_val, list) and num_gpu_val
         else _num_gpu_default(hardware)
     )
 
