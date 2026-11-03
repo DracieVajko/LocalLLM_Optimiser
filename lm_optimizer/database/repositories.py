@@ -1,4 +1,9 @@
-"""Database repositories for domain entities."""
+"""Database repositories for domain entities.
+
+Error contract: missing rows return ``None``; invalid arguments raise
+``ValueError``; SQLite failures propagate. Repositories never return partial
+entities.
+"""
 
 import json
 import sqlite3

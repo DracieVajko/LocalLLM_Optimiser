@@ -1,5 +1,10 @@
 """LM Studio service with capability discovery.
 
+Error contract: transport/HTTP failures raise ``LMStudioError`` (or a
+subclass); callers that can tolerate a failure wrap the call in
+``best_effort`` or translate it into an outcome object. Read-only helpers
+return ``None``/empty results when the host is unreachable.
+
 Live-verified contract (2026-09-19, LM Studio bundled server, `lms` commit 69d945a):
 - GET /api/v1/models -> {"models": [{key, display_name, architecture,
   quantization{name}, size_bytes, max_context_length, loaded_instances:[...], ...}]}

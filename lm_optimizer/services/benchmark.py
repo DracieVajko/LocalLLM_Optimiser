@@ -219,7 +219,13 @@ class BenchmarkConfig:
 
 
 class BenchmarkService:
-    """Runs benchmarks against LM Studio."""
+    """Runs benchmarks against LM Studio.
+
+    Error contract: a failed case is recorded as ``BenchmarkMetrics`` with
+    ``success=False`` and an ``error`` string; the service does not raise for
+    per-case failures. Transport/load failures propagate as ``LMStudioError``
+    so the optimizer can decide whether to retry the candidate.
+    """
 
     def __init__(
         self,
