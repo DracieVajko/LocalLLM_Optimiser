@@ -5,14 +5,8 @@ import subprocess
 
 import psutil
 
-try:
-    import GPUtil
-
-    GPUTIL_AVAILABLE = True
-except ImportError:
-    GPUTIL_AVAILABLE = False
-
-    WMI_AVAILABLE = False  # WMI not used; CPU name from platform.processor()
+# WMI is not used; CPU name comes from platform.processor().
+WMI_AVAILABLE = False
 
 from lm_optimizer.config import config
 from lm_optimizer.domain.models import GPUInfo, HardwareInfo
@@ -99,23 +93,6 @@ class HardwareDetector:
     def _detect_gpus(self) -> list[GPUInfo]:
         """Detect GPU information."""
         gpus = []
-
-        if GPUTIL_AVAILABLE:
-            try:
-                gpu_list = GPUtil.getGPUs()
-                for gpu in gpu_list:
-                    gpus.append(
-                        GPUInfo(
-                            index=gpu.id,
-                            name=gpu.name,
-                            vram_gb=round(gpu.memoryTotal / 1024, 2),
-                            vendor="NVIDIA",
-                            driver_version=None,
-                            compute_capability=None,
-                        )
-                    )
-            except Exception as e:
-                logger.debug("GPUtil detection failed", error=str(e))
 
         # Try nvidia-smi for more details
         if platform.system() == "Windows" or platform.system() == "Linux":

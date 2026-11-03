@@ -1821,13 +1821,13 @@ class AdaptiveOptimizer:
             if c.context_length == best.context_length
             and c.config.gpu_ratio == best.config.gpu_ratio
         }
-        for config in self._generate_stage4_configs(self.state.search_space, best.config, tested):
+        for candidate in self._generate_stage4_configs(self.state.search_space, best.config, tested):
             if self.state.should_cancel:
                 break
             while self.state.should_pause:
                 await asyncio.sleep(1)
 
-            result = await self._test_config(config, best.context_length, min_speed=self.state.run.advanced_settings.get("min_speed", 0.0))
+            result = await self._test_config(candidate, best.context_length, min_speed=self.state.run.advanced_settings.get("min_speed", 0.0))
             if result and result.status == ConfigurationStatus.PASSED:
                 self.state.tested_configs.append(result)
                 self._update_best(result)

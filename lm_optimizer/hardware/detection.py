@@ -6,15 +6,6 @@ from dataclasses import dataclass
 
 import psutil
 
-try:
-    import GPUtil
-
-    GPUTIL_AVAILABLE = True
-except ImportError:
-    GPUTIL_AVAILABLE = False
-
-    # WMI not used; CPU name from platform.processor()
-
 from ..config import config
 from ..logging_config import get_logger
 
@@ -66,53 +57,37 @@ class HardwareInfo:
 
 
 def get_gpu_info() -> GPUInfo | None:
-    """Detect GPU information using GPUtil and nvidia-smi."""
+    """Detect the first NVIDIA GPU using nvidia-smi."""
     try:
-        gpus = GPUtil.getGPUs()
-        if not gpus:
-            logger.warning("No GPUs detected by GPUtil")
-            return None
-
-        # Use first GPU by default
-        gpu = gpus[0]
-
-        # Try to get more details from nvidia-smi
-        driver_version = None
-        cuda_version = None
-        compute_capability = None
-
-        try:
-            result = subprocess.run(
-                [
-                    "nvidia-smi",
-                    "--query-gpu=driver_version,cuda_version,compute_cap",
-                    "--format=csv,noheader,nounits",
-                ],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=5,
-            )
-            if result.returncode == 0:
-                parts = result.stdout.strip().split(", ")
-                if len(parts) >= 3:
-                    driver_version = parts[0]
-                    cuda_version = parts[1]
-                    compute_capability = parts[2]
-        except (subprocess.SubprocessError, FileNotFoundError):
-            logger.debug("nvidia-smi not available or failed")
-
-        return GPUInfo(
-            name=gpu.name,
-            vram_gb=round(gpu.memoryTotal / 1024, 2),  # GPUtil reports in MB
-            driver_version=driver_version,
-            cuda_version=cuda_version,
-            compute_capability=compute_capability,
-            gpu_index=gpu.id,
+        result = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=index,name,memory.total,driver_version,compute_cap",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
         )
-    except Exception as e:
-        logger.warning("Failed to detect GPU info", error=str(e))
+        if result.returncode != 0 or not result.stdout.strip():
+            logger.debug("nvidia-smi returned no GPU rows")
+            return None
+        parts = [p.strip() for p in result.stdout.strip().splitlines()[0].split(",")]
+        if len(parts) < 5:
+            logger.debug("Unexpected nvidia-smi row", row=result.stdout[:120])
+            return None
+        return GPUInfo(
+            name=parts[1],
+            vram_gb=round(float(parts[2]) / 1024, 2),
+            driver_version=parts[3] or None,
+            cuda_version=None,
+            compute_capability=parts[4] or None,
+            gpu_index=int(parts[0]),
+        )
+    except (FileNotFoundError, subprocess.SubprocessError, ValueError) as e:
+        logger.debug("GPU detection failed", error=str(e))
         return None
 
 

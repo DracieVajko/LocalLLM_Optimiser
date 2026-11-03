@@ -415,17 +415,16 @@ async def run_deepresearch_benchmark(config: DeepResearchConfig, lm_studio_url: 
     return True
 
 
-def print_results_summary(config: DeepResearchConfig) -> None:
-    """Print a summary of the evaluation results."""
+def format_results_summary(config: DeepResearchConfig) -> str:
+    """Return a readable summary of the RACE/FACT result files."""
     race_result_file = config.results_dir / "race" / config.model_name / "race_result.txt"
     fact_result_file = config.results_dir / "fact" / config.model_name / "fact_result.txt"
 
+    sections: list[str] = []
     if race_result_file.exists():
-        print("\n=== RACE Evaluation Results ===")
-        with open(race_result_file) as f:
-            print(f.read())
-
+        sections.append("=== RACE Evaluation Results ===")
+        sections.append(race_result_file.read_text(encoding="utf-8"))
     if fact_result_file.exists():
-        print("\n=== FACT Evaluation Results ===")
-        with open(fact_result_file) as f:
-            print(f.read())
+        sections.append("=== FACT Evaluation Results ===")
+        sections.append(fact_result_file.read_text(encoding="utf-8"))
+    return "\n".join(sections)

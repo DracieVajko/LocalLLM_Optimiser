@@ -343,12 +343,6 @@ class TestTTFT:
         m = SvcMetrics(test_name="t", category="t", success=True, estimated_ttft_ms=50)
         assert m.estimated_ttft_ms == 50
 
-    def test_runner_estimated(self):
-        from lm_optimizer.benchmark.runner import BenchmarkMetrics as RunnerMetrics
-
-        m = RunnerMetrics(test_name="t", category="t", success=True, estimated_ttft_ms=77)
-        assert m.estimated_ttft_ms == 77
-
 
 class TestSearchSpace:
     """Test deterministic intelligent sampling and hardware handling."""

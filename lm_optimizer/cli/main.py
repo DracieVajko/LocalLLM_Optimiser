@@ -5655,7 +5655,7 @@ def deepresearch_bench(
 
     Results are saved to deep_research_bench/results/
     """
-    from lm_optimizer.services.deepresearch import DeepResearchConfig, run_deepresearch_benchmark, print_results_summary
+    from lm_optimizer.services.deepresearch import DeepResearchConfig, format_results_summary, run_deepresearch_benchmark
     from lm_optimizer.config import config as global_config
 
     setup_logging()
@@ -5692,7 +5692,7 @@ def deepresearch_bench(
     try:
         success = asyncio.run(run_deepresearch_benchmark(dr_config, lm_studio_url))
         if success:
-            print_results_summary(dr_config)
+            console.print(format_results_summary(dr_config))
             console.print("[green]DeepResearch Bench evaluation completed successfully![/green]")
         else:
             console.print("[red]DeepResearch Bench evaluation failed![/red]")

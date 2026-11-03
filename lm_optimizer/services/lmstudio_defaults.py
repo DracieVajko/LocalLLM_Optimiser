@@ -584,10 +584,10 @@ def diff_defaults(
     mapped_winner_keys = set(updates.keys())
     preserved: list[str] = []
     seen: set[str] = set()
-    for field in fields:
-        if not isinstance(field, dict) or not field.get("key"):
+    for entry in fields:
+        if not isinstance(entry, dict) or not entry.get("key"):
             continue
-        key = str(field.get("key"))
+        key = str(entry.get("key"))
         if key in mapped_winner_keys or key in produced_keys:
             continue
         if key in seen:
@@ -707,9 +707,9 @@ def _normalize_backup_fields(payload: Any) -> dict[str, Any]:
     if not isinstance(fields, list):
         return {}
     normalized: dict[str, Any] = {}
-    for field in fields:
-        if isinstance(field, dict) and field.get("key"):
-            normalized[str(field.get("key"))] = field.get("value")
+    for entry in fields:
+        if isinstance(entry, dict) and entry.get("key"):
+            normalized[str(entry.get("key"))] = entry.get("value")
     return normalized
 
 
