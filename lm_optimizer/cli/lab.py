@@ -1067,6 +1067,11 @@ def save_default(
     no_backup: bool = typer.Option(
         False, "--no-backup", help="Do not copy the previous defaults file"
     ),
+    gpu_ratio: float | None = typer.Option(
+        None,
+        "--gpu-ratio",
+        help="Force LM Studio offloadRatio (1.0 = all layers on GPU)",
+    ),
 ):
     """Persist the validated winner as LM Studio's per-model load default.
 
@@ -1084,6 +1089,12 @@ def save_default(
     if not run:
         console.print(f"[red]Run not found: {run_id}[/red]")
         raise typer.Exit(1)
+    if gpu_ratio is not None:
+        from dataclasses import replace
+
+        best = run.get_best_config()
+        if best is not None:
+            best.config = replace(best.config, gpu_ratio=gpu_ratio)
     try:
         result = save_run_defaults(run, dry_run=dry_run, backup=not no_backup)
     except DefaultsError as e:

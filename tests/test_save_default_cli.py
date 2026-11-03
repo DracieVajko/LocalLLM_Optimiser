@@ -101,6 +101,33 @@ def test_save_default_writes_file(monkeypatch, tmp_path):
     assert values["llm.load.contextLength"] == 8192
 
 
+def test_save_default_gpu_ratio_override(monkeypatch, tmp_path):
+    from lm_optimizer.database.repositories import run_repo
+
+    home = _home(tmp_path)
+    monkeypatch.setattr(run_repo, "get", lambda _run_id: _run())
+    monkeypatch.setenv("LM_OPTIMIZER_LMSTUDIO_HOME", str(home))
+
+    result = CliRunner().invoke(
+        cli_main.app,
+        ["lab", "save-default", str(uuid4()), "--gpu-ratio", "1.0"],
+    )
+
+    assert result.exit_code == 0, result.output
+    path = (
+        home
+        / ".internal"
+        / "user-concrete-model-default-config"
+        / "prism-ml"
+        / "bonsai-27b.json"
+    )
+    values = {
+        f["key"]: f["value"]
+        for f in json.loads(path.read_text(encoding="utf-8"))["load"]["fields"]
+    }
+    assert values["llm.load.llama.acceleration.offloadRatio"] == 1.0
+
+
 def test_save_default_dry_run_writes_nothing(monkeypatch, tmp_path):
     from lm_optimizer.database.repositories import run_repo
 
