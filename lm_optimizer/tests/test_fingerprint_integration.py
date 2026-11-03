@@ -1,23 +1,15 @@
 """Tests for fingerprint integration in optimizer."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 from lm_optimizer.domain.models import (
-    ConfigurationResult,
-    ConfigurationStatus,
     HardwareInfo,
-    LoadConfiguration,
     ModelIdentity,
     OptimizationProfile,
     OptimizationRun,
     OptimizationStage,
     RunStatus,
-    QualityScore,
 )
-from lm_optimizer.services import optimizer as _opt
-from lm_optimizer.services.fingerprint import compute_fingerprint, hardware_fingerprint
 
 
 def _make_run_with_fingerprint():

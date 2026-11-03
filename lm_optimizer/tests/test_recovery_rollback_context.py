@@ -23,7 +23,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from lm_optimizer.domain.models import (
-    BenchmarkMetrics,
     ConfigurationResult,
     ConfigurationStatus,
     LoadConfiguration,

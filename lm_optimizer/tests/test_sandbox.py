@@ -142,7 +142,6 @@ class TestDuelHistoryApi:
     def test_list_and_delete_duel(self, tmp_path, monkeypatch):
         from fastapi.testclient import TestClient
 
-        import lm_optimizer.api.routes as routes
         from lm_optimizer.api.main import app
         from lm_optimizer.database.repositories import duel_repo
 
@@ -249,7 +248,6 @@ class TestSandboxPresets:
 class TestStartOptimization:
     def test_returns_run_immediately(self, monkeypatch):
         """POST /api/optimize must return the prepared run, never 500."""
-        from types import SimpleNamespace
         from unittest.mock import AsyncMock
 
         import lm_optimizer.api.routes as routes
@@ -303,7 +301,6 @@ class TestStartOptimization:
 class TestOptimizeDirtyHost:
     def test_dirty_host_rejected_409(self, monkeypatch):
         """A resident model must refuse new web optimizations (fail-closed)."""
-        from unittest.mock import AsyncMock
 
         import lm_optimizer.api.routes as routes
         from lm_optimizer.api.main import app

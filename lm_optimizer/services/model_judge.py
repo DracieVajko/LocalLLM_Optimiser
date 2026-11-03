@@ -13,7 +13,7 @@ from typing import Any
 import httpx
 
 from lm_optimizer.domain.models import OptimizationRun, ConfigurationResult
-from lm_optimizer.services.judge_prompt import PromptBuilder, JudgeRequest
+from lm_optimizer.services.judge_prompt import PromptBuilder
 
 
 class JudgeBackend(str, Enum):
@@ -351,7 +351,7 @@ class LocalJudge(ModelJudge):
                         f"Load the model in LM Studio first, or use a different backend."
                     )
                 raise
-            except httpx.ConnectError as e:
+            except httpx.ConnectError:
                 raise RuntimeError(
                     "Cannot connect to LM Studio at http://127.0.0.1:1234. "
                     "Ensure LM Studio is running and the API server is enabled."

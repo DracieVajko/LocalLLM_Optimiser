@@ -13,7 +13,6 @@ Two defects motivated these tests:
 import logging
 from pathlib import Path
 
-import pytest
 
 from lm_optimizer.logging_config import setup_logging
 

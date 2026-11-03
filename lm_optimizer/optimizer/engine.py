@@ -692,7 +692,7 @@ class OptimizationEngine:
         if not results:
             return results[0]
 
-        base = results[0]
+        results[0]
         # For simplicity, return the one with median generation speed
         speeds = [(r.get_avg_generation_tok_s(), r) for r in results]
         speeds.sort(key=lambda x: x[0])
@@ -705,14 +705,14 @@ class OptimizationEngine:
 
         best = self.state.best_config
         try:
-            gen_improvement = (
+            (
                 (best.get_avg_generation_tok_s() - baseline.get_avg_generation_tok_s())
                 / baseline.get_avg_generation_tok_s()
                 if baseline.get_avg_generation_tok_s()
                 else 0
             )
         except Exception:
-            gen_improvement = 0
+            pass
         self.state.best_result = best  # Store for result compilation
 
     def _should_skip_config(self, context: int, gpu_ratio: float) -> bool:
@@ -778,7 +778,7 @@ class OptimizationEngine:
 
         # Compute score breakdown for best with final bounds
         try:
-            bounds = compute_norm_bounds(
+            compute_norm_bounds(
                 self.state.tested_configs,
                 None,
                 self.state.capabilities.max_context_length

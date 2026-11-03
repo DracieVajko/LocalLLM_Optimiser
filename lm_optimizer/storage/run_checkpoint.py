@@ -82,7 +82,7 @@ def build_checkpoint_payload(state: Any, reason: str = "periodic") -> dict:
         return str(getattr(c, "id", ""))
 
     def cfg_summary(c: Any) -> dict:
-        q = getattr(c, "quality_score", None)
+        getattr(c, "quality_score", None)
         return {
             "id": cfg_id(c),
             "context_length": getattr(c, "context_length", None),
@@ -175,6 +175,7 @@ def build_checkpoint_payload(state: Any, reason: str = "periodic") -> dict:
             "raw_fastest_id": str(getattr(state.raw_fastest, "id", ""))
             if getattr(state, "raw_fastest", None) is not None
             else None,
+            "context_speed": getattr(state, "context_speed", None),
             "recovery_log": list(getattr(state, "recovery_log", []) or []),
             "recovery_cursor": dict(getattr(state, "recovery_cursor", None) or {}),
             "probe_attempts": dict(getattr(state, "probe_attempts", None) or {}),

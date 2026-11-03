@@ -22,6 +22,25 @@ logger = get_logger(__name__)
 # Re-export for backward compat - authoritative definition is in benchmark/suite.py
 BENCHMARK_SUITE = _BENCHMARK_SUITE
 
+# Categories whose answer quality is judged (speed probes are excluded).
+QUALITY_CASE_CATEGORIES = frozenset({"instruction", "reasoning", "context", "coding", "format"})
+
+
+def _looks_incomplete(text: str) -> bool:
+    """True when an answer ends mid-thought (no closing punctuation).
+
+    Reasoning-first models asked to answer with thinking off often stop
+    mid-sentence or emit a shallow partial answer. Those answers score below
+    the quality gate even though the model can answer correctly with thinking.
+    """
+    from lm_optimizer.services.quality import _ends_properly
+
+    stripped = (text or "").strip()
+    if not stripped:
+        return True
+    return not _ends_properly(stripped)
+
+
 # Benchmark style presets: category -> temperature override.
 # precise: code/math need determinism; creative: summarization benefits from
 # variance; balanced: suite defaults. Recorded in ConfigurationResult.generation.
@@ -218,6 +237,7 @@ class BenchmarkService:
         flash_attention: bool = True,
         offload_kv_cache_to_gpu: bool = True,
         min_tps: float = 1.0,
+        quality_reasoning_fallback: bool = True,
     ):
         self.client = client
         self.config = benchmark_config or BenchmarkConfig(
@@ -253,6 +273,10 @@ class BenchmarkService:
         # chat endpoint exposes reasoning off/low/medium/high/on; default off
         # keeps outputs deterministic and scorable.
         self.reasoning = reasoning
+        # Quality gate protection: when reasoning is off and the answer comes
+        # back cut off mid-thought, retry that case once with thinking enabled
+        # so a reasoning-first model is not scored on a truncated answer.
+        self.quality_reasoning_fallback = quality_reasoning_fallback
         # MTP / KV cache settings
         self.flash_attention = flash_attention
         self.offload_kv_cache_to_gpu = offload_kv_cache_to_gpu
@@ -835,11 +859,11 @@ class BenchmarkService:
             )
             usage, output_text, stats = self._extract_response(response)
             thinking_text = response.get("thinking_text", "") or ""
-            if (
-                not output_text.strip()
-                and (reasoning in (None, "off"))
+            can_retry_with_reasoning = (
+                reasoning in (None, "off")
                 and not self._model_known_no_reasoning(model_id)
-            ):
+            )
+            if not output_text.strip() and can_retry_with_reasoning:
                 # Model may need thinking to answer: exactly one retry with
                 # reasoning on (widest-supported thinking mode; sets vary, R36)
                 logger.debug("Empty output, retrying with reasoning", case=case.name)
@@ -854,6 +878,43 @@ class BenchmarkService:
                 )
                 usage, output_text, stats = self._extract_response(response)
                 thinking_text = response.get("thinking_text", "") or ""
+            elif (
+                output_text.strip()
+                and can_retry_with_reasoning
+                and self.quality_reasoning_fallback
+                and case.category in QUALITY_CASE_CATEGORIES
+                and _looks_incomplete(output_text)
+            ):
+                # Reasoning off produced a cut-off answer. Retry once with
+                # thinking enabled and headroom for the trace, then keep the
+                # retry only when it actually completes the answer (never
+                # silently downgrade a complete first answer).
+                logger.info(
+                    "Incomplete quality answer, retrying with reasoning",
+                    case=case.name,
+                    category=case.category,
+                )
+                try:
+                    retry = await self.client.chat_completion(
+                        model=model_id,
+                        input_text=case.prompt,
+                        temperature=case.temperature,
+                        max_output_tokens=max(case.max_tokens, case.max_tokens * 2),
+                        top_p=case.top_p,
+                        top_k=case.top_k,
+                        reasoning="on",
+                    )
+                    rusage, rtext, rstats = self._extract_response(retry)
+                    rthinking = retry.get("thinking_text", "") or ""
+                    if rtext.strip() and not _looks_incomplete(rtext):
+                        output_text, usage, stats = rtext, rusage, rstats
+                        thinking_text = (
+                            (thinking_text + "\n" if thinking_text else "") + rthinking
+                        )
+                except Exception as e:
+                    logger.debug(
+                        "Quality reasoning retry failed", case=case.name, error=str(e)
+                    )
             if not output_text.strip():
                 # Degenerate generation (e.g. immediate EOS): must not poison
                 # speed stats with absurd tok/s from ~0 tokens.
@@ -951,7 +1012,7 @@ class BenchmarkService:
             )
 
         except Exception as e:
-            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            (time.perf_counter() - start_time) * 1000
             logger.warning("Benchmark case failed", case=case.name, error=str(e))
             return BenchmarkMetrics(
                 test_name=case.name,

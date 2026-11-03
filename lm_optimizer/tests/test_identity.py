@@ -1,7 +1,6 @@
 """Model/run identity: reports follow the run's own model_id (§6-§7, §33-§34)."""
 
 from datetime import datetime
-from uuid import uuid4
 
 from lm_optimizer.domain.models import (
     BenchmarkMetrics,

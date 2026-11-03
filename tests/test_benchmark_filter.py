@@ -5,8 +5,6 @@ import pytest
 from lm_optimizer.benchmark.suite import (
     create_benchmark_cases,
     get_benchmark_suite,
-    BenchmarkPrompt,
-    BenchmarkCase,
 )
 
 

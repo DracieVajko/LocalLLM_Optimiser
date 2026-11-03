@@ -8,7 +8,6 @@ from typing import Optional
 
 import typer
 from rich.console import Console
-from rich.table import Table
 
 from lm_optimizer.logging_config import get_logger, setup_logging
 from lm_optimizer.services.foreign_watchdog import (

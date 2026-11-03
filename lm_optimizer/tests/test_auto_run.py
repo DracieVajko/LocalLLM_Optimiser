@@ -1,24 +1,14 @@
 """Tests for auto-run CLI command."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
 
 from lm_optimizer.domain.models import (
     GPUInfo,
     HardwareInfo,
-    LoadConfiguration,
     ModelIdentity,
     OptimizationProfile,
     OptimizationRun,
-    OptimizationStage,
     RunStatus,
-)
-from lm_optimizer.services.fingerprint import (
-    compute_fingerprint,
-    fingerprint_diff,
-    hardware_fingerprint,
-    should_revalidate_config,
 )
 
 
@@ -152,7 +142,7 @@ def test_environment_change_does_scope_revalidation():
 
 def test_compute_current_fingerprint():
     """Test fingerprint computation for a model."""
-    from lm_optimizer.cli.auto_run import _compute_current_fingerprint, _get_lms_version
+    from lm_optimizer.cli.auto_run import _compute_current_fingerprint
     from lm_optimizer.services.version_identity import VersionIdentity
     from unittest.mock import patch
 

@@ -1,6 +1,5 @@
 """Tests for judge_verdicts table migration."""
 
-import tempfile
 from pathlib import Path
 
 import pytest

@@ -5,7 +5,6 @@ import statistics
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Optional
 
 import typer
 from rich.console import Console
@@ -15,7 +14,6 @@ from rich.table import Table
 from lm_optimizer.database.repositories import config_repo, run_repo
 from lm_optimizer.domain.models import (
     ConfigurationStatus,
-    HardwareInfo,
     LoadConfiguration,
     RunStatus,
 )

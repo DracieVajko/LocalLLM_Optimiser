@@ -1,8 +1,6 @@
 """MTP test runner tests (offline, no LM Studio)."""
-import json
 from pathlib import Path
 
-import pytest
 
 
 def test_mtp_test_help():

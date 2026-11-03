@@ -4,9 +4,34 @@ from __future__ import annotations
 
 from collections import namedtuple
 
-from lm_optimizer.services.test_manager import TestManager
+from lm_optimizer.services.test_manager import TestManager, parse_per_model_details
 
 MockModel = namedtuple("MockModel", ["id", "size_bytes", "architecture"])
+
+
+def test_per_model_detail_maps_one_level_per_selected_model():
+    plan = parse_per_model_details("1,2,5,8", "quick,full,benchmark,full")
+    assert plan == {"1": "quick", "2": "full", "5": "benchmark", "8": "full"}
+
+
+def test_per_model_detail_fills_missing_entries_with_default():
+    plan = parse_per_model_details("1,2,3", "quick")
+    assert plan == {"1": "quick", "2": "full", "3": "full"}
+
+
+def test_per_model_detail_all_models_without_indices_uses_default():
+    plan = parse_per_model_details(None, "benchmark")
+    assert plan == {"*": "benchmark"}
+
+
+def test_per_model_detail_rejects_unknown_level():
+    try:
+        parse_per_model_details("1", "turbo")
+    except ValueError as exc:
+        assert "turbo" in str(exc)
+    else:  # pragma: no cover - the call above must raise
+        raise AssertionError("unknown detail level must be rejected")
+
 
 
 def test_order_ascending_and_moe_before_dense():

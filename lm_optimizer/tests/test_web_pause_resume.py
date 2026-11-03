@@ -1,11 +1,10 @@
 """Tests for Web UI Pause/Resume functionality."""
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from lm_optimizer.api.main import app
-from lm_optimizer.api.main import app as fastapi_app
 
 
 class TestWebPauseResume:
@@ -22,15 +21,15 @@ class TestWebPauseResume:
     @patch("lm_optimizer.api.routes.datetime")
     def test_pause_run_endpoint(self, mock_datetime, mock_orjson, mock_path, mock_checkpoint_dir, mock_run_repo, client):
         """Test POST /api/runs/{run_id}/pause endpoint."""
-        run_id = uuid4()
+        uuid4()
         mock_run = MagicMock()
         mock_run.status = "running"
         mock_run.id = uuid4()
         mock_run_repo.get.return_value = mock_run
 
-        with patch("lm_optimizer.api.routes.checkpoint_dir") as mock_checkpoint_dir, \
+        with patch("lm_optimizer.api.routes.checkpoint_dir"), \
              patch("lm_optimizer.api.routes.Path") as mock_path, \
-             patch("lm_optimizer.api.routes.orjson") as mock_orjson, \
+             patch("lm_optimizer.api.routes.orjson"), \
              patch("lm_optimizer.api.routes.datetime") as mock_datetime:
 
             mock_datetime.now.return_value.isoformat.return_value = "2024-01-01T12:00:00"
@@ -72,7 +71,7 @@ class TestWebPauseResume:
     @patch("lm_optimizer.api.routes.resume_run_from_checkpoint")
     def test_resume_run_endpoint(self, mock_resume_from_checkpoint, mock_background_tasks, mock_load_checkpoint, mock_run_repo, client):
         """Test POST /api/runs/{run_id}/resume endpoint."""
-        run_id = uuid4()
+        uuid4()
         mock_run = MagicMock()
         mock_run.status = "paused"
         mock_run.id = uuid4()

@@ -1,8 +1,6 @@
 """Sandbox runner unit tests (P4 execution half)."""
 import sys
-from pathlib import Path
 
-import pytest
 
 from lm_optimizer.services.sandbox_lab import (
     SandboxPolicy,

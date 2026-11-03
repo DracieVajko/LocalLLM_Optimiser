@@ -110,6 +110,7 @@ class AdvancedSettingsSchema(BaseModel):
     workload_type: str = "interactive"  # interactive | throughput
     selection_threshold: float = Field(default=0.05, ge=0.0, lt=1.0)
     optimize_context: bool = False  # Phase B opt-in: max-context on frozen winner
+    min_context_speed: float = Field(default=1.0, ge=0.0)  # Phase B speed floor
     skip_phases: list[str] = []  # subset of: speed, quality, recovery, validation, context
     warmup_runs: int | None = Field(default=None, ge=0, le=5)  # None = server default
     # Granular test selection (v1.6.x): the same flags the CLI exposes.

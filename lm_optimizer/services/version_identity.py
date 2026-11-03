@@ -108,7 +108,7 @@ def identity_from_version_string(
         )
 
     sem = None
-    matches = _SEMVER.findall(raw)
+    _SEMVER.findall(raw)
     full_matches = _SEMVER.finditer(raw)
     distinct = {m.group(0) for m in full_matches}
     if len(distinct) == 1:

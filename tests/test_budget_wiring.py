@@ -273,7 +273,7 @@ def _finalize_optimizer(run, best):
     return opt
 
 
-def test_finalize_skips_context_strategies_when_context_skipped(monkeypatch):
+def test_context_strategies_skipped_when_context_skipped(monkeypatch):
     run = _run(
         benchmark_params={"skip_phases": ["context"]},
         context_strategy_modes=["winner"],
@@ -285,12 +285,11 @@ def test_finalize_skips_context_strategies_when_context_skipped(monkeypatch):
         called.append(cfg)
 
     opt._run_context_strategies = fake_strategies
-    asyncio.run(opt._finalize())
+    asyncio.run(opt._maybe_run_context_strategies())
     assert called == []
-    assert run.status.value in ("success", "completed_no_validated_winner")
 
 
-def test_finalize_runs_context_strategies_when_context_enabled(monkeypatch):
+def test_context_strategies_run_when_context_enabled(monkeypatch):
     run = _run(benchmark_params={"skip_phases": []}, context_strategy_modes=["winner"])
     opt = _finalize_optimizer(run, _result())
     called = []
@@ -299,8 +298,27 @@ def test_finalize_runs_context_strategies_when_context_enabled(monkeypatch):
         called.append(cfg)
 
     opt._run_context_strategies = fake_strategies
-    asyncio.run(opt._finalize())
+    asyncio.run(opt._maybe_run_context_strategies())
     assert len(called) == 1
+
+
+def test_context_strategies_run_before_the_run_is_marked_complete():
+    """Strategy sweeps are tests: the run must not be terminal while they run.
+
+    Regression: they used to be awaited inside _finalize() AFTER the status and
+    COMPLETE stage were saved, so a pause/crash mid-sweep left a "completed"
+    run with unfinished work.
+    """
+    import inspect
+
+    from lm_optimizer.services.optimizer import AdaptiveOptimizer
+
+    phase_ab = inspect.getsource(AdaptiveOptimizer._run_phase_ab)
+    finalize = inspect.getsource(AdaptiveOptimizer._finalize)
+    assert phase_ab.index("self._maybe_run_context_strategies()") < phase_ab.index(
+        "self._finalize()"
+    )
+    assert "_run_context_strategies" not in finalize
 
 
 # --- quality context default ------------------------------------------------

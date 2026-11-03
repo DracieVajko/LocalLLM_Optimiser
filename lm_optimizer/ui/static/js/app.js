@@ -444,6 +444,9 @@ const App = {
             test_kv_cpu: document.getElementById('test-kv-cpu')?.checked !== false,
             auto_batch: document.getElementById('auto-batch')?.checked !== false,
             optimize_context: document.getElementById('optimize-context')?.checked === true,
+            min_context_speed: parseFloat(
+                document.getElementById('min-context-speed')?.value || '1'
+            ) || 0,
             min_generation_tok_s: parseFloat(
                 document.getElementById('min-generation-tok-s')?.value || '2'
             ) || 0,

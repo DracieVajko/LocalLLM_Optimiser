@@ -432,6 +432,7 @@ def _optimize_advanced(
     final_sandbox_custom_prompts: list[str] | None = None,
     sandbox_compare_baseline: bool = False,
     artifact_test_id: str | None = None,
+    min_context_speed: float | None = None,
 ) -> dict:
     """Advanced settings for the optimize command (Phase A/B keys included)."""
     return {
@@ -448,6 +449,7 @@ def _optimize_advanced(
         "selection_threshold": 0.05,
         "gpu_via_cli": gpu_via_cli,
         "optimize_context": optimize_context,
+        "min_context_speed": min_context_speed,
         # Speed floor
         "min_generation_tok_s": min_generation_tok_s,
         "enforce_min_generation_speed": enforce_min_generation_speed,
@@ -523,29 +525,23 @@ def _resolve_experimental_flags(
     enable_speculative: bool | None,
     non_interactive: bool = False,
 ) -> dict:
-    """Merge CLI flags with the interactive opt-in prompt.
+    """Merge CLI flags with automatic availability probing.
 
-    Explicit CLI flags (True or False) always win and are never re-prompted.
-    Unspecified (None) flags are asked one by one only on an interactive
-    terminal; everywhere else (`--yes`, `--non-interactive`, pipes, EOF)
-    they resolve to OFF. Defaults stay OFF everywhere.
+    No yes/no prompts: unspecified experiments default ON and the optimizer
+    only runs the probes the model/backend actually supports (unsupported
+    probes fail inside their own stage and never abort the run). Explicit
+    ``--no-enable-*`` flags still force them OFF.
     """
     from lm_optimizer.services.optimizer import resolve_experimental_optins
 
     requested = {
-        "enable_rope": enable_rope,
-        "enable_cpu_moe": enable_cpu_moe,
-        "enable_speculative": enable_speculative,
+        "enable_rope": True if enable_rope is None else enable_rope,
+        "enable_cpu_moe": True if enable_cpu_moe is None else enable_cpu_moe,
+        "enable_speculative": (
+            True if enable_speculative is None else enable_speculative
+        ),
     }
-    if non_interactive or all(v is not None for v in requested.values()):
-        return resolve_experimental_optins(requested, ask=None)
-    try:
-        interactive = sys.stdin.isatty()
-    except Exception:
-        interactive = False
-    if not interactive:
-        return resolve_experimental_optins(requested, ask=None)
-    return resolve_experimental_optins(requested, ask=_ask_experimental)
+    return resolve_experimental_optins(requested, ask=None)
 
 
 def _phase_transparency_table(run, best):
@@ -1465,6 +1461,19 @@ def optimize(
         "--optimize-context",
         help="Phase B opt-in: max-context sweep on the frozen runtime winner",
     ),
+    ask_tests: bool = typer.Option(
+        True,
+        "--ask-tests/--no-ask-tests",
+        help="Ask which depth (quick/standard/full/benchmark) to run for the model",
+    ),
+    min_context_speed: float | None = typer.Option(
+        None,
+        "--min-context-speed",
+        help=(
+            "Phase B minimum generation tok/s; the max-context sweep stops when a "
+            "rung falls below it or fails to load. Prompted when omitted on a TTY."
+        ),
+    ),
     # Stage selection (spec §7) - custom mode only
     selected_stages: list[str] = typer.Option(
         None,
@@ -1549,7 +1558,7 @@ def optimize(
     skip_phases: str | None = typer.Option(
         None,
         "--skip-phases",
-        help="Comma-separated phases to skip: speed,quality,recovery,validation,context",
+        help="Comma-separated phases to skip: speed,context_speed,quality,recovery,validation,context",
     ),
     physical_batches: str | None = typer.Option(
         None,
@@ -1654,6 +1663,28 @@ def optimize(
     except Exception:
         console.print("[red]Invalid --workload (interactive/throughput)[/red]")
         sys.exit(2)
+
+    # Optional Phase B needs a user speed threshold, not a hidden default.
+    # Ask only when the max-context search is enabled and the flag is absent.
+    if (
+        optimize_context
+        and min_context_speed is None
+        and sys.stdin.isatty()
+        and not non_interactive
+        and not yes
+    ):
+        try:
+            min_context_speed = float(
+                typer.prompt(
+                    "Minimum generation tok/s for the max-context search",
+                    default=1.0,
+                )
+            )
+        except Exception:
+            min_context_speed = 1.0
+    if min_context_speed is not None and min_context_speed < 0:
+        console.print("[red]--min-context-speed must be >= 0[/red]")
+        sys.exit(2)
     if not resume_id:
         # Auto-recovery: if a previous process for this model died (crash,
         # kill, reboot) and left a stale "running" run with a usable
@@ -1702,6 +1733,35 @@ def optimize(
         return
 
     _reject_bool_like_model_args([model])
+
+    # One question per run (this command is single-model): depth is explicit
+    # instead of a chain of yes/no experiment prompts.
+    if ask_tests and not yes and not non_interactive and not dry_run and sys.stdin.isatty():
+        from lm_optimizer.cli.auto_run import detail_overrides
+        from lm_optimizer.services.test_selection import (
+            ask_min_context_speed,
+            ask_model_depth,
+            merge_skip_phases,
+        )
+
+        level = ask_model_depth(model, default="standard")
+        if level is None:
+            console.print(f"[yellow]Skipped {model}; nothing was started.[/yellow]")
+            return
+        overrides = detail_overrides(
+            level, repetitions=repetitions, validation=validation_repetitions
+        )
+        repetitions = overrides["repetitions"]
+        validation_repetitions = overrides["validation"]
+        skip_phases = merge_skip_phases(skip_phases, overrides["skip_phases"])
+        optimize_context = optimize_context or overrides["optimize_context"]
+        if level == "quick" and run_preset == "standard":
+            run_preset = "quick"
+        if level == "full" and run_preset == "standard":
+            run_preset = "thorough"
+        if level == "full" and min_context_speed is None:
+            min_context_speed = ask_min_context_speed()
+        console.print(f"[bold]Depth:[/bold] {level} (reps={repetitions})")
 
     effective = _preflight_optimize(
         model, profile, style, quality_threshold, repetitions,
@@ -1813,6 +1873,7 @@ def optimize(
                 final_sandbox_custom_prompts,
                 sandbox_compare_baseline,
                 artifact_test,
+                min_context_speed=min_context_speed,
             )
 
             if dry_run:
@@ -1948,9 +2009,9 @@ def apply(
             console.print(f"[red]No preset found for {model} with profile {profile}[/red]")
             console.print("What you can do:")
             console.print("  - Run 'lm-optimizer optimize' first to create a preset.")
-            console.print(f"  - Check results/<model>-best.md for the measured winner and apply it manually.")
-            console.print(f"  - Run 'lm-optimizer judge <run-id>' to pick a config from an existing run.")
-            console.print(f"  - List presets with 'lm-optimizer presets'.")
+            console.print("  - Check results/<model>-best.md for the measured winner and apply it manually.")
+            console.print("  - Run 'lm-optimizer judge <run-id>' to pick a config from an existing run.")
+            console.print("  - List presets with 'lm-optimizer presets'.")
             sys.exit(1)
 
         console.print(f"Preset for {model} ({profile}):")
@@ -1975,7 +2036,7 @@ def apply(
                 console.print("What you can do:")
                 console.print("  - The host may be busy: unload other models in LM Studio first.")
                 console.print("  - The config may exceed VRAM: try a preset with smaller context.")
-                console.print(f"  - Check run state with 'lm-optimizer run-status' and host with 'lm-optimizer status'.")
+                console.print("  - Check run state with 'lm-optimizer run-status' and host with 'lm-optimizer status'.")
                 sys.exit(1)
 
         except Exception as e:
@@ -2310,7 +2371,6 @@ def preset_export(
     from lm_optimizer.services.preset_export import (
         LMSTUDIO_PRESET_DIR,
         build_lmstudio_preset,
-        default_preset_filename,
         write_lmstudio_preset,
     )
 
@@ -2654,6 +2714,28 @@ def auto(
     max_size_gb: float | None = typer.Option(
         None, "--max-size-gb", help="Auto-pick only models up to this file size (default: all)"
     ),
+    model_detail: str | None = typer.Option(
+        None,
+        "--model-detail",
+        help=(
+            "Per-model depth: pattern=level pairs, e.g. "
+            "'qwen=quick,mixtral=full,*=standard'. "
+            "Levels: quick, standard, full, benchmark."
+        ),
+    ),
+    ask_tests: bool = typer.Option(
+        True,
+        "--ask-tests/--no-ask-tests",
+        help="Ask each selected model which tests to run (quick/standard/full/benchmark)",
+    ),
+    min_context_speed: float | None = typer.Option(
+        None,
+        "--min-context-speed",
+        help=(
+            "Minimum generation tok/s for the optional max-context search "
+            "(full depth). Prompted when a full run is selected on a TTY."
+        ),
+    ),
     speculative_draft: str | None = typer.Option(
         None, "--speculative-draft", help="Draft model key for opt-in speculative A/B stage"
     ),
@@ -2694,7 +2776,7 @@ def auto(
     skip_phases: str | None = typer.Option(
         None,
         "--skip-phases",
-        help="Comma-separated phases to skip: speed,quality,recovery,validation,context",
+        help="Comma-separated phases to skip: speed,context_speed,quality,recovery,validation,context",
     ),
     physical_batches: str | None = typer.Option(
         None,
@@ -2739,6 +2821,18 @@ def auto(
 
     _reject_bool_like_model_args(models)
 
+    from lm_optimizer.cli.auto_run import (
+        auto_depth_plan,
+        parse_model_detail,
+        resolve_model_detail,
+    )
+
+    try:
+        detail_rules = parse_model_detail(model_detail)
+    except ValueError as e:
+        console.print(f"[red]Invalid --model-detail: {e}[/red]")
+        raise typer.Exit(2)
+
     # ========== PRE-FLIGHT: all local validation, resolution, summary, confirmation ========
     effective, explicit_targets = _preflight_auto(
         models,
@@ -2772,7 +2866,14 @@ def auto(
         max_waits,
     )
 
-    if not _preflight_confirm(effective, dry_run, yes, non_interactive):
+    # Per-model depth questions replace the generic yes/no confirmation:
+    # every selected, non-skipped model gets an explicit test plan.
+    ask_interactive = bool(
+        ask_tests and not yes and not non_interactive and sys.stdin.isatty()
+    )
+    if not ask_interactive and not _preflight_confirm(
+        effective, dry_run, yes, non_interactive
+    ):
         return
 
     # Resolve experimental flags now (already computed in preflight, but need them for execution)
@@ -2787,6 +2888,8 @@ def auto(
         client = get_client()
         summary = []
         pipeline_t0 = time.perf_counter()
+        run_min_context_speed = min_context_speed
+        depth_by_model: dict[str, str] = {}
         try:
             snap = await _connect_guarded_or_abort(
                 client,
@@ -2822,13 +2925,37 @@ def auto(
                 console.print(f"[yellow]Skipping (user --skip list): {m.id}[/yellow]")
                 summary.append({"model": m.id, "stage": "skipped", "detail": "user --skip list"})
 
+            if ask_interactive and not dry_run:
+                from lm_optimizer.services.test_selection import (
+                    ask_min_context_speed,
+                    ask_model_depth,
+                )
+
+                console.print("\n[bold]Per-model test selection[/bold]")
+                kept = []
+                for m in targets:
+                    default = resolve_model_detail(m.id, detail_rules)
+                    level = ask_model_depth(m.id, default=default)
+                    if level is None:
+                        console.print(f"[yellow]Skipped {m.id}[/yellow]")
+                        summary.append(
+                            {"model": m.id, "stage": "skipped", "detail": "user choice"}
+                        )
+                        continue
+                    depth_by_model[m.id] = level
+                    kept.append(m)
+                targets = kept
+                if any(v == "full" for v in depth_by_model.values()):
+                    if run_min_context_speed is None:
+                        run_min_context_speed = ask_min_context_speed()
+
             if dry_run:
                 console.print("[yellow]Dry run plan (small first):[/yellow]")
                 for m in targets:
                     size = f"{m.size_bytes / 1024**3:.2f}GB" if m.size_bytes else "N/A"
                     console.print(
-                        f"  {m.id} ({size}): smoke ctx 2048, precision 0.2, "
-                        f"ladder ctx <= {max_context}, matrix, optimize "
+                        f"  {m.id} ({size}): detail={resolve_model_detail(m.id, detail_rules)}, "
+                        f"smoke ctx 2048, precision 0.2, ladder ctx <= {max_context}, "
                         f"profile={profile} style={style}"
                     )
                 return
@@ -2837,10 +2964,21 @@ def auto(
             quality_evaluator = QualityEvaluator(QualityConfig(minimum_score=quality_threshold))
             host_dirty_stop = False
             for m in targets:
+                level = depth_by_model.get(m.id) or resolve_model_detail(
+                    m.id, detail_rules
+                )
+                plan = auto_depth_plan(
+                    level,
+                    repetitions=repetitions,
+                    skip_phases=auto_skips,
+                    skip_matrix=skip_matrix,
+                )
+                model_reps = plan["repetitions"]
+                use_matrix = plan["matrix"]
                 row = {
                     "model": m.id,
                     "stage": "done",
-                    "detail": "",
+                    "detail": f"depth={level}",
                     "full": "",
                     "t0": time.perf_counter(),
                 }
@@ -2938,7 +3076,7 @@ def auto(
                     row["detail"] += f"; ladder ceiling {ceil}"
                     console.print(f"[green]Ladder ceiling: {ceil}[/green]")
 
-                    if not skip_matrix:
+                    if use_matrix:
                         contexts = [
                             c
                             for c in (2048, 4096, 8192)
@@ -2979,7 +3117,9 @@ def auto(
                             "selection_threshold": 0.05,
                             "gpu_via_cli": gpu_via_cli,
                             "min_speed": min_speed,
-                            "skip_phases": auto_skips,
+                            "skip_phases": plan["skip_phases"],
+                            "optimize_context": plan["optimize_context"],
+                            "min_context_speed": float(run_min_context_speed or 1.0),
                             **experimental_flags,
                         }
                         if auto_physical_batches:
@@ -2991,7 +3131,7 @@ def auto(
                             hardware,
                             profile,
                             quality_threshold,
-                            repetitions,
+                            model_reps,
                             style,
                             advanced,
                             max_tokens_scale=max_tokens_scale,
@@ -3853,7 +3993,7 @@ def resume(
     skip_phases: str | None = typer.Option(
         None,
         "--skip-phases",
-        help="Comma-separated phases to skip for the remainder: speed,quality,recovery,validation,context",
+        help="Comma-separated phases to skip for the remainder: speed,context_speed,quality,recovery,validation,context",
     ),
 ):
     """Resume an interrupted run from its checkpoint without re-running completed work."""
@@ -3882,7 +4022,7 @@ def resume(
             completed = ckpt.get("completed_candidate_ids", [])
             console.print("[bold]Resuming optimization[/bold]")
             console.print(f"Completed:\n{len(completed)} configurations")
-            hardware = hardware_detector.detect()
+            hardware_detector.detect()
             # Granular runs must resume as granular runs: the flags were
             # persisted into run.advanced_settings at start.
             adv = run.advanced_settings or {}
@@ -4326,7 +4466,7 @@ def _run_resume(run_id: str, revalidate: bool, style: str, skip_phases: str | No
             completed = ckpt.get("completed_candidate_ids", [])
             console.print("[bold]Resuming optimization[/bold]")
             console.print(f"Completed:\n{len(completed)} configurations")
-            hardware = hardware_detector.detect()
+            hardware_detector.detect()
             # Granular runs must resume as granular runs: the flags were
             # persisted into run.advanced_settings at start.
             adv = run.advanced_settings or {}
@@ -4751,6 +4891,21 @@ def _display_optimization_result(run):
     except Exception:
         pass
     console.print(rec)
+
+    ctx_speed = (best.generation or {}).get("context_speed")
+    if isinstance(ctx_speed, dict) and ctx_speed.get("results"):
+        cs = Table(title="CONTEXT SPEED (winner config)")
+        cs.add_column("Context", justify="right", style="cyan")
+        cs.add_column("Gen tok/s", justify="right")
+        cs.add_column("Status", style="green")
+        for r in ctx_speed["results"]:
+            ok = bool(r.get("ok"))
+            cs.add_row(
+                str(r.get("ctx")),
+                f"{float(r.get('tok_s') or 0):.2f}" if ok else "-",
+                "PASS" if ok else f"FAIL: {str(r.get('error') or '')[:50]}",
+            )
+        console.print(cs)
 
     # ---- PHASE A/B transparency: raw fastest (even if rejected) ----
     phase_table = _phase_transparency_table(run, best)
@@ -5178,7 +5333,6 @@ def ollama_export(
     loadable num_ctx ladder rung (unless --param num_ctx is given).
     """
     from lm_optimizer.backends.ollama.modelfile import (
-        MAX_CTX_PROBE_LADDER,
         parse_param_assignment,
         parse_show_parameters,
         render_modelfile,

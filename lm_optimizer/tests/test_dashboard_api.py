@@ -134,7 +134,6 @@ class TestDashboardRenders:
     def test_api_error_shape(self):
         from unittest.mock import AsyncMock
 
-        from lm_optimizer.api import routes as _routes
         from lm_optimizer.api.main import app
 
         async def _no_client(*args, **kwargs):
@@ -200,6 +199,30 @@ class TestLauncher:
         assert "full-ids" in low
         assert "model number or full id" in low
         assert "status --quick" in low
+
+    def test_launcher_exits_early_when_server_unreachable(self):
+        """Option 2/3 must check the server BEFORE asking anything else.
+
+        A dead server used to fall through all the prompts and fail at the end;
+        the launcher now preflights (and offers a URL) and returns to the menu.
+        """
+        from pathlib import Path
+
+        text = Path("start_optimizer.bat").read_text(encoding="utf-8", errors="replace")
+        low = text.lower()
+
+        assert ":preflight" in low
+        assert "call :preflight" in low
+        assert low.index("call :preflight") < low.index("model number or full id")
+        # URL prompt + session env override for a server on another address.
+        assert "lm studio url, empty returns to the menu" in low
+        assert "set lm_studio_base_url=" in low
+        assert "still unreachable" in low
+        # Both entry points preflight.
+        assert low.count("call :preflight") >= 2
+        # Per-model depth is chosen inside the CLI, one model at a time.
+        assert "quick/standard/full/benchmark" in low
+        assert "--model-detail" not in low
 
     def test_optimization_uses_same_services(self):
         import inspect

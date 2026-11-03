@@ -24,7 +24,7 @@ if errorlevel 1 (
 )
 
 echo [3/4] AUTO pipeline - small models up to 6GB, full tuning...
-python -m lm_optimizer auto --max-size-gb 6 --max-context 8192
+python -m lm_optimizer auto --max-size-gb 6 --max-context 8192 --no-ask-tests
 if errorlevel 1 (
     echo WARNING: auto finished with an error, continuing to fit...
 )

@@ -1,8 +1,6 @@
 """Model hashing tests (spec §16.3 / §21)."""
 import hashlib
-import json
 
-import pytest
 
 from lm_optimizer.services.model_hash import (
     _candidate_paths,

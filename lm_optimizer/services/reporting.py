@@ -677,7 +677,6 @@ def save_best_report(
     path = out / f"{sanitize_model_filename(run.model.id)}{suffix}"
 
     bc = best.config
-    qs = best.quality_score
     baseline = run.baseline_metrics or {}
     host = host or {}
     extra = extra or {}
@@ -908,6 +907,19 @@ def save_best_report(
                 f"(ctx {_slowest_cfg.context_length})"
             )
         lines += [""]
+    ctx_speed = (best.generation or {}).get("context_speed")
+    if isinstance(ctx_speed, dict) and ctx_speed.get("results"):
+        from lm_optimizer.services.context_speed import format_context_speed
+
+        lines += ["## Context speed (winner config)", ""]
+        lines += format_context_speed(ctx_speed)[1:]
+        lines += [
+            "",
+            f"- Last passing context: {ctx_speed.get('last_passing_context') or 'none'}",
+            f"- Failed context: {ctx_speed.get('failed_context') or 'none'}",
+            f"- Fastest measured context: {ctx_speed.get('max_speed_context') or 'none'}",
+            "",
+        ]
     lines += ["## Tested configurations (passed)", ""]
     lines += [
         "| # | ctx | flash | KV | batch | phys | par | gen tok/s | prompt tok/s | "

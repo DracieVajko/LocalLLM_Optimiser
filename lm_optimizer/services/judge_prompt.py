@@ -2,7 +2,6 @@
 
 import json
 from dataclasses import dataclass
-from typing import Any
 
 
 @dataclass
@@ -248,7 +247,7 @@ class PromptBuilder:
         for i, cfg in enumerate(top_configs, 1):
             model = cfg.get("model_id", "?")
             cfg_id = cfg.get("id", "?")[:8]
-            ctx = cfg.get("context_length", "?")
+            cfg.get("context_length", "?")
 
             # Runtime config
             runtime = {}

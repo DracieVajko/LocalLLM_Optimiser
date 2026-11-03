@@ -1,6 +1,5 @@
 """Tests for fingerprint service."""
 
-import pytest
 from lm_optimizer.domain.models import GPUInfo, HardwareInfo
 from lm_optimizer.services.fingerprint import (
     compute_fingerprint,

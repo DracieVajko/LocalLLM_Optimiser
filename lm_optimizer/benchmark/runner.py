@@ -257,7 +257,7 @@ class BenchmarkRunner:
             )
 
         except Exception as e:
-            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            (time.perf_counter() - start_time) * 1000
             logger.warning("Benchmark case failed", case=case.name, error=str(e))
             return BenchmarkMetrics(
                 test_name=case.name,

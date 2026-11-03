@@ -15,7 +15,7 @@ from lm_optimizer.services.model_judge import (
     JudgeVerdict,
     ModelComparison,
 )
-from lm_optimizer.domain.models import ConfigurationResult, ConfigurationStatus, QualityScore, LoadConfiguration
+from lm_optimizer.domain.models import QualityScore, LoadConfiguration
 
 
 def _make_quality_score(overall=0.95):
@@ -265,7 +265,6 @@ async def test_api_judge_calls_openrouter():
 
         assert verdict.recommended_config_id == "cfg-1"
         assert mock_client.post.call_count == 1
-        call_args = mock_client.post.call_args
         # Check auth header was passed in client construction
         mock_client_class.assert_called_once()
         init_kwargs = mock_client_class.call_args[1]

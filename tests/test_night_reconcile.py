@@ -9,9 +9,7 @@ No live process can write fresh checkpoints afterwards, so a run row still in
 from __future__ import annotations
 
 import importlib.util
-import sqlite3
 import sys
-from contextlib import closing
 from pathlib import Path
 from uuid import uuid4
 

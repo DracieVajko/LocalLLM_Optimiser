@@ -162,7 +162,7 @@ class TestNormalization:
         assert compute_memory_score(50, None, 48, 64) == 0.0
 
     def test_memory_cpu_only(self):
-        hw = make_hardware(vram_gb=None, ram_gb=16)
+        make_hardware(vram_gb=None, ram_gb=16)
         # CPU-only uses RAM headroom
         score_ok = compute_memory_score(None, 8, None, 16)
         assert score_ok == 1.0  # 8GB used of 16GB -> headroom 50% -> 1.0
@@ -564,7 +564,7 @@ class TestParetoFrontier:
         # For test, just ensure no exception and frontier includes nondominated
         from lm_optimizer.services.optimizer import AdaptiveOptimizer
 
-        client = MagicMock()
+        MagicMock()
         optimizer = AdaptiveOptimizer.__new__(AdaptiveOptimizer)
         # Mock state to avoid init
         optimizer.state = MagicMock()
@@ -577,8 +577,8 @@ class TestParetoFrontier:
             assert 0.0 <= compute_memory_score(4, None, total_vram, 32) <= 1.0
 
     def test_pareto_with_equal_configs(self):
-        r1 = make_result(gen=30, ctx=4096, vram=4)
-        r2 = make_result(gen=30, ctx=4096, vram=4)
+        make_result(gen=30, ctx=4096, vram=4)
+        make_result(gen=30, ctx=4096, vram=4)
         # Equal configs should both be on frontier (neither dominates)
         # This tests zero-range handling
 
@@ -589,7 +589,7 @@ class TestNoHardcodedConstants:
     def test_no_6gb_dependency(self):
         # This test verifies that scoring works for ANY VRAM, not just 6GB
         for vram in [4, 6, 8, 12, 16, 24, 32, 48, 80, 96]:
-            hw = make_hardware(vram)
+            make_hardware(vram)
             score = compute_memory_score(vram * 0.5, None, vram, 64)
             assert 0.0 <= score <= 1.0
             # No assertion that 6 is special
@@ -597,7 +597,7 @@ class TestNoHardcodedConstants:
     def test_no_rtx_dependency(self):
         # Ensure no code path checks for RTX string
         for name in ["RTX 3060", "RTX 4090", "AMD RX 7900", "Apple M2", "Intel UHD", "Unknown"]:
-            hw = HardwareInfo(
+            HardwareInfo(
                 os="Linux",
                 cpu_name="CPU",
                 cpu_cores_physical=4,

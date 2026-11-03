@@ -11,7 +11,6 @@ import sys
 import time
 from pathlib import Path
 
-import pytest
 
 
 def _load_suite_runner():

@@ -120,6 +120,8 @@ taskkill /FI "WINDOWTITLE eq LM Studio Auto Optimizer - server*" >nul 2>&1
 goto menu
 
 :optimize_one
+call :preflight
+if errorlevel 1 goto menu
 "%PYBIN%" -m lm_optimizer models --full-ids > "%TEMP%\lmo_models.txt" 2>nul
 type "%TEMP%\lmo_models.txt"
 echo.
@@ -140,10 +142,13 @@ pause >nul
 goto menu
 
 :optimize_all
+call :preflight
+if errorlevel 1 goto menu
 "%PYBIN%" -m lm_optimizer models --full-ids > "%TEMP%\lmo_models.txt" 2>nul
 type "%TEMP%\lmo_models.txt"
 echo.
 echo Runs the full pipeline per model, small first. This takes hours.
+echo You will pick quick/standard/full/benchmark for each model after connecting.
 set /p oprofile="Profile speed/balanced/context/quality - default balanced: "
 if "%oprofile%"=="" set oprofile=balanced
 set /p oskip="Skip terms, comma-separated, empty for none: "
@@ -176,6 +181,33 @@ echo Copy a full ID from the numbered list above.
 echo Press any key for menu.
 pause >nul
 goto menu
+
+:preflight
+"%PYBIN%" -m lm_optimizer status --quick >nul 2>&1
+if not errorlevel 1 goto preflight_ready
+echo.
+echo ====================================
+echo LM Studio is not reachable.
+echo ====================================
+echo The optimizer cannot start without the server.
+echo Check that LM Studio is running with the Developer API enabled.
+echo.
+set /p osrv="LM Studio URL, empty returns to the menu: "
+if "%osrv%"=="" goto preflight_abort
+"%PYBIN%" -m lm_optimizer status --quick --url "%osrv%"
+if errorlevel 1 goto preflight_bad
+set LM_STUDIO_BASE_URL=%osrv%
+echo Using %LM_STUDIO_BASE_URL% for this session.
+goto preflight_ready
+:preflight_bad
+echo.
+echo Still unreachable at %osrv% - nothing was started.
+goto preflight_abort
+:preflight_ready
+exit /b 0
+:preflight_abort
+echo Returning to the menu.
+exit /b 1
 
 :fail_start
 call :fail "Could not start the server process." "web_main"

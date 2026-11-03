@@ -490,7 +490,7 @@ class TestResume:
             client = MagicMock()
             client.ensure_unloaded = AsyncMock(return_value=True)
             bench = MagicMock()
-            new = _cfg_result(ctx=4096, gen=45.0)
+            _cfg_result(ctx=4096, gen=45.0)
 
             async def _fake_bench(mid, cfg, ctx):
                 r = _cfg_result(ctx=ctx, gen=45.0 if ctx == 4096 else 40.0)

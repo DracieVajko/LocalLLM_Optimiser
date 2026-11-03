@@ -4,7 +4,7 @@ import hashlib
 import json
 from typing import Any
 
-from lm_optimizer.domain.models import GPUInfo, HardwareInfo
+from lm_optimizer.domain.models import HardwareInfo
 
 
 FINGERPRINT_FIELDS = [

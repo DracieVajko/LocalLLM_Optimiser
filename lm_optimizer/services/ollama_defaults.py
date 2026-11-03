@@ -13,19 +13,13 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from lm_optimizer.services.lmstudio_defaults import (
     DefaultsError,
-    ModelNotFoundError,
     create_backup,
-    prune_backups,
     list_backups,
-    BackupEntry,
-    DefaultsSaveResult,
-    HOME_ENV as LMSTUDIO_HOME_ENV,
 )
 
 # Ollama config home env var
@@ -190,7 +184,6 @@ def restore_ollama_defaults(
     model_id: str, *, backup: str = "latest", dry_run: bool = False, keep_backups: bool = True, home: Path | None = None
 ) -> dict:
     """Restore Ollama defaults from a backup."""
-    from lm_optimizer.services.lmstudio_defaults import restore_defaults as _restore
     # Delegate to the same restore logic but with Ollama path
     home = home or default_ollama_home()
     path = resolve_ollama_defaults_path(model_id, home=home)
@@ -225,5 +218,3 @@ def restore_ollama_defaults(
         create_backup(path, keep=10)
     _atomic_write(path, backup_data)
     return {"model_id": model_id, "path": str(path), "restored_from": selected.name, "backup_path": str(path), "noop": False, "dry_run": False}
-PYEOF
-echo "File created"

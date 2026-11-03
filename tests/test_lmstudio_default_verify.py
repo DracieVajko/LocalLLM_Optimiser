@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
 
 from lm_optimizer.api.client import LoadConfig, LoadModelResponse, UnloadModelResponse
 from lm_optimizer.domain.models import LoadConfiguration

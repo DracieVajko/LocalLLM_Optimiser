@@ -1,5 +1,4 @@
 """Web validator tests (P4 static validation, stdlib only)."""
-import pytest
 
 from lm_optimizer.services.web_validator import (
     parse_html,

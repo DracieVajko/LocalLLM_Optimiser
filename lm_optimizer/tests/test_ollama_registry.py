@@ -5,7 +5,6 @@ from __future__ import annotations
 import inspect
 
 import httpx
-import pytest
 
 from lm_optimizer.backends.ollama.registry import OLLAMA_OPTIONS, ollama_space
 from lm_optimizer.domain.models import GPUInfo, HardwareInfo

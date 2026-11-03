@@ -13,12 +13,7 @@ try:
 except ImportError:
     GPUTIL_AVAILABLE = False
 
-try:
-    import wmi
-
-    WMI_AVAILABLE = True
-except ImportError:
-    WMI_AVAILABLE = False
+    # WMI not used; CPU name from platform.processor()
 
 from ..config import config
 from ..logging_config import get_logger
@@ -125,17 +120,7 @@ def get_cpu_info() -> CPUInfo:
     """Detect CPU information."""
     cpu_name = platform.processor()
     if not cpu_name or cpu_name == "":
-        try:
-            # Try to get more detailed CPU name on Windows
-            if platform.system() == "Windows":
-                import wmi
-
-                c = wmi.WMI()
-                for processor in c.Win32_Processor():
-                    cpu_name = processor.Name
-                    break
-        except Exception:
-            cpu_name = "Unknown"
+        cpu_name = "Unknown CPU"
 
     return CPUInfo(
         name=cpu_name,

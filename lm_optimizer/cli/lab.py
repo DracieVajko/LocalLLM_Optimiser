@@ -1309,8 +1309,9 @@ def test_manager(
     all_models: bool = typer.Option(False, "--all", help="Run all models"),
     models: str = typer.Option(None, "--models", help="Comma-separated model indices (e.g., 1,2,5,8)"),
     test_count: int = typer.Option(1, "--test-count", help="Number of tests to run (1=single, 3=full)"),
-    detail_level: str = typer.Option("full", "--detail-level", help="Detail level: short, benchmark, pure-opt, full"),
+    detail_level: str = typer.Option("full", "--detail-level", help="Detail level: quick, standard, full, benchmark"),
     overnight: bool = typer.Option(False, "--overnight", help="Run through all selected without interruption"),
+    model_detail: str = typer.Option(None, "--model-detail", help="One detail level per --models entry, e.g. --models 1,2,5 --model-detail quick,full,benchmark"),
 ):
     """Integrated test manager: intelligent ordering, partial results, assistant opt-in."""
     from lm_optimizer.services.test_manager import TestManager
@@ -1319,13 +1320,28 @@ def test_manager(
     if interactive:
         console.print("[yellow]Interactive mode: will prompt before each major phase.[/yellow]")
     # Full automated cycle (no live model load by default; scheduling logic only)
-    cycle_result = manager.run_cycle(
-        model_id="lmstudio-community/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-GGUF",
-        interactive=interactive,
-        use_assistant=use_assistant,
-        calm_minutes=calm_minutes,
-        check_interval=check_interval,
-    )
+    try:
+        cycle_result = manager.run_cycle(
+            model_id="lmstudio-community/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-GGUF",
+            interactive=interactive,
+            use_assistant=use_assistant,
+            calm_minutes=calm_minutes,
+            check_interval=check_interval,
+            all_models=all_models,
+            models=models,
+            test_count=test_count,
+            detail_level=detail_level,
+            overnight=overnight,
+            model_detail=model_detail,
+        )
+    except ValueError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(2) from None
+    per_model = cycle_result.get("per_model_plan") or {}
+    if per_model:
+        console.print("[bold]Per-model depth[/bold]")
+        for key, level in per_model.items():
+            console.print(f"  {key}: {level}")
     console.print(f"[dim]Cycle result: {cycle_result}[/dim]")
 
 

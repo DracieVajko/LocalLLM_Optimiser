@@ -4,7 +4,6 @@ RED batch: /api/status and /api/models currently propagate connect errors
 as HTTP 500, leaving dashboard as a white page with menu only.
 """
 
-from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -316,7 +315,6 @@ class TestThinkingPlumbing:
 
     def test_api_exposes_thinking_and_prompt(self):
         from lm_optimizer.api.routes import _convert_config_result
-        from lm_optimizer.domain.models import BenchmarkMetrics
 
         cfg_run = TestConfigDetailShape._cfg(self)
         cfg_run.metrics[0].thinking_text = "why this answer"
@@ -498,7 +496,7 @@ class TestMatrixFailFast:
 
 class TestFlashLessonPersists:
     def _opt(self):
-        from unittest.mock import AsyncMock, MagicMock
+        from unittest.mock import MagicMock
 
         from lm_optimizer.domain.models import ModelIdentity, OptimizationRun
         from lm_optimizer.services.optimizer import AdaptiveOptimizer, OptimizationState

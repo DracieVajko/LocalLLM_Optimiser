@@ -182,7 +182,7 @@ class ModelRepository:
             row = conn.execute("SELECT * FROM models WHERE id = ?", (model_id,)).fetchone()
             if not row:
                 return None
-            metadata = json.loads(row["metadata_json"]) if row["metadata_json"] else {}
+            json.loads(row["metadata_json"]) if row["metadata_json"] else {}
             return ModelIdentity(
                 id=row["id"],
                 name=row["name"],
@@ -202,7 +202,7 @@ class ModelRepository:
             return [self._row_to_model(row) for row in rows]
 
     def _row_to_model(self, row: sqlite3.Row) -> ModelIdentity:
-        metadata = json.loads(row["metadata_json"]) if row["metadata_json"] else {}
+        json.loads(row["metadata_json"]) if row["metadata_json"] else {}
         return ModelIdentity(
             id=row["id"],
             name=row["name"],

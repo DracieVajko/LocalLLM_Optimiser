@@ -154,13 +154,6 @@ def create_benchmark_cases(
             each at 5 levels (temperature off, low, medium, high, xhigh).
     """
     # Define reasoning temperature sweep levels
-    REASONING_LEVELS = {
-        "off": 0.0,
-        "low": 0.1,
-        "medium": 0.3,
-        "high": 0.5,
-        "xhigh": 0.7,
-    }
     
     # If include_categories is None or empty, include all categories
     if not include_categories:

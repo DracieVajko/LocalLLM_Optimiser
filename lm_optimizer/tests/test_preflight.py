@@ -132,7 +132,7 @@ def test_preflight_auto_pure_no_server_call():
     assert effective["profile"] == "balanced"
     assert effective["skip_phases"] == []
     assert effective["experimental"] == {
-        "enable_rope": False, "enable_cpu_moe": False, "enable_speculative": False,
+        "enable_rope": True, "enable_cpu_moe": True, "enable_speculative": True,
     }
     assert explicit == ["m1"]
 
@@ -181,5 +181,5 @@ def test_preflight_optimize_exists_and_pure():
     )
     assert eff["model"] == "mymodel"
     assert eff["experimental"] == {
-        "enable_rope": False, "enable_cpu_moe": False, "enable_speculative": False,
+        "enable_rope": True, "enable_cpu_moe": True, "enable_speculative": True,
     }

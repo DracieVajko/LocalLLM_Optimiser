@@ -90,7 +90,6 @@ def _run(configs):
 
 
 def _failed_cfg(name="structured_output", overall=0.0):
-    from lm_optimizer.domain.models import RunStatus
 
     r = _result()
     r.status = ConfigurationStatus.QUALITY_FAILED

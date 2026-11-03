@@ -18,7 +18,6 @@ import subprocess
 import sys
 import textwrap
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -397,10 +396,8 @@ class TestAutoRunLock:
         try:
             from typer.testing import CliRunner
             from lm_optimizer.cli.main import app
-            import lm_optimizer.cli.auto_run as ar
             from pathlib import Path as _P
 
-            monkey = None
             # Point the command at the temporary lock dir.
             import lm_optimizer.services.joblock as jl
             orig = jl._default_lock_path
@@ -440,7 +437,6 @@ class TestAutoRunLock:
         jl._default_lock_path = lambda: tmp_path / jl.LOCK_NAME
         try:
             import lm_optimizer.cli.auto_run as ar
-            from lm_optimizer.services.joblock import JobBusyError
 
             with pytest.raises(RuntimeError):
                 ar._acquire_auto_run_lock(1)
@@ -479,7 +475,7 @@ class TestAutoRunLock:
 
     def test_independent_process_contention(self, tmp_path):
         """A real second process must be refused while the first holds it."""
-        from lm_optimizer.services.joblock import LOCK_NAME, acquire_lock, release_lock
+        from lm_optimizer.services.joblock import acquire_lock, release_lock
 
         acquire_lock("auto-run:first", lock_dir=tmp_path)
         try:

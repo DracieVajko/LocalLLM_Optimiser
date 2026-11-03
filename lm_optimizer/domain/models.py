@@ -29,6 +29,7 @@ class OptimizationStage(str, Enum):
     VALIDATION = "validation"
     # Phase A/B strategy stages (legacy values above kept for compat).
     SPEED_DISCOVERY = "speed_discovery"
+    CONTEXT_SPEED = "context_speed"
     QUALITY_CHECK = "quality_check"
     RECOVERY = "recovery"
     FINAL_VALIDATION = "final_validation"
@@ -44,6 +45,7 @@ class OptimizationPhase(str, Enum):
     """Phase A/B strategy phases.
 
     SPEED: fixed small-context speed discovery + frontier.
+    CONTEXT_SPEED: doubling context-speed ladder on the fastest config.
     QUALITY: full quality suite on frozen speed finalists.
     RECOVERY: bounded causal rollback after quality failure.
     FINAL_VALIDATION: adaptive validation of the final runtime config.
@@ -51,6 +53,7 @@ class OptimizationPhase(str, Enum):
     """
 
     SPEED = "speed"
+    CONTEXT_SPEED = "context_speed"
     QUALITY = "quality"
     RECOVERY = "recovery"
     FINAL_VALIDATION = "final_validation"

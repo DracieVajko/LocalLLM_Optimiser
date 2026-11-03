@@ -22,11 +22,7 @@ from lm_optimizer.domain.models import (
     OptimizationRun,
 )
 from lm_optimizer.services.lmstudio_defaults import (
-    BACKUP_KEEP,
-    BackupEntry,
-    DefaultsDiff,
     DefaultsError,
-    DefaultsRestoreResult,
     ModelNotFoundError,
     NoWinnerError,
     apply_defaults,
@@ -478,7 +474,7 @@ def test_restore_defaults_dry_run_writes_nothing(tmp_path):
 
 def test_diff_defaults_reports_added_changed_unchanged_preserved(tmp_path):
     home = _lmstudio_home(tmp_path, [["m", {"uiIdentifier": "m"}]])
-    path = _write_defaults(
+    _write_defaults(
         home, "m.json", _document(**{
             "llm.load.contextLength": 8192,
             "llm.load.llama.cpuThreadPoolSize": 8,

@@ -7,7 +7,6 @@ recorded-only (REST-unsupported) params reported explicitly.
 
 import json
 from datetime import datetime
-from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
@@ -190,7 +189,6 @@ class TestCliExport:
         assert "Exported" in r.output
 
     def test_export_default_dir(self, tmp_path, monkeypatch):
-        import lm_optimizer.services.preset_export as pe
         from lm_optimizer.cli.main import app
 
         monkeypatch.chdir(tmp_path)

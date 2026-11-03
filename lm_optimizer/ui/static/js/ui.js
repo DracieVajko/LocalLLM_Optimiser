@@ -319,6 +319,7 @@ export const UI = {
                     <div><span class="text-gray-500">Strategy</span><br>
                         Phase A speed context (frozen): ${advanced.max_context <= 4096 ? advanced.max_context : 2048}<br>
                         Phase A quality context (frozen): ${advanced.max_context}<br>
+            Context-speed ladder: 2k ... model limit (auto, on fastest config)<br>
                         Speed: staged cheap probes (no full suite until finalists)<br>
                         Quality: full 5-test suite on finalists only, then bounded recovery<br>
                         Validation: adaptive (2–5 reps by stability)<br>
@@ -407,8 +408,19 @@ export const UI = {
 
                 <div class="form-checkbox">
                     <input type="checkbox" id="optimize-context" class="form-checkbox-input advanced-toggle">
-                    <label for="optimize-context">Optimize Maximum Context (Phase B, optional — runs after the runtime winner is final, runtime settings stay frozen)</label>
+                    <label for="optimize-context">Optimize Maximum Context (Phase B, optional - runs after the runtime winner is final, runtime settings stay frozen)</label>
                 </div>
+
+                <div>
+                    <label class="form-label">Phase B minimum generation tok/s (stops the max-context search)</label>
+                    <input type="number" id="min-context-speed" value="1" step="0.1" min="0" class="form-input">
+                </div>
+
+                <p class="text-xs text-gray-500">
+                    Every speed run also measures a context-speed ladder (2k, 4k, 8k,
+                    16k, 32k, 64k, 128k, 256k ...) on the fastest config and stops at
+                    the first context that cannot load.
+                </p>
 
                 <div>
                     <label class="form-label">Skip phases (unchecked phases run normally)</label>

@@ -1,92 +1,98 @@
-"""--test / --test-only wiring tests (these were dead code until 2026-10-22)."""
+"""Per-model depth questions (no yes/no chains)."""
+
 import pytest
-from unittest.mock import MagicMock
 
-from lm_optimizer.services.benchmark import BenchmarkService
-
-
-def _service(**kw):
-    client = MagicMock()
-    return BenchmarkService(client, **kw)
-
-
-def test_test_names_filter_the_suite():
-    svc = _service(test_names=["short_instruction", "coding_task"])
-    cases = svc.create_cases_for_context(4096)
-    names = {c.name for c in cases}
-    assert names == {"short_instruction", "coding_task"}
+from lm_optimizer.services.test_selection import (
+    ask_min_context_speed,
+    ask_model_depth,
+    merge_skip_phases,
+    parse_depth_choice,
+    parse_min_speed,
+)
 
 
-def test_no_test_names_returns_full_suite():
-    svc = _service()
-    cases = svc.create_cases_for_context(4096)
-    assert len(cases) > 2
+@pytest.mark.parametrize(
+    "answer,expected",
+    [
+        ("1", "quick"),
+        ("q", "quick"),
+        ("2", "standard"),
+        ("3", "full"),
+        ("f", "full"),
+        ("4", "benchmark"),
+        ("b", "benchmark"),
+        ("5", None),
+        ("skip", None),
+    ],
+)
+def test_choice_aliases(answer, expected):
+    assert parse_depth_choice(answer, "standard") == expected
 
 
-def test_unknown_test_names_raise_instead_of_silently_running_all():
-    svc = _service(test_names=["definitely-not-a-test"])
+def test_empty_answer_keeps_default():
+    assert parse_depth_choice("", "full") == "full"
+    assert parse_depth_choice(None, "quick") == "quick"
+
+
+def test_unknown_choice_is_rejected():
     with pytest.raises(ValueError):
-        svc.create_cases_for_context(4096)
+        parse_depth_choice("turbo", "standard")
 
 
-def test_mixed_known_and_unknown_keeps_known():
-    svc = _service(test_names=["short_instruction", "nope"])
-    cases = svc.create_cases_for_context(4096)
-    assert {c.name for c in cases} == {"short_instruction"}
+def test_default_skip_skips_the_model():
+    assert parse_depth_choice("", "skip") is None
 
 
-def test_test_names_are_case_insensitive():
-    svc = _service(test_names=["SHORT_INSTRUCTION"])
-    cases = svc.create_cases_for_context(4096)
-    assert {c.name for c in cases} == {"short_instruction"}
+def test_min_speed_parses_numbers_and_rejects_negatives():
+    assert parse_min_speed("2.5", 1.0) == 2.5
+    assert parse_min_speed("", 1.0) == 1.0
+    with pytest.raises(ValueError):
+        parse_min_speed("fast", 1.0)
+    with pytest.raises(ValueError):
+        parse_min_speed("-1", 1.0)
 
 
-def test_blank_names_are_ignored():
-    svc = _service(test_names=["  ", ""])
-    cases = svc.create_cases_for_context(4096)
-    assert len(cases) > 2  # no filter applied
+def test_merge_skip_phases_unions_and_deduplicates():
+    assert merge_skip_phases("context", "quality,context") == "context,quality"
+    assert merge_skip_phases(None, None) is None
+    assert merge_skip_phases(None, "quality") == "quality"
 
 
-# --- preflight composition ---
-
-def _pf(**kw):
-    from lm_optimizer.cli import main as _cli
-
-    base = dict(
-        model="m",
-        profile="balanced",
-        style="chat",
-        quality_threshold=0.97,
-        repetitions=3,
-        min_context=2048,
-        max_context=32768,
-        warmup_runs=1,
-        report_sort="run",
-        skip_phases=None,
-        physical_batches=None,
-        enable_rope=None,
-        enable_cpu_moe=None,
-        enable_speculative=None,
-        yes=True,
-        non_interactive=True,
-        dry_run=False,
+def test_ask_model_depth_prints_one_menu_and_returns_the_choice():
+    printed = []
+    level = ask_model_depth(
+        "qwen/qwen3-coder-30b",
+        "standard",
+        input_fn=lambda _prompt: "3",
+        print_fn=printed.append,
     )
-    base.update(kw)
-    return _cli._preflight_optimize(**base)
+    assert level == "full"
+    text = "\n".join(printed)
+    assert "qwen/qwen3-coder-30b" in text
+    assert "quick" in text and "benchmark" in text and "skip" in text
 
 
-def test_preflight_test_only_composes_skips():
-    eff = _pf(test_only=True, test=["short_instruction"])
-    assert {"speed", "recovery", "validation", "context"} <= set(eff["skip_phases"])
-    assert eff["test_names"] == ["short_instruction"]
+def test_ask_model_depth_reasks_after_bad_input():
+    answers = iter(["nonsense", "2"])
+
+    def fake_input(_prompt):
+        return next(answers)
+
+    level = ask_model_depth("m", "standard", input_fn=fake_input, print_fn=lambda _l: None)
+    assert level == "standard"
 
 
-def test_preflight_test_names_without_test_only_keep_speed():
-    eff = _pf(test=["short_instruction"])
-    assert "speed" not in eff["skip_phases"]
-    assert eff["test_names"] == ["short_instruction"]
+def test_ask_model_depth_eof_uses_default():
+    def eof(_prompt):
+        raise EOFError
+
+    assert ask_model_depth("m", "quick", input_fn=eof, print_fn=lambda _l: None) == "quick"
 
 
-def test_preflight_both_flags_coexist_with_quality_only():
-    eff = _pf(test_only=True, test=["coding_task"], quality_only=True)
-    assert {"speed", "recovery", "validation", "context"} <= set(eff["skip_phases"])
+def test_ask_min_context_speed_defaults_on_empty_or_eof():
+    assert ask_min_context_speed(input_fn=lambda _p: "", print_fn=lambda _l: None) == 1.0
+
+    def eof(_prompt):
+        raise EOFError
+
+    assert ask_min_context_speed(input_fn=eof, print_fn=lambda _l: None) == 1.0

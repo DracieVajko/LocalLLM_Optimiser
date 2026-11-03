@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 from uuid import uuid4
 
-import pytest
 from typer.testing import CliRunner
 
 from lm_optimizer.cli import main as cli_main
@@ -114,7 +113,6 @@ def test_restore_default_bad_backup_exits_1(monkeypatch, tmp_path):
 
 def test_verify_default_verified(monkeypatch, tmp_path):
     from lm_optimizer.api import routes
-    from lm_optimizer.database.repositories import run_repo
     from lm_optimizer.database.repositories import run_repo
     from lm_optimizer.api.client import LoadConfig, LoadModelResponse, UnloadModelResponse
     home = _home(tmp_path)

@@ -6,7 +6,6 @@ import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 
 from lm_optimizer.domain.models import (
     ConfigurationResult,

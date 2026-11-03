@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Context-speed ladder**: every speed run now ends with a doubling ladder (2k, 4k, 8k, 16k, 32k, 64k, 128k, 256k, clamped to the model limit) measured on the fastest config. Each rung is a real load + short speed probe; the first load failure ends the ladder. Results persist on the winner and in phase params, and resume continues from the last measured rung. Skip explicitly with `--skip-phases context_speed`.
+- **Per-model depth questions**: `optimize` and `auto` ask once per selected model (quick / standard / full / benchmark / skip) instead of a chain of yes/no prompts. `auto` also accepts `--model-detail pattern=level` for unattended runs and `--no-ask-tests`.
+- **User speed threshold for max context**: `--min-context-speed` (Phase B) stops the optional absolute-maximum context search when a rung falls below the given tok/s or fails to load; prompted on a TTY when omitted.
+- **Experiments run automatically when available**: RoPE, CPU-MoE and speculative probes no longer ask yes/no; explicit `--no-enable-*` still forces them off.
 - **Test manager + recommender** (integrated in `lab`): `lab test-manager` (intelligent ordering, MoE before dense, VRAM floor 250-500MB, partial results, assistant opt-in via `.env`); `lab recommend`; `lab clean`; `docs/specs/2026-10-28-test-manager-design.md` approved; no web access by default; folder-bound isolation.
 - **Persistence loop**: timestamped backups (`optimizer-backup-<utc>`), keep newest 10, legacy `.optimizer-backup` recognized; `lab diff-default`, `lab restore-default`, `lab verify-default`; `GET /api/model-default`, `GET /api/runs/{run_id}/default-diff`, `POST /api/model-default/restore`, `POST /api/runs/{run_id}/verify-default`, `POST /api/runs/{run_id}/save-default?verify=true`; Results-page diff before save; model-detail "LM Studio default" card.
 - **Persist the winner in LM Studio**: `lm-optimizer lab save-default <run-id>`,

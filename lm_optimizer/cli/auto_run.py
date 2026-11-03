@@ -10,16 +10,12 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
-from lm_optimizer.config import config
 from lm_optimizer.database.repositories import run_repo
 from lm_optimizer.domain.models import (
-    ConfigurationStatus,
     HardwareInfo,
-    LoadConfiguration,
     ModelIdentity,
     OptimizationProfile,
     OptimizationRun,
-    OptimizationStage,
     RunStatus,
 )
 from lm_optimizer.logging_config import get_logger, setup_logging
@@ -28,7 +24,6 @@ from lm_optimizer.services.fingerprint import (
     compute_fingerprint,
     fingerprint_diff,
     hardware_fingerprint,
-    should_revalidate_config,
 )
 from lm_optimizer.services.joblock import JobBusyError, acquire_lock, release_lock
 from lm_optimizer.services.lm_studio import LMStudioClient
@@ -66,6 +61,127 @@ def _normalize_workload(workload: str) -> str:
         console.print("Expected: interactive or throughput")
         raise typer.Exit(2)
     return w
+
+
+VALID_DETAIL_LEVELS = ("quick", "standard", "full", "benchmark")
+
+
+def parse_model_detail(spec: str | None) -> list[tuple[str, str]]:
+    """Parse a per-model depth spec into ordered ``(pattern, level)`` rules.
+
+    Format: ``pattern=level`` pairs separated by commas, e.g.
+    ``qwen=quick,mixtral=full,*=standard``. Patterns are matched as
+    case-insensitive substrings of the model id; later rules win, and ``*``
+    is the fallback (default ``standard`` when no rule matches).
+    """
+    if not spec or not spec.strip():
+        return []
+    rules: list[tuple[str, str]] = []
+    for chunk in spec.split(","):
+        pair = chunk.strip()
+        if not pair:
+            continue
+        if "=" not in pair:
+            # Shorthand: a bare level applies to every model.
+            if pair.lower() in VALID_DETAIL_LEVELS:
+                rules.append(("*", pair.lower()))
+                continue
+            raise ValueError(f"model-detail rule missing '=': {pair!r}")
+        pattern, level = (part.strip() for part in pair.split("=", 1))
+        if not pattern:
+            raise ValueError(f"model-detail rule has an empty pattern: {pair!r}")
+        level = level.lower()
+        if level not in VALID_DETAIL_LEVELS:
+            raise ValueError(
+                f"unknown detail level {level!r} for {pattern!r}; "
+                f"expected one of {', '.join(VALID_DETAIL_LEVELS)}"
+            )
+        rules.append((pattern.lower(), level))
+    return rules
+
+
+def resolve_model_detail(model_id: str, rules: list[tuple[str, str]]) -> str:
+    """Resolve the depth for one model.
+
+    ``*`` is a fallback only: a specific substring rule always wins, and the
+    last matching specific rule wins when several apply.
+    """
+    chosen: str | None = None
+    fallback = "standard"
+    lowered = model_id.lower()
+    for pattern, level in rules:
+        if pattern == "*":
+            fallback = level
+        elif pattern in lowered:
+            chosen = level
+    return chosen or fallback
+
+
+def detail_overrides(
+    level: str, *, repetitions: int, validation: int
+) -> dict:
+    """Translate a depth level into concrete run parameters.
+
+    quick:     one repetition, minimal validation, no context sweep.
+    standard:  the caller's flags unchanged.
+    full:      more repetitions/validation and the context sweep enabled.
+    benchmark: speed/benchmark only - quality, recovery, validation and
+               context phases are skipped so the model is measured, not gated.
+    """
+    if level == "quick":
+        return {
+            "repetitions": 1,
+            "validation": max(1, min(validation, 2)),
+            "optimize_context": False,
+            "skip_phases": None,
+        }
+    if level == "full":
+        return {
+            "repetitions": max(repetitions, 3),
+            "validation": max(validation, 5),
+            "optimize_context": True,
+            "skip_phases": None,
+        }
+    if level == "benchmark":
+        return {
+            "repetitions": 1,
+            "validation": 1,
+            "optimize_context": False,
+            "skip_phases": "quality,recovery,validation,context",
+        }
+    return {
+        "repetitions": repetitions,
+        "validation": validation,
+        "optimize_context": False,
+        "skip_phases": None,
+    }
+
+
+def auto_depth_plan(
+    level: str,
+    *,
+    repetitions: int,
+    skip_phases: list[str] | None = None,
+    skip_matrix: bool = False,
+) -> dict:
+    """Resolve the unattended ``auto`` pipeline knobs for one depth level.
+
+    ``quick`` skips the exploratory VRAM matrix (the optimizer still measures
+    speed); ``benchmark`` keeps the matrix but skips every quality gate;
+    ``full`` enables the opt-in max-context phase.
+    """
+    overrides = detail_overrides(level, repetitions=repetitions, validation=0)
+    extra = [
+        part.strip()
+        for part in (overrides["skip_phases"] or "").split(",")
+        if part.strip()
+    ]
+    return {
+        "repetitions": overrides["repetitions"],
+        "matrix": (not skip_matrix) and level != "quick",
+        "optimize_context": bool(overrides["optimize_context"]),
+        "skip_phases": sorted(set(skip_phases or []) | set(extra)),
+    }
 
 
 def _get_lms_version() -> str:
@@ -228,6 +344,7 @@ async def _execute_auto_run_for_model(
     physical_batches: str | None,
     revalidate_fingerprint: bool,
     output_dir: Path,
+    min_context_speed: float = 1.0,
 ) -> dict:
     """Execute auto-run for a single model. Returns result dict."""
     client = LMStudioClient()
@@ -253,6 +370,7 @@ async def _execute_auto_run_for_model(
         "workload_type": workload,
         "gpu_via_cli": gpu_via_cli,
         "optimize_context": optimize_context,
+        "min_context_speed": min_context_speed,
         "min_speed": min_speed,
         "warmup_runs": warmup_runs,
         "selection_threshold": 0.05,
@@ -329,6 +447,11 @@ def auto_run(
     repetitions: int = typer.Option(3, "--repetitions", "-r", help="Benchmark repetitions per config"),
     validation: int = typer.Option(5, "--validation", "-v", help="Validation repetitions for best config"),
     max_context: int = typer.Option(32768, "--max-context", help="Maximum context length"),
+    min_context_speed: float = typer.Option(
+        1.0,
+        "--min-context-speed",
+        help="Phase B minimum generation tok/s (full depth max-context search)",
+    ),
     min_gpu: float = typer.Option(0.0, "--min-gpu", help="Minimum GPU ratio"),
     max_gpu: float = typer.Option(1.0, "--max-gpu", help="Maximum GPU ratio"),
     workload: str = typer.Option("interactive", "--workload", help="Workload: interactive or throughput"),
@@ -338,6 +461,15 @@ def auto_run(
     warmup: int = typer.Option(1, "--warmup", help="Warmup runs per config 0-5"),
     skip: Optional[str] = typer.Option(None, "--skip", help="Comma-separated model id substrings to skip"),
     max_size_gb: Optional[float] = typer.Option(None, "--max-size-gb", help="Auto-pick only models up to this file size"),
+    model_detail: Optional[str] = typer.Option(
+        None,
+        "--model-detail",
+        help=(
+            "Per-model depth: pattern=level pairs, e.g. "
+            "'qwen=quick,mixtral=full,*=standard'. "
+            "Levels: quick, standard, full, benchmark."
+        ),
+    ),
     revalidate_fingerprint: bool = typer.Option(False, "--revalidate-fingerprint", help="Force re-check even if fingerprint matches"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show plan without running"),
     output: Path = typer.Option(Path("results"), "--output", help="Report output directory"),
@@ -353,6 +485,11 @@ def auto_run(
     setup_logging()
     style = _require_style(style)
     workload = _normalize_workload(workload)
+    try:
+        parse_model_detail(model_detail)
+    except ValueError as e:
+        console.print(f"[red]Invalid --model-detail: {e}[/red]")
+        raise typer.Exit(2)
 
     output.mkdir(parents=True, exist_ok=True)
 
@@ -369,6 +506,7 @@ def auto_run(
             repetitions=repetitions,
             validation=validation,
             max_context=max_context,
+            min_context_speed=min_context_speed,
             min_gpu=min_gpu,
             max_gpu=max_gpu,
             workload=workload,
@@ -378,6 +516,7 @@ def auto_run(
             warmup=warmup,
             skip=skip,
             max_size_gb=max_size_gb,
+            model_detail=model_detail,
             revalidate_fingerprint=revalidate_fingerprint,
             dry_run=dry_run,
             output=output,
@@ -416,6 +555,7 @@ def _auto_run_body(
     repetitions,
     validation,
     max_context,
+    min_context_speed,
     min_gpu,
     max_gpu,
     workload,
@@ -425,6 +565,7 @@ def _auto_run_body(
     warmup,
     skip,
     max_size_gb,
+    model_detail,
     revalidate_fingerprint,
     dry_run,
     output,
@@ -433,6 +574,12 @@ def _auto_run_body(
     force_generation,
 ) -> None:
     """Discovery -> eligibility -> plan -> (execute) -> report."""
+    try:
+        detail_rules = parse_model_detail(model_detail)
+    except ValueError as e:
+        console.print(f"[red]Invalid --model-detail: {e}[/red]")
+        raise typer.Exit(2)
+
     # Auto-reconcile stale runs from previous crashed/killed invocations.
     try:
         from lm_optimizer.services.run_reconcile import reconcile_stale_runs
@@ -534,6 +681,7 @@ def _auto_run_body(
             "model": m,
             "run": run,
             "action": action,
+            "detail": resolve_model_detail(m.id, detail_rules),
             "fingerprint_match": (
                 run is not None
                 and (run.benchmark_params or {}).get("fingerprint") == current_fp
@@ -547,6 +695,7 @@ def _auto_run_body(
     table = Table(title="Auto-Run Plan")
     table.add_column("Model", style="cyan")
     table.add_column("Action", style="green")
+    table.add_column("Detail", style="magenta")
     table.add_column("Fingerprint", style="dim")
     table.add_column("Details", style="yellow")
 
@@ -566,7 +715,9 @@ def _auto_run_body(
             details = f"Complete but fingerprint mismatch ({diff_str})"
         elif p["action"] == "FULL":
             details = "No previous run"
-        table.add_row(p["model"].id, p["action"], p["current_fp"][:16] + "...", details)
+        table.add_row(
+            p["model"].id, p["action"], p["detail"], p["current_fp"][:16] + "...", details
+        )
 
     console.print(table)
 
@@ -581,6 +732,7 @@ def _auto_run_body(
             {
                 "model": p["model"].id,
                 "action": p["action"],
+                "detail": p["detail"],
                 "fp_diff": p["fp_diff"],
                 "previous_run_id": p["previous_run_id"],
             }
@@ -599,6 +751,9 @@ def _auto_run_body(
     ) as progress:
         for p in plan:
             task = progress.add_task(f"Processing {p['model'].id}...", total=None)
+            overrides = detail_overrides(
+                p["detail"], repetitions=repetitions, validation=validation
+            )
             result = asyncio.run(_execute_auto_run_for_model(
                 model=p["model"],
                 hardware=hardware,
@@ -606,8 +761,8 @@ def _auto_run_body(
                 fingerprint_diff_fields=p["fp_diff"],
                 profile=OptimizationProfile(profile),
                 quality_threshold=quality,
-                repetitions=repetitions,
-                validation_repetitions=validation,
+                repetitions=overrides["repetitions"],
+                validation_repetitions=overrides["validation"],
                 style=style,
                 workload=workload,
                 gpu_via_cli=gpu_via_cli,
@@ -615,10 +770,11 @@ def _auto_run_body(
                 min_speed=min_speed,
                 warmup_runs=warmup,
                 max_context=max_context,
+                min_context_speed=min_context_speed,
                 min_gpu=min_gpu,
                 max_gpu=max_gpu,
-                optimize_context=False,
-                skip_phases=None,
+                optimize_context=overrides["optimize_context"],
+                skip_phases=overrides["skip_phases"],
                 physical_batches=None,
                 revalidate_fingerprint=revalidate_fingerprint,
                 output_dir=output,

@@ -60,3 +60,12 @@ lmstudio-presets/
 data/
 data/archive/
 data/model_hashes.json
+
+# Desloppify local state and review artifacts
+.desloppify/
+attest_abstraction.md
+holistic_context.txt
+scorecard.png
+
+# Local agent config
+.claude/

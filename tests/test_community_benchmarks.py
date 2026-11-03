@@ -4,7 +4,6 @@ import pytest
 from lm_optimizer.services.community_benchmarks import COMMUNITY_BENCHMARKS
 from lm_optimizer.services.recommender import (
     Confidence,
-    FitClass,
     HardwareFingerprint,
     ModelCatalogEntry,
     ModelRecommender,

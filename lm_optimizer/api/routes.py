@@ -9,7 +9,6 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import JSONResponse
 
 from lm_optimizer.api.schemas import (
-    AdvancedSettingsSchema,
     ApplyConfigRequest,
     CompareRequest,
     CompareResponse,
@@ -368,7 +367,6 @@ def _convert_preset(p: dict) -> PresetSchema:
 
 
 # Import datetime
-from datetime import datetime
 
 # ============================================================
 # Hardware & LM Studio Status
@@ -709,10 +707,8 @@ async def run_optimization_task(
     Continues from the synchronously prepared run (prepare_run); never
     re-prepares, so the returned run id stays the executed one.
     """
-    run_id = run.id
     try:
         run = await optimizer.execute(model, profile, run, baseline_config, advanced_settings)
-        run_id = run.id
         try:
             from lm_optimizer.api.websocket import broadcast_complete
 
@@ -723,7 +719,6 @@ async def run_optimization_task(
         try:
             if optimizer.state is not None:
                 optimizer.checkpoint_now(reason="task-cancelled")
-                run_id = optimizer.state.run.id
         except Exception:
             pass
     except Exception as e:
@@ -814,7 +809,7 @@ async def resume_run(run_id: UUID):
     from fastapi import BackgroundTasks
     
     background_tasks = BackgroundTasks()
-    result = await resume_run_from_checkpoint(run_id, background_tasks)
+    await resume_run_from_checkpoint(run_id, background_tasks)
     
     return {"success": True, "run_id": str(run_id), "completed": len(ckpt.get("completed_candidate_ids", []))}
 
@@ -874,7 +869,7 @@ async def resume_run_from_checkpoint(run_id: UUID, background_tasks: BackgroundT
             raise HTTPException(status_code=404, detail="Run not found")
 
         client = await get_lm_client()
-        hardware = hardware_detector.detect()
+        hardware_detector.detect()
         benchmark_service = BenchmarkService(client)
         quality_evaluator = QualityEvaluator(QualityConfig(minimum_score=run.quality_threshold))
         search_generator = SearchSpaceGenerator(client)
@@ -1962,7 +1957,7 @@ async def _run_judge_async(judge_id: str, request: JudgeRequest):
     from lm_optimizer.config import config
 
     try:
-        db = DatabaseManager(config.storage.database_path)
+        DatabaseManager(config.storage.database_path)
         svc = JudgeService(db_path=config.storage.database_path)
         verdict = await svc.run_judge(request)
 
@@ -2000,7 +1995,7 @@ async def judge_submit(request: JudgeRequest, background: BackgroundTasks, wait:
         from lm_optimizer.database.manager import DatabaseManager
         from lm_optimizer.config import config
 
-        db = DatabaseManager(config.storage.database_path)
+        DatabaseManager(config.storage.database_path)
         svc = JudgeService(db_path=config.storage.database_path)
         verdict = await svc.run_judge(request)
 
@@ -2125,9 +2120,7 @@ async def lab_recommend(
     local measurements in the database outrank community priors.
     """
     from lm_optimizer.services.recommender import (
-        Confidence,
         HardwareFingerprint,
-        ModelCatalogEntry,
         ModelRecommender,
         RecommenderRequest,
         UseCase,
@@ -2532,7 +2525,6 @@ async def get_run_ollama_default_diff(run_id: UUID):
 @router.post("/runs/{run_id}/verify-ollama-default")
 async def verify_ollama_default(run_id: UUID):
     """Verify saved Ollama defaults via echo load (never writes)."""
-    import asyncio
     from dataclasses import replace as _replace
     run = run_repo.get(str(run_id))
     if not run:
@@ -2567,7 +2559,7 @@ async def verify_ollama_default(run_id: UUID):
 
 @router.get("/monitor/gpu-status")
 async def get_gpu_status():
-    from lm_optimizer.services.gpu_monitor import should_run_tests, is_gpu_busy, is_cpu_busy
+    from lm_optimizer.services.gpu_monitor import should_run_tests
     return should_run_tests()
 
 

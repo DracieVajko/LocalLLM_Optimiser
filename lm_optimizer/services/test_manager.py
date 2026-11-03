@@ -13,6 +13,55 @@ if TYPE_CHECKING:
     from lm_optimizer.domain.models import ModelInfo
 
 
+# Detail levels accepted by `lab test-manager --detail-level/--model-detail`.
+# Canonical vocabulary shared with `auto --model-detail`; legacy names are
+# aliases so existing scripts keep working.
+VALID_TEST_DETAILS = ("quick", "standard", "full", "benchmark")
+DETAIL_ALIASES = {"short": "quick", "pure-opt": "standard"}
+
+
+def _normalize_detail(level: str) -> str:
+    """Normalize one detail level or raise ValueError."""
+    key = DETAIL_ALIASES.get(level, level)
+    if key not in VALID_TEST_DETAILS:
+        raise ValueError(
+            f"unknown detail level {level!r}; expected one of "
+            f"{', '.join(VALID_TEST_DETAILS)}"
+        )
+    return key
+
+
+def parse_per_model_details(
+    models: str | None, model_detail: str | None, default: str = "full"
+) -> dict[str, str]:
+    """Map selected model indices to their own test depth.
+
+    ``models`` is the ``--models`` selection (``"1,2,5,8"``) and
+    ``model_detail`` the parallel ``--model-detail`` list
+    (``"quick,full,benchmark,full"``). Missing entries fall back to
+    ``default`` (``--detail-level``). With no index selection the level
+    applies to every model and is keyed ``"*"``.
+    """
+    default_level = _normalize_detail(default.strip().lower())
+    levels: list[str] = []
+    if model_detail:
+        for raw in model_detail.split(","):
+            level = raw.strip().lower()
+            if not level:
+                continue
+            levels.append(_normalize_detail(level))
+
+    if not models:
+        return {"*": levels[0] if levels else default_level}
+
+    indices = [part.strip() for part in models.split(",") if part.strip()]
+    plan: dict[str, str] = {}
+    for position, index in enumerate(indices):
+        plan[index] = levels[position] if position < len(levels) else default_level
+    return plan
+
+
+
 class TestManager:
     """Orchestrates benchmark/test runs with intelligent scheduling."""
 
@@ -132,15 +181,19 @@ class TestManager:
 
     def recommend_best(self, model_id: str) -> dict | None:
         """Recommend best configuration for a model from existing runs/history."""
-        from lm_optimizer.database.repositories import run_repo
         # Integration point: reads existing runs/configurations and returns best config fields.
         # Does not load any model; uses DB state only.
         return {"model_id": model_id, "recommended": True, "source": "history"}
 
-    def run_cycle(self, model_id: str, interactive: bool = False, use_assistant: bool = False, calm_minutes: int = 15, check_interval: int = 60) -> dict:
+    def run_cycle(self, model_id: str, interactive: bool = False, use_assistant: bool = False, calm_minutes: int = 15, check_interval: int = 60, all_models: bool = False, models: str = None, test_count: int = 1, detail_level: str = "full", overnight: bool = False, model_detail: str = None) -> dict:
         """Full automated cycle: discover, order, run partial/full tests, clean, recommend."""
         # Integration point: connects to benchmark service and DB without live model load.
-        manager = TestManager(speed_floor=self.speed_floor, vram_floor_mb=self.vram_floor_mb)
+        TestManager(speed_floor=self.speed_floor, vram_floor_mb=self.vram_floor_mb)
+        # Per-model depth is resolved here so a run can mix quick/full/benchmark
+        # models instead of forcing one depth on the whole batch.
+        per_model_plan = parse_per_model_details(
+            models, model_detail, default=detail_level
+        )
         result: dict = {
             "model_id": model_id,
             "interactive": interactive,
@@ -148,6 +201,13 @@ class TestManager:
             "ordering_applied": True,
             "partial_saved": False,
             "cleaned": False,
+            "all_models": all_models,
+            "models": models,
+            "test_count": test_count,
+            "detail_level": detail_level,
+            "overnight": overnight,
+            "model_detail": model_detail,
+            "per_model_plan": per_model_plan,
         }
         if use_assistant and not self.can_use_assistant():
             result["assistant_available"] = False

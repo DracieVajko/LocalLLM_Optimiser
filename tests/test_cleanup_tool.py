@@ -81,7 +81,6 @@ def _counts(data_dir):
 
 
 def _run(root, data, *extra, monkeypatch):
-    output = []
 
     class _Out:
         def __call__(self, *a):

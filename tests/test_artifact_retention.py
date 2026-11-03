@@ -1,7 +1,6 @@
 """Artifact retention tests (spec §13.5)."""
 import time
 
-import pytest
 
 from lm_optimizer.services.sandbox_lab import SandboxPolicy
 from lm_optimizer.services.sandbox_runner import apply_retention
@@ -22,7 +21,7 @@ def _make_dirs(base, count):
 
 
 def test_retention_keeps_newest(tmp_path):
-    dirs = _make_dirs(tmp_path, 5)
+    _make_dirs(tmp_path, 5)
     policy = SandboxPolicy(workdir=tmp_path, artifact_retention="keep_last_2")
     removed = apply_retention(tmp_path, policy)
     assert len(removed) == 3

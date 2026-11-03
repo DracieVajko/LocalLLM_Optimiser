@@ -151,7 +151,7 @@ class TestYesNonInteractiveFlags:
             assert "yes" in params, cmd
             assert "non_interactive" in params, cmd
 
-    def test_wrapper_non_interactive_never_prompts(self):
+    def test_wrapper_defaults_to_available_experiments(self):
         import sys
         from unittest.mock import patch
 
@@ -164,10 +164,11 @@ class TestYesNonInteractiveFlags:
             patch.object(typer, "confirm") as confirm,
         ):
             out = cli_main._resolve_experimental_flags(None, None, None, non_interactive=True)
-        assert out == {"enable_rope": False, "enable_cpu_moe": False, "enable_speculative": False}
+        # No yes/no prompt: unspecified probes are attempted automatically.
+        assert out == {"enable_rope": True, "enable_cpu_moe": True, "enable_speculative": True}
         confirm.assert_not_called()
 
-    def test_wrapper_yes_never_enables(self):
+    def test_wrapper_explicit_off_still_wins(self):
         from unittest.mock import patch
 
         import typer
@@ -175,8 +176,10 @@ class TestYesNonInteractiveFlags:
         from lm_optimizer.cli import main as cli_main
 
         with patch.object(typer, "confirm") as confirm:
-            out = cli_main._resolve_experimental_flags(None, None, None, non_interactive=True)
-        assert out == {"enable_rope": False, "enable_cpu_moe": False, "enable_speculative": False}
+            out = cli_main._resolve_experimental_flags(
+                False, None, False, non_interactive=True
+            )
+        assert out == {"enable_rope": False, "enable_cpu_moe": True, "enable_speculative": False}
         confirm.assert_not_called()
 
 

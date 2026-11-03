@@ -1,5 +1,4 @@
 """Finalist rotation tests (spec 7.3: ABC/BCA/CAB)."""
-import pytest
 
 from lm_optimizer.services.optimizer import AdaptiveOptimizer
 

@@ -65,8 +65,7 @@ class TestReconcile:
 
     def test_quality_failed_restored_as_completed(self):
         from lm_optimizer.domain.models import (
-            ConfigurationResult, ConfigurationStatus, HardwareInfo,
-            LoadConfiguration, ModelIdentity, OptimizationProfile, OptimizationRun,
+            ConfigurationResult, ConfigurationStatus, LoadConfiguration,
         )
         from lm_optimizer.services import optimizer as _opt
 
@@ -402,24 +401,20 @@ class TestPhaseTransitionCrashRecovery:
             * Set best_config_id
             * NOT re-run quality candidate
         """
-        import asyncio
         from unittest.mock import AsyncMock, MagicMock
 
         from lm_optimizer.domain.models import (
-            ConfigurationResult,
             ConfigurationStatus,
             HardwareInfo,
-            LoadConfiguration,
             ModelIdentity,
             OptimizationProfile,
             OptimizationRun,
             OptimizationStage,
             RunStatus,
-            QualityScore,
         )
         from lm_optimizer.services import optimizer as _opt
         from lm_optimizer.storage import run_checkpoint as _rc
-        from uuid import UUID, uuid4
+        from uuid import uuid4
 
         # --- Build test fixtures ---
 
@@ -605,10 +600,7 @@ class TestPhaseTransitionCrashRecovery:
         Should adopt checkpoint phase but keep DB completed work.
         """
         from lm_optimizer.domain.models import (
-            ConfigurationResult,
-            ConfigurationStatus,
             HardwareInfo,
-            LoadConfiguration,
             ModelIdentity,
             OptimizationProfile,
             OptimizationRun,
@@ -618,7 +610,7 @@ class TestPhaseTransitionCrashRecovery:
         )
         from lm_optimizer.services import optimizer as _opt
         from lm_optimizer.services.search_space import SearchSpace
-        from uuid import UUID, uuid4
+        from uuid import uuid4
 
         model = ModelIdentity(id="test-model", name="test-model", context_limit=32768)
         hw = HardwareInfo(
@@ -656,7 +648,6 @@ class TestPhaseTransitionCrashRecovery:
             OptimizationProfile,
             OptimizationRun,
             OptimizationStage,
-            RunStatus,
             GPUInfo,
         )
         from lm_optimizer.services import optimizer as _opt

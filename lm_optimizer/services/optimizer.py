@@ -44,7 +44,6 @@ from lm_optimizer.services.fingerprint import (
     compute_fingerprint,
     fingerprint_diff,
     hardware_fingerprint,
-    should_revalidate_config,
     filter_configs_for_revalidation,
 )
 from lm_optimizer.services.lm_studio import LMStudioClient
@@ -383,7 +382,14 @@ def format_diagnostic(exc: BaseException) -> dict:
 
 
 # Canonical skippable phases (CLI --skip-phases, API skip_phases, GUI).
-PHASE_SKIP_NAMES = ("speed", "quality", "recovery", "validation", "context")
+PHASE_SKIP_NAMES = (
+    "speed",
+    "context_speed",
+    "quality",
+    "recovery",
+    "validation",
+    "context",
+)
 
 
 def parse_phase_skips(value) -> set[str]:
@@ -644,6 +650,8 @@ class OptimizationState:
     probe_repetitions: int = 1
     speed_finalists: list = field(default_factory=list)  # config id strings
     raw_fastest: ConfigurationResult | None = None
+    # Doubling context-speed ladder measured on the fastest speed config.
+    context_speed: dict | None = None
     baseline_result: ConfigurationResult | None = None
     recovery_log: list = field(default_factory=list)  # RecoveryAttempt dicts
     excluded_notes: list = field(default_factory=list)
@@ -915,6 +923,9 @@ class AdaptiveOptimizer:
                 "quality_finalist_limit": max_finalists,
                 "max_speed_probes": max_speed_probes,
                 "optimize_context": bool(advanced_settings.get("optimize_context", False)),
+                "min_context_speed": float(
+                    advanced_settings.get("min_context_speed") or 1.0
+                ),
                 "skip_phases": final_skips,
                 # Preset metadata
                 "run_preset": preset,
@@ -2028,7 +2039,7 @@ class AdaptiveOptimizer:
         Unexpected exceptions return a stamped failed result (score None,
         never a winner) instead of None so the attempt is recorded.
         """
-        from lm_optimizer.services.failure_states import classify_error, is_soft
+        from lm_optimizer.services.failure_states import classify_error
 
         if (
             self.state is not None
@@ -2052,7 +2063,7 @@ class AdaptiveOptimizer:
             # Clear any foreign model load BEFORE measuring: a stray local
             # client competes for VRAM and can abort this generation, which
             # turns a real measurement into noise.
-            guard = await self.guard_host()
+            await self.guard_host()
             self._log_event("LOAD_REQUESTED", f"ctx={context_length}")
             result = await self.benchmark.run_benchmark(
                 self.state.run.model.id,
@@ -2573,6 +2584,7 @@ class AdaptiveOptimizer:
                 "raw_fastest_id": str(self.state.raw_fastest.id)
                 if self.state.raw_fastest is not None
                 else None,
+                "context_speed": self.state.context_speed,
                 "recovery_log": list(self.state.recovery_log),
                 "recovery_cursor": dict(self.state.recovery_cursor or {}),
                 "probe_attempts": dict(self.state.probe_attempts or {}),
@@ -2968,6 +2980,143 @@ class AdaptiveOptimizer:
         self._checkpoint("phase:speed:complete")
         await self._broadcast({"stage": "speed_discovery", "event": "speed_complete"})
         return frontier
+
+    async def _phase_context_speed(self, frontier: dict) -> dict | None:
+        """Measure generation speed across the doubling context ladder.
+
+        Runs on the fastest speed config right after the speed phase. The
+        ladder stops at the first context that cannot load, so every rung is
+        real evidence (no estimates). Results are stored on the winner's
+        ``generation`` JSON and mirrored into phase params for resume/UI.
+        """
+        from lm_optimizer.services.context_speed import (
+            format_context_speed,
+            measure_context_speed,
+            plan_context_speed_ladder,
+        )
+
+        winner = frontier.get("winner")
+        if winner is None:
+            probed = [
+                c
+                for c in self.state.tested_configs
+                if (c.generation or {}).get("phase") == OptimizationPhase.SPEED.value
+                and c.status == ConfigurationStatus.PASSED
+            ]
+            winner = (
+                max(probed, key=lambda r: r.get_avg_generation_tok_s())
+                if probed
+                else None
+            )
+        if winner is None or winner.config is None:
+            self._log_event("CONTEXT_SPEED skipped", "no passing speed config")
+            return None
+
+        model = self.state.run.model
+        limit = int(getattr(model, "context_limit", 0) or 0) or None
+        ladder = plan_context_speed_ladder(limit)
+
+        existing = (winner.generation or {}).get("context_speed")
+        if not isinstance(existing, dict):
+            existing = (
+                self.state.context_speed
+                if isinstance(self.state.context_speed, dict)
+                and self.state.context_speed.get("winner_config_id") == str(winner.id)
+                else None
+            )
+        if isinstance(existing, dict) and existing.get("complete"):
+            self.state.context_speed = existing
+            self._log_event(
+                "RESUME_SKIP context_speed_completed",
+                f"rungs={len(existing.get('results') or [])}",
+            )
+            return existing
+
+        self.state.phase = OptimizationPhase.CONTEXT_SPEED.value
+        self.state.run.phase = OptimizationPhase.CONTEXT_SPEED.value
+        self.state.run.stage = OptimizationStage.CONTEXT_SPEED
+        self._checkpoint("phase:context_speed:start")
+        run_repo.save(self.state.run)
+        self.state.planned_total += len(ladder)
+        self._log_event(
+            "CONTEXT_SPEED started",
+            f"winner={str(winner.id)[:8]} rungs={','.join(map(str, ladder))}",
+        )
+        await self._broadcast({"stage": "context_speed", "event": "context_speed_start"})
+
+        completed = {
+            int(r["ctx"]): r
+            for r in (existing or {}).get("results", [])
+            if isinstance(r, dict) and r.get("ctx") is not None
+        }
+
+        async def _probe(ctx: int) -> dict:
+            await self._pause_point()
+            if self.state.should_cancel:
+                raise asyncio.CancelledError()
+            data = dict(winner.config.to_dict())
+            data["context_length"] = ctx
+            cfg = LoadConfiguration(
+                **{k: v for k, v in data.items() if hasattr(LoadConfiguration, k)}
+            )
+            cfg.context_length = ctx
+            res = await self.benchmark.run_speed_probe(
+                model.id,
+                cfg,
+                context_length=ctx,
+                repetitions=1,
+                warmup=False,
+            )
+            tok_s = float(res.get_avg_generation_tok_s() or 0.0)
+            ok = res.status == ConfigurationStatus.PASSED and tok_s > 0
+            return {
+                "ok": bool(ok),
+                "tok_s": round(tok_s, 3),
+                "ttft_ms": round(float(res.get_avg_estimated_ttft_ms() or 0.0), 1),
+                "error": (res.error or "")[:160] if not ok else "",
+            }
+
+        async def _persist(entry: dict, results: list) -> None:
+            partial = {
+                "winner_config_id": str(winner.id),
+                "model_limit": limit,
+                "ladder": list(ladder),
+                "results": list(results),
+                "complete": False,
+            }
+            winner.generation = {**(winner.generation or {}), "context_speed": partial}
+            self.state.context_speed = partial
+            self._sync_phase_params()
+            try:
+                config_repo.save(winner)
+            except Exception as e:
+                logger.error("Context-speed partial save failed", error=str(e))
+            self._checkpoint("phase:context_speed:rung")
+
+        report = await measure_context_speed(
+            _probe, ladder, completed=completed, on_rung=_persist
+        )
+        report["winner_config_id"] = str(winner.id)
+        report["model_limit"] = limit
+        winner.generation = {**(winner.generation or {}), "context_speed": report}
+        self.state.context_speed = report
+        self._sync_phase_params()
+        try:
+            config_repo.save(winner)
+        except Exception as e:
+            logger.error("Context-speed result save failed", error=str(e))
+        run_repo.save(self.state.run)
+        self._checkpoint("phase:context_speed:complete")
+        for line in format_context_speed(report):
+            self._log_event("CONTEXT_SPEED", line.strip())
+        await self._broadcast(
+            {
+                "stage": "context_speed",
+                "event": "context_speed_complete",
+                "last_passing_context": report.get("last_passing_context"),
+            }
+        )
+        return report
 
     def _tag_phase(self, result: ConfigurationResult, phase: str) -> None:
         """Stamp the measurement phase (SPEED/QUALITY/RECOVERY/FINAL_VALIDATION).
@@ -3583,6 +3732,16 @@ class AdaptiveOptimizer:
         model = self.state.run.model
         model_limit = model.context_limit or 131072
         min_ctx = self.state.quality_context or 8192
+        try:
+            min_ctx_tps = float(
+                (self.state.run.benchmark_params or {}).get("min_context_speed")
+                or 1.0
+            )
+        except (TypeError, ValueError):
+            min_ctx_tps = 1.0
+        self._log_event(
+            "CONTEXT optional min speed", f"{min_ctx_tps:.2f} tok/s (user threshold)"
+        )
 
         async def _probe_at(cfg: LoadConfiguration, ctx: int) -> dict:
             data = {k: v for k, v in cfg.to_dict().items()}
@@ -3600,7 +3759,10 @@ class AdaptiveOptimizer:
         frozen = winner.config
         try:
             gpu_only = await sweep(
-                lambda ctx: _probe_at(frozen, ctx), min_ctx=min_ctx, max_ctx=model_limit
+                lambda ctx: _probe_at(frozen, ctx),
+                min_ctx=min_ctx,
+                max_ctx=model_limit,
+                min_tps=min_ctx_tps,
             )
         except Exception as e:
             # Phase B is optional: a sweep crash is contained, never fatal.
@@ -3624,6 +3786,7 @@ class AdaptiveOptimizer:
                 lambda ctx, _c=spill_cfg: _probe_at(_c, ctx),
                 min_ctx=min_ctx,
                 max_ctx=model_limit,
+                min_tps=min_ctx_tps,
             )
         except Exception as e:
             logger.error("Phase B system sweep crashed", error=str(e))
@@ -3736,6 +3899,17 @@ class AdaptiveOptimizer:
             frontier = await self._phase_speed()
         if self.state.should_cancel:
             raise asyncio.CancelledError()
+        # Every speed test ends with a context-speed ladder on the fastest
+        # config (unless explicitly skipped). This is measurement only: the
+        # winner and its frozen runtime config are not changed.
+        if "context_speed" in skips:
+            self._log_event("Phase CONTEXT_SPEED skipped", "--skip-phases")
+        elif "speed" in skips:
+            self._log_event("Phase CONTEXT_SPEED skipped", "no speed phase")
+        else:
+            await self._phase_context_speed(frontier)
+        if self.state.should_cancel:
+            raise asyncio.CancelledError()
         if "quality" in skips:
             self._log_event("Phase QUALITY skipped", "--skip-phases (no winner path)")
             safe, failed = [], []
@@ -3774,8 +3948,35 @@ class AdaptiveOptimizer:
         if self.state.phase_b_enabled and self.state.best_config is not None:
             await self._phase_context_optional(self.state.best_config)
 
+        # --- Context strategies (spec §5) ---
+        # Must run BEFORE _finalize(): the run is only terminal once every
+        # configured test finished, so an interrupted strategy sweep can still
+        # be paused/resumed instead of surfacing under a "completed" run.
+        await self._maybe_run_context_strategies()
+
         self._recompute_all_scores()
         await self._finalize()
+
+    async def _maybe_run_context_strategies(self) -> None:
+        """Run configured context strategies unless the run plan skips context.
+
+        Gated by the run's skip plan: granular modes (--reasoning-only,
+        --speed-only, --quality-only, --skip-phases context) must not run extra
+        context sweeps (observed 2026-10-26: a reasoning-only resume spent
+        ~2x40 min on unintended strategies).
+        """
+        _skips = run_skip_phases(self.state.run)
+        if (
+            self.state.best_config
+            and self.state.run.context_strategy_modes
+            and "context" not in _skips
+        ):
+            await self._run_context_strategies(self.state.best_config)
+        elif self.state.run.context_strategy_modes and "context" in _skips:
+            self._log_event(
+                "Context strategies skipped",
+                "context phase skipped by the run plan",
+            )
 
     async def _finalize(self) -> None:
         """Finalize optimization run with comparison to baseline."""
@@ -3907,24 +4108,6 @@ class AdaptiveOptimizer:
         run_repo.save(self.state.run)
         self._checkpoint(f"final:{state_name}")
         await self._broadcast({"stage": "complete", "event": "complete", "final": state_name})
-
-        # --- Context strategies (spec §5) ---
-        # Gated by the run's skip plan: granular modes (--reasoning-only,
-        # --speed-only, --quality-only, --skip-phases context) must not run
-        # extra context sweeps after the run (observed 2026-10-26: a
-        # reasoning-only resume spent ~2x40 min on unintended strategies).
-        _skips = run_skip_phases(self.state.run)
-        if (
-            self.state.best_config
-            and self.state.run.context_strategy_modes
-            and "context" not in _skips
-        ):
-            await self._run_context_strategies(self.state.best_config)
-        elif self.state.run.context_strategy_modes and "context" in _skips:
-            self._log_event(
-                "Context strategies skipped",
-                "context phase skipped by the run plan",
-            )
 
         # --- Final sandbox (spec §6) ---
         if self.state.best_config and self.state.run.final_sandbox_mode != "off":
@@ -4377,6 +4560,7 @@ class AdaptiveOptimizer:
             except Exception:
                 self.state.baseline_result = None
         self.state.speed_finalists = list(pab.get("speed_finalist_ids") or [])
+        self.state.context_speed = pab.get("context_speed")
         self.state.recovery_log = list(pab.get("recovery_log") or [])
         self.state.recovery_cursor = dict(pab.get("recovery_cursor") or {}) or None
         restored_attempts = pab.get("probe_attempts") or {}
@@ -4575,6 +4759,14 @@ class AdaptiveOptimizer:
             frontier = await self._phase_speed()
         if self.state.should_cancel:
             raise asyncio.CancelledError()
+        if "context_speed" in skips:
+            self._log_event("Phase CONTEXT_SPEED skipped", "--skip-phases")
+        elif "speed" in skips:
+            self._log_event("Phase CONTEXT_SPEED skipped", "no speed phase")
+        else:
+            await self._phase_context_speed(frontier)
+        if self.state.should_cancel:
+            raise asyncio.CancelledError()
         # Prefer checkpoint-recorded finalists that are still tested.
         tested_ids = {str(c.id) for c in self.state.tested_configs}
         kept = [i for i in self.state.speed_finalists if i in tested_ids]
@@ -4617,6 +4809,7 @@ class AdaptiveOptimizer:
             self.state.run.phase_b_enabled = False
         if self.state.phase_b_enabled and self.state.best_config is not None:
             await self._phase_context_optional(self.state.best_config)
+        await self._maybe_run_context_strategies()
         self._recompute_all_scores()
         await self._finalize()
 
@@ -4682,8 +4875,7 @@ class AdaptiveOptimizer:
         independently. The user can then choose which strategy's recommendation
         to prefer.
         """
-        from lm_optimizer.services.context_sweep import sweep, geometric_contexts
-        from lm_optimizer.services.context_explorer import MIN_DECODE_TPS
+        from lm_optimizer.services.context_sweep import sweep
 
         strategies = getattr(self.state.run, "context_strategy_modes", [])
         if not strategies:
@@ -4767,7 +4959,6 @@ class AdaptiveOptimizer:
 
         Gates modes through live LM Studio capability registry.
         """
-        from lm_optimizer.services.lm_studio import LMStudioClient
 
         # Check capabilities
         caps = getattr(self.client, "_capabilities", None)

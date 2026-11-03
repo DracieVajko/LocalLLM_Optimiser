@@ -6,7 +6,6 @@ from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 from uuid import uuid4
 
 from lm_optimizer.database.repositories import RunRepository, ConfigurationRepository

@@ -11,18 +11,13 @@ Covers:
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
-from uuid import uuid4
 
 import pytest
 
 from lm_optimizer.domain.models import (
-    ConfigurationResult,
-    ConfigurationStatus,
-    LoadConfiguration,
     ModelIdentity,
     OptimizationProfile,
     OptimizationRun,
-    QualityScore,
 )
 from lm_optimizer.services.optimizer import (
     PHASE_SKIP_NAMES,
@@ -66,7 +61,12 @@ def _opt():
 class TestParsePhaseSkips:
     def test_names(self):
         assert set(PHASE_SKIP_NAMES) == {
-            "speed", "quality", "recovery", "validation", "context",
+            "speed",
+            "context_speed",
+            "quality",
+            "recovery",
+            "validation",
+            "context",
         }
 
     def test_comma_string(self):

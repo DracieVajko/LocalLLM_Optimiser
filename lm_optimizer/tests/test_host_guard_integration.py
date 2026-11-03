@@ -1,6 +1,5 @@
 """Host-guard integration: foreign loads are cleared before a measurement."""
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -16,7 +15,6 @@ from lm_optimizer.domain.models import (
     OptimizationRun,
     QualityScore,
 )
-from lm_optimizer.services.foreign_watchdog import BACKEND_LMSTUDIO
 from lm_optimizer.services.optimizer import AdaptiveOptimizer, OptimizationState
 from lm_optimizer.services.search_space import SearchSpace
 

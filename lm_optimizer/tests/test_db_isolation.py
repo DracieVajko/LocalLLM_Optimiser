@@ -1,6 +1,5 @@
 """Production DB must never be touched by tests (§5, §16)."""
 
-from datetime import datetime
 
 from lm_optimizer.domain.models import (
     HardwareInfo,

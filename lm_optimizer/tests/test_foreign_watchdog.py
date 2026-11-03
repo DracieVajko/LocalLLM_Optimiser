@@ -1,6 +1,5 @@
 """Foreign-model watchdog: detection, protection, opt-in unload, fail-closed."""
 
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -9,7 +8,6 @@ from lm_optimizer.services.foreign_watchdog import (
     BACKEND_LMSTUDIO,
     BACKEND_OLLAMA,
     ForeignModelWatchdog,
-    LoadedModel,
     build_watchdog,
     normalize_expected,
 )
