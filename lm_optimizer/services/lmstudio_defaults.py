@@ -29,7 +29,7 @@ import tempfile
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, TypedDict, cast
 
 from lm_optimizer.domain.models import LoadConfiguration
 
@@ -58,6 +58,36 @@ class NoWinnerError(DefaultsError):
 
 class UnsafePathError(DefaultsError):
     """A model identifier would escape the LM Studio defaults directory."""
+
+
+class DefaultsField(TypedDict):
+    """One ``{"key", "value"}`` entry in an LM Studio defaults section."""
+
+    key: str
+    value: Any
+
+
+class DefaultsSection(TypedDict):
+    """A section such as ``load`` or ``operation``."""
+
+    fields: list[DefaultsField]
+
+
+class DefaultsDocument(TypedDict, total=False):
+    """The subset of the LM Studio defaults JSON the optimizer reads/writes."""
+
+    preset: str
+    operation: DefaultsSection
+    load: DefaultsSection
+
+
+class DefaultsChange(TypedDict):
+    """One diff row between the current defaults and a winner."""
+
+    key: str
+    current: Any
+    winner: Any
+    kind: Literal["changed", "added"]
 
 
 @dataclass(frozen=True)
@@ -99,7 +129,7 @@ class DefaultsDiff:
     model_id: str
     path: Path
     exists: bool
-    changes: list[dict[str, Any]]
+    changes: list[DefaultsChange]
     unchanged: list[str]
     preserved: list[str]
     winner_fields: dict[str, Any]
@@ -339,11 +369,11 @@ def resolve_defaults_path(model_id: str, *, home: Path | None = None) -> Path:
     )
 
 
-def _new_document() -> dict[str, Any]:
+def _new_document() -> DefaultsDocument:
     return {"preset": "", "operation": {"fields": []}, "load": {"fields": []}}
 
 
-def _read_document(path: Path) -> tuple[dict[str, Any], bool]:
+def _read_document(path: Path) -> tuple[DefaultsDocument, bool]:
     """Read an existing defaults file; returns (document, existed)."""
     if not path.exists():
         return _new_document(), False
@@ -357,20 +387,20 @@ def _read_document(path: Path) -> tuple[dict[str, Any], bool]:
         raise DefaultsError(
             f"Refusing to overwrite non-object LM Studio defaults file: {path}"
         )
-    return payload, True
+    return cast(DefaultsDocument, payload), True
 
 
-def _field_list(document: dict[str, Any]) -> list[dict[str, Any]]:
+def _field_list(document: DefaultsDocument) -> list[DefaultsField]:
     load = document.setdefault("load", {})
     if not isinstance(load, dict):
         raise DefaultsError("LM Studio defaults file has a non-object 'load' section")
     fields = load.setdefault("fields", [])
     if not isinstance(fields, list):
         raise DefaultsError("LM Studio defaults file has a non-list 'load.fields'")
-    return fields
+    return cast(list[DefaultsField], fields)
 
 
-def _existing_keys(fields: list[dict[str, Any]]) -> set[str]:
+def _existing_keys(fields: list[DefaultsField]) -> set[str]:
     return {
         str(field.get("key"))
         for field in fields
@@ -385,7 +415,7 @@ def _wrapped(kind: str, value: Any) -> Any:
 
 
 def _updates_for(
-    config: LoadConfiguration, fields: list[dict[str, Any]]
+    config: LoadConfiguration, fields: list[DefaultsField]
 ) -> dict[str, Any]:
     existing = _existing_keys(fields)
     updates: dict[str, Any] = {}
@@ -398,7 +428,7 @@ def _updates_for(
     return updates
 
 
-def _merge(document: dict[str, Any], updates: dict[str, Any]) -> list[dict[str, Any]]:
+def _merge(document: DefaultsDocument, updates: dict[str, Any]) -> list[DefaultsField]:
     fields = _field_list(document)
     by_key = {
         str(field.get("key")): field
@@ -420,7 +450,7 @@ def _merge(document: dict[str, Any], updates: dict[str, Any]) -> list[dict[str, 
     return fields
 
 
-def _atomic_write(path: Path, document: dict[str, Any]) -> None:
+def _atomic_write(path: Path, document: DefaultsDocument) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(
         dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp"
@@ -549,7 +579,7 @@ def diff_defaults(
 
     current_map = _normalize_backup_fields(document)
 
-    changes: list[dict[str, Any]] = []
+    changes: list[DefaultsChange] = []
     unchanged: list[str] = []
     for key, winner_value in updates.items():
         if key in current_map:

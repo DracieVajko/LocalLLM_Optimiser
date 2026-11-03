@@ -383,13 +383,18 @@ def format_diagnostic(exc: BaseException) -> dict:
 
 
 # Canonical skippable phases (CLI --skip-phases, API skip_phases, GUI).
+# Four names come straight from OptimizationPhase; "validation" and
+# "context" are the historical CLI aliases for FINAL_VALIDATION and
+# CONTEXT_OPTIONAL and are kept for persisted runs.
+VALIDATION_SKIP = "validation"
+CONTEXT_SKIP = "context"
 PHASE_SKIP_NAMES = (
-    "speed",
-    "context_speed",
-    "quality",
-    "recovery",
-    "validation",
-    "context",
+    OptimizationPhase.SPEED.value,
+    OptimizationPhase.CONTEXT_SPEED.value,
+    OptimizationPhase.QUALITY.value,
+    OptimizationPhase.RECOVERY.value,
+    VALIDATION_SKIP,
+    CONTEXT_SKIP,
 )
 
 
@@ -450,11 +455,26 @@ def compose_granular_skips(advanced_settings) -> list[str]:
         except ValueError:
             pass
     if adv.speed_only:
-        skips |= {"quality", "recovery", "validation", "context"}
+        skips |= {
+            OptimizationPhase.QUALITY.value,
+            OptimizationPhase.RECOVERY.value,
+            VALIDATION_SKIP,
+            CONTEXT_SKIP,
+        }
     if adv.quality_only or adv.reasoning_sweep:
-        skips |= {"speed", "recovery", "validation", "context"}
+        skips |= {
+            OptimizationPhase.SPEED.value,
+            OptimizationPhase.RECOVERY.value,
+            VALIDATION_SKIP,
+            CONTEXT_SKIP,
+        }
     if adv.mtp_test:
-        skips |= {"quality", "recovery", "validation", "context"}
+        skips |= {
+            OptimizationPhase.QUALITY.value,
+            OptimizationPhase.RECOVERY.value,
+            VALIDATION_SKIP,
+            CONTEXT_SKIP,
+        }
     return sorted(skips)
 
 
