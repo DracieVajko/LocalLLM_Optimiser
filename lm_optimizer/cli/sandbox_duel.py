@@ -1,8 +1,9 @@
 """Sandbox duel: compare two models on the same prompt."""
 
 import asyncio
+import json
 import statistics
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from rich.table import Table
 
 from lm_optimizer.database.repositories import config_repo, run_repo
 from lm_optimizer.domain.models import (
+    BenchmarkCase,
     ConfigurationStatus,
     LoadConfiguration,
     RunStatus,
@@ -146,6 +148,21 @@ def _load_best_config(model_id: str) -> tuple[LoadConfiguration, int]:
     )
 
 
+def _load_user_config(path: Path, context: int | None) -> tuple[LoadConfiguration, int]:
+    """Load a user-supplied JSON load config (overrides the best preset)."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        raise ValueError(f"Cannot read config {path}: {e}") from None
+    if not isinstance(data, dict):
+        raise ValueError(f"Config {path} must be a JSON object")
+    cfg = LoadConfiguration(**data)
+    ctx = context or cfg.context_length or 8192
+    if cfg.context_length is None:
+        cfg = replace(cfg, context_length=ctx)
+    return cfg, ctx
+
+
 async def _measure_side(
     client: LMStudioClient,
     model_id: str,
@@ -154,6 +171,7 @@ async def _measure_side(
     prompt: str,
     repetitions: int,
     quality: QualityEvaluator,
+    category: str = "instruction",
 ) -> DuelModelResult:
     """Run the prompt N times against one model's validated config.
 
@@ -161,15 +179,19 @@ async def _measure_side(
     repetition is a fresh full cycle: the host never holds two models at once
     and a failed repetition cannot poison the next one.
     """
-    from lm_optimizer.benchmark.suite import BenchmarkCase
-
     result = DuelModelResult(model_id=model_id, config=cfg, context_length=ctx)
     service = BenchmarkService(client, style="balanced")
 
     for _i in range(repetitions):
+        case_name = {
+            "coding": "coding_task",
+            "instruction": "short_instruction",
+            "reasoning": "medium_reasoning",
+            "format": "structured_output",
+        }.get(category, "short_instruction")
         case = BenchmarkCase(
-            name="duel_prompt",
-            category="duel",
+            name=case_name,
+            category=category,
             prompt=prompt,
             max_tokens=256,
             temperature=0.7,
@@ -310,21 +332,48 @@ def sandbox_duel(
     prompt: str = typer.Option(..., "--prompt", help="Prompt to run on both models"),
     repetitions: int = typer.Option(3, "--repetitions", "-r", help="Runs per model"),
     style: str = typer.Option("balanced", "--style", help="Benchmark style"),
+    category: str = typer.Option(
+        "instruction", "--category", help="Quality category for the prompt (instruction/coding/reasoning/format)"
+    ),
     output: Path = typer.Option(Path("results/duels"), "--output", help="Output directory"),
     quality: float = typer.Option(0.97, "--quality", "-q", help="Quality threshold"),
+    config_a: Path | None = typer.Option(
+        None, "--config-a", help="User JSON load config for A (overrides best preset)"
+    ),
+    config_b: Path | None = typer.Option(
+        None, "--config-b", help="User JSON load config for B (overrides best preset)"
+    ),
+    context_a: int | None = typer.Option(None, "--context-a", help="Override context for A"),
+    context_b: int | None = typer.Option(None, "--context-b", help="Override context for B"),
 ):
     """Compare two models on the same prompt using each one's validated winner."""
     setup_logging()
     style = _require_style(style)
 
     try:
-        cfg_a, ctx_a = _load_best_config(model_a)
-        cfg_b, ctx_b = _load_best_config(model_b)
+        if config_a is not None:
+            cfg_a, ctx_a = _load_user_config(config_a, context_a)
+        else:
+            cfg_a, ctx_a = _load_best_config(model_a)
+            if context_a is not None:
+                cfg_a = replace(cfg_a, context_length=context_a)
+                ctx_a = context_a
+        if config_b is not None:
+            cfg_b, ctx_b = _load_user_config(config_b, context_b)
+        else:
+            cfg_b, ctx_b = _load_best_config(model_b)
+            if context_b is not None:
+                cfg_b = replace(cfg_b, context_length=context_b)
+                ctx_b = context_b
     except ValueError as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(1)
 
-    console.print(f"[bold]Duel:[/bold] {model_a} (ctx {ctx_a}) vs {model_b} (ctx {ctx_b})")
+    console.print(
+        f"[bold]Duel:[/bold] {model_a} "
+        f"({'user config' if config_a else 'best preset'}, ctx {ctx_a}) vs "
+        f"{model_b} ({'user config' if config_b else 'best preset'}, ctx {ctx_b})"
+    )
 
     async def _run():
         client = LMStudioClient()
@@ -341,12 +390,12 @@ def sandbox_duel(
             ) as progress:
                 t1 = progress.add_task(f"Measuring {model_a}...", total=repetitions)
                 side_a = await _measure_side(
-                    client, model_a, cfg_a, ctx_a, prompt, repetitions, quality_eval
+                    client, model_a, cfg_a, ctx_a, prompt, repetitions, quality_eval, category
                 )
                 progress.update(t1, completed=repetitions)
                 t2 = progress.add_task(f"Measuring {model_b}...", total=repetitions)
                 side_b = await _measure_side(
-                    client, model_b, cfg_b, ctx_b, prompt, repetitions, quality_eval
+                    client, model_b, cfg_b, ctx_b, prompt, repetitions, quality_eval, category
                 )
                 progress.update(t2, completed=repetitions)
         finally:

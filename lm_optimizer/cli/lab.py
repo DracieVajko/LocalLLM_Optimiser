@@ -1072,6 +1072,11 @@ def save_default(
         "--gpu-ratio",
         help="Force LM Studio offloadRatio (1.0 = all layers on GPU)",
     ),
+    context: int | None = typer.Option(
+        None,
+        "--context",
+        help="Override LM Studio contextLength",
+    ),
 ):
     """Persist the validated winner as LM Studio's per-model load default.
 
@@ -1089,12 +1094,17 @@ def save_default(
     if not run:
         console.print(f"[red]Run not found: {run_id}[/red]")
         raise typer.Exit(1)
-    if gpu_ratio is not None:
+    if gpu_ratio is not None or context is not None:
         from dataclasses import replace
 
         best = run.get_best_config()
         if best is not None:
-            best.config = replace(best.config, gpu_ratio=gpu_ratio)
+            overrides = {}
+            if gpu_ratio is not None:
+                overrides["gpu_ratio"] = gpu_ratio
+            if context is not None:
+                overrides["context_length"] = context
+            best.config = replace(best.config, **overrides)
     try:
         result = save_run_defaults(run, dry_run=dry_run, backup=not no_backup)
     except DefaultsError as e:
