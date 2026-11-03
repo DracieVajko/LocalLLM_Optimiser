@@ -213,7 +213,7 @@ Outputs: recommended config, reasoning, confidence, pros/cons, alternatives, VRA
 
 ## Phase Skips, Fast Tests & Full Reports (v1.6.0)
 
-**Skip phases** (CLI, API i GUI Dashboard): `speed,quality,recovery,validation,context`.
+**Skip phases** (CLI, API i GUI Dashboard): `speed,context_speed,quality,recovery,validation,context`.
 
 ```bash
 lm-optimizer optimize <model> --skip-phases recovery,validation
@@ -224,9 +224,25 @@ lm-optimizer resume-menu --all                       # finish every pending run
 
 Skips are stored on the run, so `resume` keeps them. Skipping `quality`
 means no winner path (run ends without best config); skipping `context`
-forces Phase B off. GUI: Dashboard → Advanced → Skip phases checkboxes
-(same names); History → Resume All Pending finishes `paused`,
-`partial_success` and `interrupted` runs.
+forces Phase B off, while `context_speed` disables only the context-speed
+ladder. GUI: Dashboard → Advanced → Skip phases checkboxes (same names);
+History → Resume All Pending finishes `paused`, `partial_success` and
+`interrupted` runs.
+
+**Context-speed ladder (every speed run).** After the speed probes, the
+fastest config is re-loaded at 2k, 4k, 8k, 16k, 32k, 64k, 128k, 256k
+(clamped to the model limit) and a short probe records tok/s at each rung.
+The first context that cannot load ends the ladder, so every point is real
+evidence. Results appear in the CLI/report and are persisted for resume.
+
+**Optional absolute maximum.** `--optimize-context --min-context-speed N`
+runs the Phase B sweep after the winner is frozen and stops at the first
+rung below `N` tok/s or an OOM/load failure. On a TTY the threshold is
+prompted when omitted. GUI: Advanced → Phase B minimum generation tok/s.
+
+**Per-model depth (no yes/no chain).** `optimize` and `auto` ask once per
+selected model: quick, standard, full, benchmark or skip. `auto --model-detail
+'qwen=quick,*=standard' --no-ask-tests` supports unattended batches.
 
 **Faster tests.** `--warmup-runs 0-5` (default 1) on `optimize` / `auto` /
 `ctx` — `0` skips the warmup suite pass per config (~15–20% faster quality

@@ -120,10 +120,11 @@ const ResultsPage = {
     renderPhaseSteps(stage) {
         const steps = [
             ['speed_discovery', '1. Speed'],
-            ['quality_check', '2. Quality'],
-            ['recovery', '3. Recovery'],
-            ['final_validation', '4. Validation'],
-            ['context_optional', '5. Context (opt)'],
+            ['context_speed', '2. Context speed'],
+            ['quality_check', '3. Quality'],
+            ['recovery', '4. Recovery'],
+            ['final_validation', '5. Validation'],
+            ['context_optional', '6. Context (opt)'],
         ];
         const active = steps.findIndex(([key]) => key === stage);
         return `<div class="flex flex-wrap gap-2 mb-3 text-xs">` + steps.map(([key, label], i) => {
