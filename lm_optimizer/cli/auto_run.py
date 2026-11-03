@@ -19,7 +19,8 @@ from lm_optimizer.domain.models import (
     RunStatus,
 )
 from lm_optimizer.logging_config import get_logger, setup_logging
-from lm_optimizer.services.benchmark import BenchmarkService
+from lm_optimizer.services.advanced_settings import AdvancedSettings
+from lm_optimizer.services.benchmark import build_benchmark_service
 from lm_optimizer.services.fingerprint import (
     compute_fingerprint,
     fingerprint_diff,
@@ -353,16 +354,7 @@ async def _execute_auto_run_for_model(
     except Exception as e:
         return {"model": model.id, "action": "FAILED", "error": f"Connection failed: {e}"}
 
-    benchmark_service = BenchmarkService(
-        client,
-        style=style,
-        gpu_via_cli=gpu_via_cli,
-    )
-    quality_evaluator = QualityEvaluator(QualityConfig(minimum_score=quality_threshold))
-    search_generator = SearchSpaceGenerator(client)
-    optimizer = AdaptiveOptimizer(client, benchmark_service, quality_evaluator, search_generator)
-
-    advanced = {
+    advanced = AdvancedSettings({
         "min_context": 2048,
         "max_context": max_context,
         "min_gpu_ratio": min_gpu,
@@ -374,11 +366,18 @@ async def _execute_auto_run_for_model(
         "min_speed": min_speed,
         "warmup_runs": warmup_runs,
         "selection_threshold": 0.05,
-    }
+    })
     if skip_phases:
         advanced["skip_phases"] = [s.strip() for s in skip_phases.split(",")]
     if physical_batches:
         advanced["physical_batches"] = [int(x.strip()) for x in physical_batches.split(",")]
+
+    benchmark_service = build_benchmark_service(
+        client, advanced, style=style, gpu_via_cli=gpu_via_cli
+    )
+    quality_evaluator = QualityEvaluator(QualityConfig(minimum_score=quality_threshold))
+    search_generator = SearchSpaceGenerator(client)
+    optimizer = AdaptiveOptimizer(client, benchmark_service, quality_evaluator, search_generator)
 
     try:
         if action == "RESUME":

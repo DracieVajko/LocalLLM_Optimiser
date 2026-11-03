@@ -49,7 +49,8 @@ from lm_optimizer.domain.models import (
     ProfileWeights,
     RunStatus,
 )
-from lm_optimizer.services.benchmark import BenchmarkService
+from lm_optimizer.services.advanced_settings import AdvancedSettings
+from lm_optimizer.services.benchmark import build_benchmark_service
 from lm_optimizer.services.hardware import hardware_detector
 from lm_optimizer.services.joblock import JobBusyError, acquire_lock, release_lock
 from lm_optimizer.services.lm_studio import LMStudioClient, create_client
@@ -631,30 +632,10 @@ async def start_optimization(request: OptimizationRequest, background_tasks: Bac
                     pass
                 raise HTTPException(status_code=422, detail=str(e)[:300]) from None
 
-        # Create services
-        benchmark_service = BenchmarkService(
-            client,
-            style=str(adv.get("style", "balanced")),
-            speed_only=bool(adv.get("speed_only")),
-            quality_only=bool(adv.get("quality_only")),
-            speed_context=adv.get("speed_context"),
-            mtp_test=bool(adv.get("mtp_test")),
-            reasoning_sweep=bool(adv.get("reasoning_sweep")),
-            quality_lab=bool(adv.get("quality_lab")),
-        )
-        if adv.get("warmup_runs") is not None:
-            try:
-                benchmark_service.config.warmup_repetitions = min(
-                    5, max(0, int(adv["warmup_runs"]))
-                )
-            except (TypeError, ValueError):
-                pass
-        try:
-            benchmark_service.config.max_tokens_scale = float(
-                adv.get("max_tokens_scale", 1.0)
-            )
-        except (TypeError, ValueError):
-            pass
+        # Create services from one typed settings boundary. The factory keeps
+        # CLI and API flag lists, warmup and max-token scale in sync.
+        adv = AdvancedSettings(adv)
+        benchmark_service = build_benchmark_service(client, adv)
         quality_evaluator = QualityEvaluator(QualityConfig(minimum_score=request.quality_threshold))
         search_generator = SearchSpaceGenerator(client)
         optimizer = AdaptiveOptimizer(
@@ -880,7 +861,7 @@ async def resume_run_from_checkpoint(run_id: UUID, background_tasks: BackgroundT
 
         client = await get_lm_client()
         hardware_detector.detect()
-        benchmark_service = BenchmarkService(client)
+        benchmark_service = build_benchmark_service(client, run.advanced_settings or {})
         quality_evaluator = QualityEvaluator(QualityConfig(minimum_score=run.quality_threshold))
         search_generator = SearchSpaceGenerator(client)
         optimizer = AdaptiveOptimizer(

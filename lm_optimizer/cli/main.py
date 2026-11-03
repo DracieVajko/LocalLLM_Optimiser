@@ -31,7 +31,8 @@ from lm_optimizer.domain.models import (
     OptimizationStage,
 )
 from lm_optimizer.logging_config import get_logger, setup_logging
-from lm_optimizer.services.benchmark import VALID_STYLES, BenchmarkService
+from lm_optimizer.services.advanced_settings import AdvancedSettings
+from lm_optimizer.services.benchmark import VALID_STYLES, BenchmarkService, build_benchmark_service
 from lm_optimizer.services.context_sweep import format_report as _ctx_format
 from lm_optimizer.services.context_sweep import geometric_contexts as _ctx_ladder
 from lm_optimizer.services.context_sweep import sweep as _ctx_sweep
@@ -445,7 +446,7 @@ def _optimize_advanced(
     min_context_speed: float | None = None,
 ) -> dict:
     """Advanced settings for the optimize command (Phase A/B keys included)."""
-    return {
+    return AdvancedSettings({
         "min_context": min_context,
         "max_context": max_context,
         "min_gpu_ratio": min_gpu,
@@ -485,7 +486,7 @@ def _optimize_advanced(
         "final_sandbox_preset_ids": final_sandbox_preset_ids or [],
         "final_sandbox_custom_prompts": final_sandbox_custom_prompts or [],
         "sandbox_compare_baseline": sandbox_compare_baseline,
-    }
+    })
 
 
 EXPERIMENTAL_PROMPT = "Test experimental features? (RoPE / CPU-MoE / Speculative)"
@@ -4035,19 +4036,8 @@ def resume(
             hardware_detector.detect()
             # Granular runs must resume as granular runs: the flags were
             # persisted into run.advanced_settings at start.
-            adv = run.advanced_settings or {}
-            benchmark_service = BenchmarkService(
-                client,
-                style=style,
-                include_categories=adv.get("include_categories"),
-                speed_only=bool(adv.get("speed_only")),
-                quality_only=bool(adv.get("quality_only")),
-                speed_context=adv.get("speed_context"),
-                mtp_test=bool(adv.get("mtp_test")),
-                reasoning_sweep=bool(adv.get("reasoning_sweep")),
-                quality_lab=bool(adv.get("quality_lab")),
-                test_names=adv.get("test_names") or None,
-            )
+            adv = AdvancedSettings(run.advanced_settings or {})
+            benchmark_service = build_benchmark_service(client, adv, style=style)
             quality_evaluator = QualityEvaluator(QualityConfig(minimum_score=run.quality_threshold))
             search_generator = SearchSpaceGenerator(client)
             optimizer = AdaptiveOptimizer(
@@ -4479,19 +4469,8 @@ def _run_resume(run_id: str, revalidate: bool, style: str, skip_phases: str | No
             hardware_detector.detect()
             # Granular runs must resume as granular runs: the flags were
             # persisted into run.advanced_settings at start.
-            adv = run.advanced_settings or {}
-            benchmark_service = BenchmarkService(
-                client,
-                style=style,
-                include_categories=adv.get("include_categories"),
-                speed_only=bool(adv.get("speed_only")),
-                quality_only=bool(adv.get("quality_only")),
-                speed_context=adv.get("speed_context"),
-                mtp_test=bool(adv.get("mtp_test")),
-                reasoning_sweep=bool(adv.get("reasoning_sweep")),
-                quality_lab=bool(adv.get("quality_lab")),
-                test_names=adv.get("test_names") or None,
-            )
+            adv = AdvancedSettings(run.advanced_settings or {})
+            benchmark_service = build_benchmark_service(client, adv, style=style)
             quality_evaluator = QualityEvaluator(QualityConfig(minimum_score=run.quality_threshold))
             search_generator = SearchSpaceGenerator(client)
             optimizer = AdaptiveOptimizer(

@@ -3,7 +3,9 @@
 import asyncio
 import statistics
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
 
 # Single source of truth for benchmark suite - import from benchmark/suite.py
 from lm_optimizer.benchmark.suite import BENCHMARK_SUITE as _BENCHMARK_SUITE
@@ -1142,3 +1144,51 @@ class BenchmarkService:
 
 # Import at end to avoid circular
 from datetime import datetime
+
+from lm_optimizer.services.advanced_settings import AdvancedSettings
+
+
+def build_benchmark_service(
+    client: LMStudioClient,
+    settings: AdvancedSettings | Mapping[str, Any] | None = None,
+    *,
+    benchmark_config: BenchmarkConfig | None = None,
+    style: str | None = None,
+    reasoning: str | None = "off",
+    gpu_via_cli: bool | None = None,
+    flash_attention: bool = True,
+    offload_kv_cache_to_gpu: bool = True,
+    min_tps: float = 1.0,
+    quality_reasoning_fallback: bool = True,
+) -> BenchmarkService:
+    """Build a ``BenchmarkService`` from one advanced-settings mapping.
+
+    Both the CLI and the API use this factory so the flag list, warmup count
+    and max-token scale cannot drift between entrypoints.
+    """
+    values = AdvancedSettings.coerce(settings)
+    config_obj = benchmark_config or BenchmarkConfig()
+    if "warmup_runs" in values:
+        config_obj.warmup_repetitions = values.warmup_runs
+    if "max_tokens_scale" in values:
+        config_obj.max_tokens_scale = values.max_tokens_scale
+    return BenchmarkService(
+        client,
+        benchmark_config=config_obj,
+        style=style or values.style,
+        reasoning=reasoning,
+        gpu_via_cli=values.gpu_via_cli if gpu_via_cli is None else gpu_via_cli,
+        include_categories=values.include_categories,
+        test_only=values.test_only,
+        speed_only=values.speed_only,
+        quality_only=values.quality_only,
+        speed_context=values.speed_context,
+        mtp_test=values.mtp_test,
+        reasoning_sweep=values.reasoning_sweep,
+        quality_lab=values.quality_lab,
+        test_names=values.test_names,
+        flash_attention=flash_attention,
+        offload_kv_cache_to_gpu=offload_kv_cache_to_gpu,
+        min_tps=min_tps,
+        quality_reasoning_fallback=quality_reasoning_fallback,
+    )

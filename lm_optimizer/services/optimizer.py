@@ -38,6 +38,7 @@ from lm_optimizer.scoring.normalization import (
     score_result_breakdown,
     weighted_score,
 )
+from lm_optimizer.services.advanced_settings import AdvancedSettings
 from lm_optimizer.services.benchmark import BenchmarkService
 from lm_optimizer.services.foreign_watchdog import BACKEND_LMSTUDIO, ForeignModelWatchdog
 from lm_optimizer.services.fingerprint import (
@@ -428,7 +429,7 @@ def parse_phase_skips(value) -> set[str]:
 def phase_skips_of(advanced_settings) -> set[str]:
     """Lenient skip set for run/resume paths (warn + ignore unknowns)."""
     try:
-        return parse_phase_skips((advanced_settings or {}).get("skip_phases"))
+        return parse_phase_skips(AdvancedSettings.coerce(advanced_settings).skip_phases)
     except ValueError as e:
         logger.warning("Ignoring invalid skip_phases", error=str(e)[:160])
         return set()
@@ -441,18 +442,18 @@ def compose_granular_skips(advanced_settings) -> list[str]:
     produce the SAME skip set for the same flags (§23 acceptance: the web
     endpoint accepts granular flags).
     """
-    adv = advanced_settings or {}
+    adv = AdvancedSettings.coerce(advanced_settings)
     skips: set[str] = set()
-    if adv.get("skip_phases"):
+    if adv.skip_phases:
         try:
-            skips |= parse_phase_skips(adv.get("skip_phases"))
+            skips |= parse_phase_skips(adv.skip_phases)
         except ValueError:
             pass
-    if adv.get("speed_only"):
+    if adv.speed_only:
         skips |= {"quality", "recovery", "validation", "context"}
-    if adv.get("quality_only") or adv.get("reasoning_sweep"):
+    if adv.quality_only or adv.reasoning_sweep:
         skips |= {"speed", "recovery", "validation", "context"}
-    if adv.get("mtp_test"):
+    if adv.mtp_test:
         skips |= {"quality", "recovery", "validation", "context"}
     return sorted(skips)
 
@@ -470,8 +471,8 @@ def granular_quality_frontier(
     frontier = {"winner": None, "finalists": [], "contrarian": None}
     if "speed" not in skips:
         return frontier
-    adv = advanced or {}
-    if not (adv.get("quality_only") or adv.get("reasoning_sweep")):
+    adv = AdvancedSettings.coerce(advanced)
+    if not (adv.quality_only or adv.reasoning_sweep):
         return frontier
     if baseline_result is not None:
         frontier["finalists"] = [baseline_result]
@@ -505,7 +506,7 @@ def resolve_phase_contexts(advanced_settings, model_limit) -> tuple[int, int]:
         speed_context_for,
     )
 
-    adv = advanced_settings or {}
+    adv = AdvancedSettings.coerce(advanced_settings)
     user_cap = adv.get("max_context")
     try:
         limit = int(model_limit or 0) or None
@@ -711,7 +712,7 @@ class AdaptiveOptimizer:
         profile: OptimizationProfile,
         profile_weights: ProfileWeights | None = None,
         quality_threshold: float = 0.97,
-        advanced_settings: dict | None = None,
+        advanced_settings: AdvancedSettings | dict | None = None,
         baseline_config: LoadConfiguration | None = None,
         style: str = "balanced",
         progress_cb=None,
@@ -734,11 +735,11 @@ class AdaptiveOptimizer:
         profile: OptimizationProfile,
         profile_weights: ProfileWeights | None = None,
         quality_threshold: float = 0.97,
-        advanced_settings: dict | None = None,
+        advanced_settings: AdvancedSettings | dict | None = None,
         style: str = "balanced",
         baseline_config: LoadConfiguration | None = None,
         progress_cb=None,
-    ) -> tuple[OptimizationRun, LoadConfiguration | None, dict]:
+    ) -> tuple[OptimizationRun, LoadConfiguration | None, AdvancedSettings]:
         """Create run + state synchronously (route returns before background work).
 
         Same steps optimize() always ran first (now shared); returns the run,
@@ -749,7 +750,7 @@ class AdaptiveOptimizer:
         hardware_id = hardware_repo.save(hardware)
         model_repo.save(model)
 
-        advanced_settings = advanced_settings or {}
+        advanced_settings = AdvancedSettings.coerce(advanced_settings)
         self.benchmark.style = style
 
         # --- Resolve preset and apply budgets (spec §2, §4.2) ---
@@ -1010,7 +1011,7 @@ class AdaptiveOptimizer:
         run.status = RunStatus.RUNNING
         run.started_at = datetime.now()
         run_repo.save(run)
-        return run, baseline_config, advanced_settings or {}
+        return run, baseline_config, advanced_settings
 
     async def execute(
         self,
@@ -1018,9 +1019,10 @@ class AdaptiveOptimizer:
         profile: OptimizationProfile,
         run: OptimizationRun,
         baseline_config: LoadConfiguration | None,
-        advanced_settings: dict,
+        advanced_settings: AdvancedSettings | dict,
     ) -> OptimizationRun:
         """Run all phases from a prepared run (background-safe entry point)."""
+        advanced_settings = AdvancedSettings.coerce(advanced_settings)
         # First Ctrl+C arms graceful pause (second aborts); restored on exit.
         self._install_pause_handler()
 
@@ -3850,7 +3852,7 @@ class AdaptiveOptimizer:
         return recovered, ref_config
 
     async def _run_phase_ab(
-        self, advanced_settings: dict, baseline_config: LoadConfiguration | None
+        self, advanced_settings: AdvancedSettings | dict, baseline_config: LoadConfiguration | None
     ) -> None:
         """Phase A/B orchestration: SPEED → QUALITY → RECOVERY → validation → B."""
         model = self.state.run.model
@@ -3862,7 +3864,7 @@ class AdaptiveOptimizer:
         self.state.run.speed_context = speed_ctx
         self.state.run.quality_context = quality_ctx
         self.state.score_context = False
-        self.state.phase_b_enabled = bool((advanced_settings or {}).get("optimize_context", False))
+        self.state.phase_b_enabled = bool(AdvancedSettings.coerce(advanced_settings).optimize_context)
         self.state.run.phase_b_enabled = self.state.phase_b_enabled
         self._sync_phase_params()
         run_repo.save(self.state.run)
