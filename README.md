@@ -127,8 +127,14 @@ Manual install:
 ```bash
 pip install -e ".[dev]"
 cp .env.example .env    # Windows: copy .env.example .env
-python -m pytest -q
+python -m pytest -q                    # all tests
+python -m pytest -q -m unit            # fast unit suite (lm_optimizer/tests)
+python -m pytest -q -m integration     # integration/tooling suite (tests/)
 ```
+
+Tests live in two roots: `lm_optimizer/tests/` is the unit suite and
+`tests/` is the integration/tooling suite. Both are collected by default;
+use the `unit`/`integration` markers to run one side.
 
 ## CLI reference
 
@@ -439,7 +445,7 @@ CPU-only paths are coded and unit-tested, not physically exercised.
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest -q                       # 719 tests (mock-only)
+python -m pytest -q                       # 1,500+ tests (mock-only)
 python scripts/generate_parameter_matrix.py
 ```
 
@@ -468,6 +474,12 @@ hw_monitor.py vram_matrix.py run-*.bat run-*.sh scripts/ docs/ results/ (gitigno
 
 Runtime data (`data/*.db`, `logs/`, `results/`) is gitignored and
 never pushed. No credentials exist in the repo (only `LM_STUDIO_URL` default).
+
+**Type strategy:** domain aggregates (`lm_optimizer/domain/`) are dataclasses;
+Pydantic models appear only at the HTTP boundary (`api/schemas.py`); raw
+`dict`/JSON is kept at file and external-process edges (LM Studio defaults,
+judge responses). New code should follow that split rather than adding a
+second representation of the same aggregate.
 
 ## License
 

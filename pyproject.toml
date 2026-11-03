@@ -69,6 +69,13 @@ asyncio_mode = "auto"
 testpaths = ["lm_optimizer/tests", "tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
+# The tree keeps two roots for historical reasons: lm_optimizer/tests is the
+# unit suite, tests/ is the integration/tooling suite. The markers make the
+# split explicit and allow `pytest -m unit` / `-m integration`.
+markers = [
+    "unit: fast, isolated unit test (lm_optimizer/tests)",
+    "integration: cross-module or tooling test (tests/)",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
