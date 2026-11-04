@@ -67,6 +67,7 @@ class RunStatus(str, Enum):
     candidate failures (that is SUCCESS).
     FAILED: genuine run-level failure (model never loaded, no usable output).
     CANCELLED/INTERRUPTED are terminal interruption states.
+    CLEANED: legacy state written by the old cleanup tool; kept for history.
     RESUMED marks a run that was restored from a checkpoint and is running.
     COMPLETED is kept as a legacy alias of SUCCESS.
     """
@@ -81,6 +82,7 @@ class RunStatus(str, Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     INTERRUPTED = "interrupted"
+    CLEANED = "cleaned"
     RESUMED = "resumed"
 
 

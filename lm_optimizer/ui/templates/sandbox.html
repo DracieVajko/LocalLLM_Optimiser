@@ -74,6 +74,16 @@
             <div class="card mt-4"><div class="card-body" id="sb-out">
                 <p class="text-sm text-gray-500">Result appears here.</p>
             </div></div>
+            <div class="card mt-4"><div class="card-body">
+                <div class="flex items-center justify-between mb-2">
+                    <div>
+                        <h2 class="font-bold text-lg">Recent sandbox task runs</h2>
+                        <p class="text-xs text-gray-500">Single-model runs from <code>lab sandbox</code> and the all-models sweep.</p>
+                    </div>
+                    <button id="sb-refresh-runs" class="btn btn-outline btn-sm">Refresh</button>
+                </div>
+                <div id="sb-runs"><p class="text-sm text-gray-500">Loading...</p></div>
+            </div></div>
         </main>
     </div>
     <script src="/static/js/sandbox.js?v=17"></script>

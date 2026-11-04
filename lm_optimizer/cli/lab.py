@@ -831,6 +831,15 @@ def sandbox(
     removed = apply_retention(base_dir, policy)
     if removed:
         console.print(f"[dim]retention: pruned {len(removed)} old sandbox run(s)[/dim]")
+    from lm_optimizer.services.sandbox_history import record_run
+
+    record_run(
+        model or "(none)",
+        task,
+        result.as_dict(),
+        workdir=str(workdir),
+        duration_s=sum(a.duration_s for a in result.attempts),
+    )
     console.print(json.dumps(result.as_dict(), indent=2, ensure_ascii=False))
     path = _write_json(f"sandbox-{task}.json", result.as_dict())
     console.print(f"\nReport saved: {path}")

@@ -40,6 +40,18 @@ def _split_generation(config_data: dict) -> tuple[dict, dict | None]:
     return data, generation
 
 
+def _safe_enum(enum_cls, value, fallback):
+    """Coerce a stored enum value, tolerating rows written by older tools.
+
+    A single unknown legacy value must never take down the whole history
+    list (the API contract says corrupt rows are skipped, not fatal).
+    """
+    try:
+        return enum_cls(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
 class HardwareRepository:
     """Repository for hardware snapshots."""
 
@@ -422,8 +434,8 @@ class RunRepository:
             profile=OptimizationProfile(row["profile"]),
             profile_weights=profile_weights,
             quality_threshold=row["quality_threshold"],
-            status=RunStatus(row["status"]),
-            stage=OptimizationStage(row["stage"]),
+            status=_safe_enum(RunStatus, row["status"], RunStatus.FAILED),
+            stage=_safe_enum(OptimizationStage, row["stage"], OptimizationStage.COMPLETE),
             search_space=search_space,
             optimizer_version=row["optimizer_version"],
             benchmark_repetitions=row["benchmark_repetitions"],
@@ -482,6 +494,14 @@ class RunRepository:
                 "SELECT COUNT(DISTINCT model_id) FROM runs WHERE best_config_id IS NOT NULL"
             ).fetchone()
             return int(row[0]) if row else 0
+
+    def models_with_validated_winner(self) -> set[str]:
+        """Model ids that have at least one validated winning configuration."""
+        with db_manager.get_connection() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT model_id FROM runs WHERE best_config_id IS NOT NULL"
+            ).fetchall()
+            return {str(row[0]) for row in rows if row and row[0]}
 
     def _get_configurations(self, run_id: str) -> list[ConfigurationResult]:
         """Get all configurations for a run."""

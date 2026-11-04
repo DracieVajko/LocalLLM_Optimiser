@@ -117,7 +117,8 @@ class TestStatsEndpoint:
     def test_optimized_and_total_counts(self, monkeypatch):
         from lm_optimizer.database.repositories import run_repo
 
-        _patch_client(monkeypatch, [])
+        # Only installed models can be "optimized" on the dashboard.
+        _patch_client(monkeypatch, [_model("m-a", "llm"), _model("m-b", "llm")])
         # Two distinct models with a validated winner, one without.
         for mid, best in (("m-a", True), ("m-b", True), ("m-c", False)):
             _save_model(mid)

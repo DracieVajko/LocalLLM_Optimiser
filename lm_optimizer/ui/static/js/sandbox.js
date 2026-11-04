@@ -169,4 +169,40 @@
             out('<p class="text-red-600 text-sm">Error: ' + esc((e && e.message) || e) + '</p>');
         }
     });
+    // Recent single-model sandbox task runs (CLI `lab sandbox` history).
+    async function loadTaskRuns() {
+        var box = el('sb-runs');
+        try {
+            var r = await fetch('/api/sandbox/runs?limit=200');
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            var j = await r.json();
+            var runs = j.runs || [];
+            if (!runs.length) {
+                box.innerHTML = '<p class="text-sm text-gray-500">No sandbox task runs yet. Run one with '
+                    + '<code>python -m lm_optimizer.cli.main lab sandbox --task email_write --model &lt;model&gt;</code></p>';
+                return;
+            }
+            box.innerHTML = '<div class="table-container"><table class="table"><thead><tr>'
+                + '<th>Time</th><th>Model</th><th>Task</th><th>Score</th><th>Result</th><th>Duration</th>'
+                + '</tr></thead><tbody>'
+                + runs.map(function (x) {
+                    var ok = x.final_success
+                        ? '<span class="badge badge-success">PASS</span>'
+                        : '<span class="badge badge-error">FAIL</span>';
+                    var score = (x.final_score == null) ? '-' : Number(x.final_score).toFixed(3);
+                    return '<tr><td class="font-mono text-xs">' + esc(x.ts || '') + '</td>'
+                        + '<td class="font-mono text-xs">' + esc(x.model || '') + '</td>'
+                        + '<td>' + esc(x.task || '') + '</td>'
+                        + '<td class="font-mono">' + score + '</td>'
+                        + '<td>' + ok + '</td>'
+                        + '<td class="font-mono">' + (x.duration_s ? Number(x.duration_s).toFixed(0) + 's' : '-') + '</td>'
+                        + '</tr>';
+                }).join('') + '</tbody></table></div>';
+        } catch (e) {
+            box.innerHTML = '<p class="text-sm text-red-600">Failed to load sandbox runs: '
+                + esc((e && e.message) || e) + '</p>';
+        }
+    }
+    el('sb-refresh-runs').addEventListener('click', loadTaskRuns);
+    loadTaskRuns();
 })();

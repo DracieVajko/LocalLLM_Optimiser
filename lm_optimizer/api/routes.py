@@ -447,7 +447,11 @@ async def get_stats():
     embedding_only = sum(1 for m in models if _is_embedding_model(m))
     optimized = total_runs = runs_today = 0
     try:
-        optimized = run_repo.count_models_with_validated_winner()
+        installed = {getattr(m, "id", "") for m in models}
+        winners = run_repo.models_with_validated_winner()
+        # "Optimized" must mean installed models: old campaign models whose
+        # files are gone must not inflate the dashboard above "available".
+        optimized = len(installed & winners)
         total_runs = run_repo.count_all()
         runs_today = run_repo.count_created_on(datetime.now().strftime("%Y-%m-%d"))
     except Exception as e:
@@ -1641,6 +1645,14 @@ def generation_profiles(model_id: str, architecture: str | None = None):
     from lm_optimizer.services.generation_profiles import profiles_for
 
     return {"model_id": model_id, "profiles": profiles_for(model_id, architecture)}
+
+
+@router.get("/sandbox/runs")
+def list_sandbox_task_runs(limit: int = 100):
+    """Recent single-model sandbox task runs (CLI `lab sandbox` history)."""
+    from lm_optimizer.services.sandbox_history import list_runs
+
+    return {"runs": list_runs(limit)}
 
 
 @router.get("/sandbox/{job_id}", response_model=SandboxResponse)

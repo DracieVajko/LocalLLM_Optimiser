@@ -59,7 +59,17 @@ def test_lab_sandbox_tasks_endpoint(client):
     assert response.status_code == 200, response.text
     tasks = response.json()["tasks"]
     ids = {t["id"] for t in tasks}
-    assert {"web_dashboard", "research_synthesis", "blender_skyblock"} == ids
+    assert {
+        "web_dashboard",
+        "research_synthesis",
+        "blender_skyblock",
+        "email_write",
+        "calendar_event",
+        "email_and_calendar",
+        "web_fetch_brief",
+        "web_search",
+        "deep_research",
+    } == ids
     for task in tasks:
         assert task["checks"]
         assert task["max_repair_attempts"] >= 1
