@@ -1,0 +1,109 @@
+"""Retry the large MoE models with the chat-readiness fix and a low floor."""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+from datetime import datetime
+from pathlib import Path
+
+from lm_optimizer.database.repositories import run_repo
+
+MODELS = [
+    "qwen/qwen3.6-35b-a3b",
+    "nvidia-nemotron-3.5-bolt-74b-a9b-24gb",
+    "recursivesi/flint",
+]
+LOG = Path("logs/retry_large_models.log")
+LOG.parent.mkdir(parents=True, exist_ok=True)
+
+
+def log(message: str) -> None:
+    line = f"[{datetime.now().isoformat(timespec='seconds')}] {message}"
+    print(line, flush=True)
+    with LOG.open("a", encoding="utf-8") as handle:
+        handle.write(line + "\n")
+
+
+def cli(args: list[str], timeout: int) -> int:
+    cmd = [sys.executable, "-m", "lm_optimizer.cli.main", *args]
+    log("RUN " + " ".join(cmd))
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout
+        )
+    except subprocess.TimeoutExpired:
+        log("TIMEOUT")
+        return 124
+    log((result.stdout or "")[-6000:])
+    log((result.stderr or "")[-2000:])
+    log(f"EXIT {result.returncode}")
+    return result.returncode
+
+
+def main() -> int:
+    log("Large-model retry queue started")
+    for model in MODELS:
+        log(f"===== {model} =====")
+        cli(
+            [
+                "optimize",
+                model,
+                "--profile",
+                "quality",
+                "--quality-only",
+                "--quality",
+                "0.9",
+                "--quality-context",
+                "2048",
+                "--max-context",
+                "2048",
+                "--min-context",
+                "2048",
+                "--repetitions",
+                "1",
+                "--validation-repetitions-max",
+                "2",
+                "--warmup-runs",
+                "0",
+                "--min-generation-tok-s",
+                "0.5",
+                "--skip-phases",
+                "speed,context_speed,recovery,validation,context",
+                "--non-interactive",
+                "--yes",
+                "--no-enable-rope",
+                "--no-enable-cpu-moe",
+                "--no-enable-speculative",
+            ],
+            timeout=14_400,
+        )
+        for summary in run_repo.get_by_model(model, limit=10):
+            if summary.status.value not in ("success", "completed", "partial_success"):
+                continue
+            full = run_repo.get(str(summary.id))
+            best = full.get_best_config() if full else None
+            if best is None:
+                continue
+            log(f"winner run={full.id} ctx={best.context_length} score={best.score}")
+            cli(["lab", "save-default", str(full.id)], timeout=600)
+            cli(
+                [
+                    "benchmark",
+                    model,
+                    "--context",
+                    str(int(best.context_length or 2048)),
+                    "--repetitions",
+                    "1",
+                    "--max-tokens-scale",
+                    "0.5",
+                ],
+                timeout=10_800,
+            )
+            break
+    log("Large-model retry queue finished")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
