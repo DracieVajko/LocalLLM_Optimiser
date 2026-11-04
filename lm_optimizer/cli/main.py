@@ -739,7 +739,7 @@ def models(
             await client.connect(echo_probe=False)
             models = await client.list_models()
             if full_ids:
-                for i, m in enumerate(models, 1):
+                for i, m in enumerate(_display_models_small_first(models), 1):
                     console.print(f"{i}|{m.id}", highlight=False)
                 return
 
@@ -2432,6 +2432,40 @@ def _apply_skip_models(targets: list, skip_terms: list[str]) -> tuple[list, list
     return kept, skipped
 
 
+def _display_models_small_first(models: list) -> list:
+    """Canonical order for numbered menus: small first, id as tie-breaker.
+
+    Both `models --full-ids` and `auto --skip-indices` use this, so the
+    numbers shown to the user always mean the same models.
+    """
+    return sorted(
+        models,
+        key=lambda m: (
+            getattr(m, "size_bytes", None) or float("inf"),
+            (getattr(m, "id", "") or "").lower(),
+        ),
+    )
+
+
+def _resolve_skip_indices(
+    all_models: list, tokens: list[str]
+) -> tuple[list[str], list[str]]:
+    """Turn 1-based menu numbers into model ids; other tokens stay substrings."""
+    ordered = _display_models_small_first(all_models)
+    terms: list[str] = []
+    errors: list[str] = []
+    for token in tokens:
+        if token.isdigit():
+            index = int(token)
+            if 1 <= index <= len(ordered):
+                terms.append((ordered[index - 1].id or "").lower())
+            else:
+                errors.append(token)
+        else:
+            terms.append(token)
+    return terms, errors
+
+
 def _preflight_auto(
     models: list[str] | None,
     profile: str,
@@ -2612,6 +2646,14 @@ def auto(
         None,
         "--skip",
         help="Comma-separated model id substrings to skip (e.g. --skip 27b,gpt-oss)",
+    ),
+    skip_indices: str | None = typer.Option(
+        None,
+        "--skip-indices",
+        help=(
+            "Comma-separated 1-based numbers from `models --full-ids` to skip "
+            "(e.g. --skip-indices 1,2,5); non-numeric tokens are treated as id substrings"
+        ),
     ),
     max_size_gb: float | None = typer.Option(
         None, "--max-size-gb", help="Auto-pick only models up to this file size (default: all)"
@@ -2822,7 +2864,17 @@ def auto(
                     key=lambda m: m.size_bytes or float("inf"),
                 )
 
-            targets, skipped_models = _apply_skip_models(targets, _parse_skip_models(skip))
+            skip_terms = _parse_skip_models(skip)
+            if skip_indices:
+                indexed, errors = _resolve_skip_indices(
+                    all_models, _parse_skip_models(skip_indices)
+                )
+                skip_terms.extend(indexed)
+                for bad in errors:
+                    console.print(
+                        f"[yellow]Skip index out of range (ignored): {bad}[/yellow]"
+                    )
+            targets, skipped_models = _apply_skip_models(targets, skip_terms)
             for m in skipped_models:
                 console.print(f"[yellow]Skipping (user --skip list): {m.id}[/yellow]")
                 summary.append({"model": m.id, "stage": "skipped", "detail": "user --skip list"})

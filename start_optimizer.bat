@@ -147,16 +147,18 @@ if errorlevel 1 goto menu
 "%PYBIN%" -m lm_optimizer models --full-ids > "%TEMP%\lmo_models.txt" 2>nul
 type "%TEMP%\lmo_models.txt"
 echo.
-echo Runs the full pipeline per model, small first. This takes hours.
+echo Runs the full pipeline per selected model, small first. This takes hours.
 echo You will pick quick/standard/full/benchmark for each model after connecting.
 set /p oprofile="Profile speed/balanced/context/quality - default balanced: "
 if "%oprofile%"=="" set oprofile=balanced
-set /p oskip="Skip terms, comma-separated, empty for none: "
-if "%oskip%"=="" goto all_noskip
-call :log "optimize-all profile %oprofile% skip %oskip%"
-"%PYBIN%" -m lm_optimizer auto --profile "%oprofile%" --skip "%oskip%"
+set /p oselect="Run ONLY these numbers from the list (e.g. 6,9), empty = all models: "
+if "%oselect%"=="" goto all_all
+call :log "optimize-all profile %oprofile% only %oselect%"
+set "oselect_ids="
+for %%n in (%oselect%) do call :resolve_one %%n
+"%PYBIN%" -m lm_optimizer auto %oselect_ids% --profile "%oprofile%"
 goto all_done
-:all_noskip
+:all_all
 call :log "optimize-all profile %oprofile%"
 "%PYBIN%" -m lm_optimizer auto --profile "%oprofile%"
 :all_done
@@ -164,6 +166,17 @@ echo.
 echo Finished with exit code %errorlevel%. Press any key for menu.
 pause >nul
 goto menu
+
+:resolve_one
+set "one=%~1"
+set "found="
+for /f "tokens=1,2 delims=|" %%a in ('type "%TEMP%\lmo_models.txt"') do if "%%a"=="%one%" set "found=%%b"
+if defined found (
+  set "oselect_ids=%oselect_ids% "%found%""
+) else (
+  set "oselect_ids=%oselect_ids% "%one%""
+)
+goto :eof
 
 :check
 "%PYBIN%" -m lm_optimizer status --quick
