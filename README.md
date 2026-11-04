@@ -86,6 +86,18 @@ default**) merges the validated winner into that file:
 - the next load uses the new values — no LM Studio restart required;
 - unreadable/non-object files are never overwritten (CLI exits 1, API 409).
 
+**Configurable LM Studio home.** The defaults path is
+`<lmstudio-home>/.internal/user-concrete-model-default-config/<model>.json`.
+By default `~/.lmstudio`. Override per-call with `--lmstudio-home` or globally
+with the `LM_OPTIMIZER_LMSTUDIO_HOME` environment variable:
+
+```bash
+LM_OPTIMIZER_LMSTUDIO_HOME=D:/LMStudio lm-optimizer lab save-default <run-id>
+lm-optimizer lab save-default <run-id> --lmstudio-home D:/LMStudio
+```
+
+This keeps the repo machine-agnostic; no user paths are hard-coded.
+
 Verified live on 2026-10-27: writing `llm.load.contextLength=3072`,
 `llm.load.llama.flashAttention=false` and
 `llm.load.offloadKVCacheToGpu=false`, then loading with
@@ -162,7 +174,8 @@ use the `unit`/`integration` markers to run one side.
 |`lab context-explorer <model>`|1.5x context ladder + fill ratios + needle retrieval|yes|
 |`lab quality-lab <model> [--category C] [--seeds N]`|deterministic quality tasks, hard gates, reliability|yes|
 |`lab recommend [--min-tps N] [--min-context N] [--vram-only]`|model recommendations from the local fingerprint + local measurements|no|
-|`lab duel <model-a> <model-b> [--type T] [--mode M]`|controlled/best-profile duel, blind A/B judging|yes|
+|`lab duel <model-a> <model-b> [--type T] [--mode M]`|controlled/best-profile duel, blind A/B judging; types: micro_quality, web, research, blender, agentic, complete_sandbox, complete_model|yes|
+|`lab sandbox --task T --model M`|single-model sandbox task with repair loop (web, research, blender, email_write, calendar_event, email_and_calendar, web_fetch_brief)|yes|
 
 Benchmark styles: `precise` (code/math temp 0.1), `balanced` (suite defaults),
 `creative` (summarization temp 0.9). Every command first unloads stale models and
@@ -356,7 +369,18 @@ that are NOT the runtime optimizer:
   database outrank community priors.
 - `lab duel <model-a> <model-b>` - controlled (identical context, sampling,
   seed) or best-profile duel with blind A/B judging; the judge never sees
-  the model identity and may not be one of the candidates.
+  the model identity and may not be one of the candidates. Supported types:
+  `micro_quality`, `web`, `research`, `blender`, `agentic`,
+  `complete_sandbox`, `complete_model`.
+
+**Agentic sandbox tasks** (`lab sandbox --task <task> --model <model>` or duel type `agentic`):
+
+- `email_write` - professional follow-up email with Subject, greeting, next step + deadline, closing; no placeholders.
+- `calendar_event` - JSON calendar event (title, start/end ISO 8601, attendees, location).
+- `email_and_calendar` - combined email + calendar JSON from meeting notes.
+- `web_fetch_brief` - JSON with tool=web_fetch, url, title, facts or error; never invents facts.
+
+All agentic tasks run offline (`network_allowed=false`) with an evidence-only repair loop: on failure the model gets the failing checks, not the solution.
 
 **Verified LM Studio capability boundaries (probed 2026-10-21).** This
 build accepts the whole `speculative_draft_*` family over REST
