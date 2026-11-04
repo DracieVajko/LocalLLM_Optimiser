@@ -53,6 +53,8 @@ DUEL_TASKS: dict[DuelType, tuple[str, ...]] = {
         "calendar_event",
         "email_and_calendar",
         "web_fetch_brief",
+        "web_search",
+        "deep_research",
     ),
     DuelType.COMPLETE_SANDBOX: (
         "web_dashboard",
@@ -62,6 +64,8 @@ DUEL_TASKS: dict[DuelType, tuple[str, ...]] = {
         "calendar_event",
         "email_and_calendar",
         "web_fetch_brief",
+        "web_search",
+        "deep_research",
     ),
     DuelType.COMPLETE_MODEL: (
         "instruction_list_three",

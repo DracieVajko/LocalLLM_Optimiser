@@ -27,6 +27,8 @@ def test_all_sandbox_tasks_exist():
         "calendar_event",
         "email_and_calendar",
         "web_fetch_brief",
+        "web_search",
+        "deep_research",
     }
     kinds = {t.kind for t in SANDBOX_TASKS.values()}
     assert kinds == {
@@ -35,6 +37,37 @@ def test_all_sandbox_tasks_exist():
         SandboxTaskKind.BLENDER,
         SandboxTaskKind.TEXT,
     }
+
+
+def test_agentic_web_search_task_scores_good_code():
+    task = SANDBOX_TASKS["web_search"]
+    good = (
+        "```python\n"
+        "queries = [\"RTX 3060 LLM\", \"6GB VRAM inference\", \"quantization guide\"]\n"
+        "headers = {\"User-Agent\": \"Mozilla/5.0 research\"}\n"
+        "try:\n"
+        "    resp = requests.get(url, headers=headers, timeout=15)\n"
+        "    soup = BeautifulSoup(resp.text, \"html.parser\")\n"
+        "    print(soup.get_text()[:500])\n"
+        "except Exception as e:\n"
+        "    print(\"Network error:\", e)\n"
+        "```\n"
+    )
+    score, failing, critical = score_attempt(task, {"web_search.py": good})
+    assert score == 1.0, (failing, critical)
+
+
+def test_agentic_deep_research_task_scores_good_plan():
+    task = SANDBOX_TASKS["deep_research"]
+    good = (
+        "1. What VRAM does a 70B MoE need?\n"
+        "2. Search strategy: site:huggingface.co 70B MoE GGUF\n"
+        "3. Source quality: prefer official docs and benchmarks\n"
+        "4. Conflicting claims: compare multiple independent tests\n"
+        "5. Preliminary synthesis: likely needs offload, not VRAM-only\n"
+    )
+    score, failing, critical = score_attempt(task, {"deep_research.txt": good})
+    assert score == 1.0, (failing, critical)
 
 
 def test_agentic_email_task_scores_good_output():

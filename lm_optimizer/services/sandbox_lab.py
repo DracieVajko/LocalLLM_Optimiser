@@ -319,6 +319,67 @@ WEB_FETCH_TASK = SandboxTask(
 )
 
 
+# --- 13.5 Web search / deep research / scraping ---------------------------
+
+WEB_SEARCH_TASK = SandboxTask(
+    id="web_search",
+    kind=SandboxTaskKind.TEXT,
+    title="Web search + scraping script",
+    prompt=(
+        "Write a Python script that performs web research on the topic "
+        "'RTX 3060 Laptop GPU 6 GB VRAM local LLM inference'. The script "
+        "must: (1) define a list of 3+ search queries, (2) show how it would "
+        "fetch a page with a proper User-Agent and timeout, (3) extract text "
+        "with BeautifulSoup or similar, (4) handle network errors gracefully, "
+        "(5) print a short summary of findings. Output ONLY the Python code, "
+        "in a markdown code fence. Do not actually access the network in this "
+        "sandbox - this is a code-quality task, not a live crawl."
+    ),
+    checks=[
+        SandboxCheck("is_python_code", "regex", r"```python", weight=2.0, critical=True),
+        SandboxCheck("has_queries", "regex", r"(queries|search|q\s*=)", weight=1.5),
+        SandboxCheck("has_user_agent", "regex", r"(User-Agent|user.agent)", weight=1.5),
+        SandboxCheck("has_timeout", "regex", r"(timeout|Timeout)", weight=1.0),
+        SandboxCheck("has_error_handling", "regex", r"(try|except|Exception)", weight=1.5),
+        SandboxCheck("has_extraction", "regex", r"(BeautifulSoup|soup|\.get_text|\.text)", weight=1.5),
+        SandboxCheck("has_summary", "regex", r"(summary|print|findings)", weight=1.0),
+    ],
+    max_repair_attempts=1,
+    timeout_s=240.0,
+    network_allowed=False,
+    allowed_executables=(),
+    artifacts=("web_search.py",),
+)
+
+DEEP_RESEARCH_TASK = SandboxTask(
+    id="deep_research",
+    kind=SandboxTaskKind.TEXT,
+    title="Deep research plan",
+    prompt=(
+        "Create a deep research plan for the question: 'Can a 70B MoE model "
+        "run well on consumer hardware with 24 GB VRAM?' Your plan must "
+        "include: (1) 3+ specific sub-questions, (2) 3+ search strategies / "
+        "queries, (3) criteria for evaluating source quality, (4) how you "
+        "would resolve conflicting claims, (5) a concise synthesized answer "
+        "based on what you already know, marked as preliminary. Output only "
+        "the plan, no markdown fences."
+    ),
+    checks=[
+        SandboxCheck("has_subquestions", "regex", r"(sub.?question|1\.|2\.|3\.)", weight=2.0, critical=True),
+        SandboxCheck("has_search_strategy", "regex", r"(search|query|strategy)", weight=1.5),
+        SandboxCheck("has_source_criteria", "regex", r"(source|quality|credible|reliable)", weight=1.5),
+        SandboxCheck("has_conflict_resolution", "regex", r"(conflict|contradict|resolve|discrepanc)", weight=1.5),
+        SandboxCheck("has_synthesis", "regex", r"(synthesis|preliminary|conclusion)", weight=1.5),
+        SandboxCheck("no_markdown_fence", "regex", r"```", weight=1.0, negate=True),
+    ],
+    max_repair_attempts=1,
+    timeout_s=240.0,
+    network_allowed=False,
+    allowed_executables=(),
+    artifacts=("deep_research.txt",),
+)
+
+
 SANDBOX_TASKS: dict[str, SandboxTask] = {
     t.id: t
     for t in (
@@ -329,6 +390,8 @@ SANDBOX_TASKS: dict[str, SandboxTask] = {
         CALENDAR_TASK,
         EMAIL_CALENDAR_TASK,
         WEB_FETCH_TASK,
+        WEB_SEARCH_TASK,
+        DEEP_RESEARCH_TASK,
     )
 }
 
