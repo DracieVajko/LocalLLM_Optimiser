@@ -199,8 +199,137 @@ BLENDER_TASK = SandboxTask(
 )
 
 
+# --- 13.4 Agentic tasks (email / calendar / web fetch) --------------------
+
+EMAIL_TASK = SandboxTask(
+    id="email_write",
+    kind=SandboxTaskKind.TEXT,
+    title="Professional follow-up email",
+    prompt=(
+        "Write a concise professional follow-up email to a client after a "
+        "project kickoff. Include a Subject line, a greeting, a 2-3 sentence "
+        "body with the next step and a concrete deadline, and a closing. "
+        "Output only the email, with no placeholders such as [name]."
+    ),
+    checks=[
+        SandboxCheck("has_subject", "regex", r"^Subject:\s*\S+", weight=2.0, critical=True),
+        SandboxCheck("has_greeting", "regex", r"\b(Dear|Hello|Hi)\b", weight=1.0),
+        SandboxCheck(
+            "has_closing",
+            "regex",
+            r"\b(Best regards|Kind regards|Sincerely|Best,)\b",
+            weight=1.0,
+        ),
+        SandboxCheck(
+            "has_next_step_and_deadline",
+            "regex",
+            r"(next step|deadline|by\s+\w+)",
+            weight=1.5,
+        ),
+        SandboxCheck("no_placeholders", "regex", r"\[[^\]]+\]", weight=2.0, negate=True),
+    ],
+    max_repair_attempts=1,
+    timeout_s=180.0,
+    network_allowed=False,
+    allowed_executables=(),
+    artifacts=("email.txt",),
+)
+
+CALENDAR_TASK = SandboxTask(
+    id="calendar_event",
+    kind=SandboxTaskKind.TEXT,
+    title="Create a calendar event JSON",
+    prompt=(
+        "Create one calendar event for a 45-minute project kickoff on "
+        "2026-11-10 starting at 10:00 Europe/Bratislava. Return ONLY a JSON "
+        "object with title, start, end, attendees (alice@example.com and "
+        "bob@example.com), and location 'Meet'. Use ISO 8601 datetimes."
+    ),
+    checks=[
+        SandboxCheck(
+            "has_required_keys",
+            "json",
+            ["title", "start", "end", "attendees", "location"],
+            weight=3.0,
+            critical=True,
+        ),
+        SandboxCheck("start_iso", "regex", r"2026-11-10T10:00", weight=2.0),
+        SandboxCheck("end_iso", "regex", r"2026-11-10T10:45", weight=2.0),
+        SandboxCheck("has_attendees", "regex", r"alice@example\.com", weight=1.0),
+        SandboxCheck("no_markdown_fence", "regex", r"```", weight=1.0, negate=True),
+    ],
+    max_repair_attempts=1,
+    timeout_s=180.0,
+    network_allowed=False,
+    allowed_executables=(),
+    artifacts=("calendar.json",),
+)
+
+EMAIL_CALENDAR_TASK = SandboxTask(
+    id="email_and_calendar",
+    kind=SandboxTaskKind.TEXT,
+    title="Email + calendar from meeting notes",
+    prompt=(
+        "From these notes: 'Kickoff with Acme on 2026-11-10 at 10:00 "
+        "Europe/Bratislava; attendees alice@example.com and "
+        "bob@example.com; next step send the API draft by 2026-11-07.' "
+        "Write (1) a short follow-up email with Subject and next step, then "
+        "the separator line '--- CALENDAR ---', then (2) one JSON object "
+        "with title, start, end, attendees, location. No markdown fences."
+    ),
+    checks=[
+        SandboxCheck("has_subject", "regex", r"Subject:\s*\S+", weight=2.0, critical=True),
+        SandboxCheck("has_next_step", "regex", r"2026-11-07|next step", weight=1.5),
+        SandboxCheck("has_calendar_separator", "regex", r"--- CALENDAR ---", weight=1.0),
+        SandboxCheck("calendar_start", "regex", r"2026-11-10T10:00", weight=2.0),
+        SandboxCheck("calendar_end", "regex", r"2026-11-10T10:45", weight=2.0),
+        SandboxCheck("calendar_keys", "regex", r"\"(title|start|end|attendees|location)\"", weight=2.0),
+        SandboxCheck("no_markdown_fence", "regex", r"```", weight=1.0, negate=True),
+    ],
+    max_repair_attempts=1,
+    timeout_s=240.0,
+    network_allowed=False,
+    allowed_executables=(),
+    artifacts=("response.txt",),
+)
+
+WEB_FETCH_TASK = SandboxTask(
+    id="web_fetch_brief",
+    kind=SandboxTaskKind.TEXT,
+    title="Web fetch brief (tool-use protocol)",
+    prompt=(
+        "You have a web_fetch tool. For https://www.nvidia.com/en-us/geforce/"
+        "graphics-cards/rtx-3060/ return ONLY a JSON object with keys "
+        "'tool' ('web_fetch'), 'url', 'title', 'facts' (2 bullet strings) and "
+        "'citation'. If you cannot fetch, return {'tool':'web_fetch',"
+        "'url':...,'error':'network unavailable'} instead of inventing facts."
+    ),
+    checks=[
+        SandboxCheck("is_json", "json", ["tool", "url"], weight=2.0, critical=True),
+        SandboxCheck("tool_is_web_fetch", "regex", r"\"tool\"\s*:\s*\"web_fetch\"", weight=2.0),
+        SandboxCheck("has_nvidia_url", "regex", r"nvidia\.com", weight=1.0),
+        SandboxCheck("has_facts_or_error", "regex", r"(\"facts\"|\"error\")", weight=1.5),
+        SandboxCheck("no_markdown_fence", "regex", r"```", weight=1.0, negate=True),
+    ],
+    max_repair_attempts=1,
+    timeout_s=180.0,
+    network_allowed=False,
+    allowed_executables=(),
+    artifacts=("web_fetch.json",),
+)
+
+
 SANDBOX_TASKS: dict[str, SandboxTask] = {
-    t.id: t for t in (WEB_TASK, RESEARCH_TASK, BLENDER_TASK)
+    t.id: t
+    for t in (
+        WEB_TASK,
+        RESEARCH_TASK,
+        BLENDER_TASK,
+        EMAIL_TASK,
+        CALENDAR_TASK,
+        EMAIL_CALENDAR_TASK,
+        WEB_FETCH_TASK,
+    )
 }
 
 #: Canonical alias used by the optimizer's post-run sandbox stage. Exactly

@@ -18,10 +18,57 @@ from lm_optimizer.services.sandbox_lab import (
 
 # --- task definitions ---
 
-def test_all_three_sandbox_tasks_exist():
-    assert set(SANDBOX_TASKS) == {"web_dashboard", "research_synthesis", "blender_skyblock"}
+def test_all_sandbox_tasks_exist():
+    assert set(SANDBOX_TASKS) == {
+        "web_dashboard",
+        "research_synthesis",
+        "blender_skyblock",
+        "email_write",
+        "calendar_event",
+        "email_and_calendar",
+        "web_fetch_brief",
+    }
     kinds = {t.kind for t in SANDBOX_TASKS.values()}
-    assert kinds == {SandboxTaskKind.WEB, SandboxTaskKind.RESEARCH, SandboxTaskKind.BLENDER}
+    assert kinds == {
+        SandboxTaskKind.WEB,
+        SandboxTaskKind.RESEARCH,
+        SandboxTaskKind.BLENDER,
+        SandboxTaskKind.TEXT,
+    }
+
+
+def test_agentic_email_task_scores_good_output():
+    task = SANDBOX_TASKS["email_write"]
+    good = (
+        "Subject: Kickoff next steps\n\n"
+        "Hello Alice,\n\n"
+        "Thanks for the kickoff. The next step is to send the API draft by 2026-11-07.\n\n"
+        "Best regards,\nBob\n"
+    )
+    score, failing, critical = score_attempt(task, {"email.txt": good})
+    assert score == 1.0, (failing, critical)
+
+
+def test_agentic_calendar_task_scores_valid_json():
+    task = SANDBOX_TASKS["calendar_event"]
+    payload = (
+        '{"title":"Project kickoff","start":"2026-11-10T10:00:00+01:00",'
+        '"end":"2026-11-10T10:45:00+01:00",'
+        '"attendees":["alice@example.com","bob@example.com"],'
+        '"location":"Meet"}'
+    )
+    score, failing, critical = score_attempt(task, {"calendar.json": payload})
+    assert score == 1.0, (failing, critical)
+
+
+def test_agentic_web_fetch_accepts_explicit_error():
+    task = SANDBOX_TASKS["web_fetch_brief"]
+    payload = (
+        '{"tool":"web_fetch","url":"https://www.nvidia.com/en-us/geforce/'
+        'graphics-cards/rtx-3060/","error":"network unavailable"}'
+    )
+    score, failing, critical = score_attempt(task, {"web_fetch.json": payload})
+    assert score == 1.0, (failing, critical)
 
 
 def test_every_task_has_criteria_and_prompt():

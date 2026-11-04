@@ -37,6 +37,7 @@ class DuelType(str, Enum):
     WEB = "web"
     RESEARCH = "research"
     BLENDER = "blender"
+    AGENTIC = "agentic"
     COMPLETE_SANDBOX = "complete_sandbox"
     COMPLETE_MODEL = "complete_model"
 
@@ -47,10 +48,20 @@ DUEL_TASKS: dict[DuelType, tuple[str, ...]] = {
     DuelType.WEB: ("web_dashboard",),
     DuelType.RESEARCH: ("research_synthesis",),
     DuelType.BLENDER: ("blender_skyblock",),
+    DuelType.AGENTIC: (
+        "email_write",
+        "calendar_event",
+        "email_and_calendar",
+        "web_fetch_brief",
+    ),
     DuelType.COMPLETE_SANDBOX: (
         "web_dashboard",
         "research_synthesis",
         "blender_skyblock",
+        "email_write",
+        "calendar_event",
+        "email_and_calendar",
+        "web_fetch_brief",
     ),
     DuelType.COMPLETE_MODEL: (
         "instruction_list_three",
