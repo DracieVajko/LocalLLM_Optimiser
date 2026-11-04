@@ -22,6 +22,8 @@ MODELS = [
     "swift-qwen3.8-27b@q2_k",
     "swift-qwen3.8-27b@q4_k_s",
 ]
+#: Default list; optional CLI args select a subset (used by the watcher).
+DEFAULT_MODELS = MODELS
 
 SANDBOX_TASKS = [
     "web_dashboard",
@@ -65,11 +67,13 @@ def cli(args: list[str], timeout: int) -> int:
     return result.returncode
 
 
-def winner(model: str):
+def winner(model: str, since: datetime | None = None):
     from lm_optimizer.database.repositories import run_repo
 
     for summary in run_repo.get_by_model(model, limit=10):
         if summary.status.value not in ("success", "completed", "partial_success"):
+            continue
+        if since is not None and summary.created_at < since:
             continue
         full = run_repo.get(str(summary.id))
         best = full.get_best_config() if full else None
@@ -79,8 +83,11 @@ def winner(model: str):
 
 
 def main() -> int:
+    models = sys.argv[1:] or DEFAULT_MODELS
     log("===== Night Swift run started =====")
-    for model in MODELS:
+    log("models: " + ", ".join(models))
+    for model in models:
+        run_started = datetime.now()
         log(f"===== {model} =====")
         cli(
             [
@@ -115,7 +122,7 @@ def main() -> int:
             ],
             timeout=14_400,
         )
-        run, best = winner(model)
+        run, best = winner(model, since=run_started)
         if run is not None and best is not None:
             ctx = int(best.context_length or 4096)
             log(f"winner run={run.id} ctx={ctx} score={best.score}")

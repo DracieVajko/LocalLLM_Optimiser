@@ -23,7 +23,6 @@ MODELS = [
     ("openai-gpt-oss-20b-claude-4.5-opus-heretic-uncensored-i1", "22aee0c8-33a9-4c78-83ff-7c6e8a33751b"),
     ("qwen/qwen3.6-35b-a3b", "4de58d2c-3243-4f1f-846d-19e7ef3019ea"),
     ("nvidia-nemotron-3.5-bolt-74b-a9b-24gb", "78efeec6-5804-4823-85c8-054dd242cda1"),
-    ("recursivesi/flint", "0e20794b-1cb0-40d9-b593-79e967950ccd"),
 ]
 
 CONTEXT = 32768
