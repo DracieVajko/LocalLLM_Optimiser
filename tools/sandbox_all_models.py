@@ -27,7 +27,7 @@ MODELS = [
     "openai-gpt-oss-20b-claude-4.5-opus-heretic-uncensored-i1",
     "qwen/qwen3.6-35b-a3b",
     "nvidia-nemotron-3.5-bolt-74b-a9b-24gb",
-    "recursivesi/flint",
+    # "recursivesi/flint",  # vynechany - chat timeoutuje (model nereaguje)
 ]
 
 TASKS = [
