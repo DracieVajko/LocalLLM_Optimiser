@@ -791,13 +791,32 @@ def sandbox(
     async def _generate(feedback: str) -> str:
         if not model:
             return ""
+        from lm_optimizer.cli.sandbox_duel import _load_best_config
+        from lm_optimizer.domain.models import LoadConfiguration
+
         client = _client()
         try:
-            await client.connect()
-            prompt = definition.prompt
-            if feedback:
-                prompt = feedback + "\n\n" + definition.prompt
-            return await _chat(client, model, prompt, 2048)
+            await client.connect(echo_probe=False)
+            # One resident model at a time: a leftover model from an earlier
+            # experiment makes the new load fail or crash the server.
+            await client.unload_all()
+            try:
+                cfg, _ctx = _load_best_config(model)
+            except ValueError:
+                cfg = LoadConfiguration()
+            loaded = await client.load_model(model, cfg)
+            if not getattr(loaded, "success", False):
+                return ""
+            try:
+                prompt = definition.prompt
+                if feedback:
+                    prompt = feedback + "\n\n" + definition.prompt
+                return await _chat(client, model, prompt, 2048)
+            finally:
+                try:
+                    await client.ensure_unloaded(model)
+                except Exception as exc:
+                    log_best_effort("best-effort operation failed", exc)
         finally:
             try:
                 await client.close()
@@ -1077,6 +1096,11 @@ def save_default(
         "--context",
         help="Override LM Studio contextLength",
     ),
+    lmstudio_home: Path | None = typer.Option(
+        None,
+        "--lmstudio-home",
+        help="LM Studio home dir (env LM_OPTIMIZER_LMSTUDIO_HOME; default ~/.lmstudio)",
+    ),
 ):
     """Persist the validated winner as LM Studio's per-model load default.
 
@@ -1106,7 +1130,9 @@ def save_default(
                 overrides["context_length"] = context
             best.config = replace(best.config, **overrides)
     try:
-        result = save_run_defaults(run, dry_run=dry_run, backup=not no_backup)
+        result = save_run_defaults(
+            run, dry_run=dry_run, backup=not no_backup, home=lmstudio_home
+        )
     except DefaultsError as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(1) from None
@@ -1142,6 +1168,11 @@ def _winner_config(run, run_id: str):
 @app.command("diff-default")
 def diff_default(
     run_id: str = typer.Argument(..., help="Run ID with a validated winner"),
+    lmstudio_home: Path | None = typer.Option(
+        None,
+        "--lmstudio-home",
+        help="LM Studio home dir (env LM_OPTIMIZER_LMSTUDIO_HOME; default ~/.lmstudio)",
+    ),
 ):
     """Show how a model's LM Studio defaults differ from the run's winner.
 
@@ -1157,7 +1188,7 @@ def diff_default(
     config = _winner_config(run, run_id)
     model_id = getattr(getattr(run, "model", None), "id", "") or ""
     try:
-        diff = diff_defaults(model_id, config)
+        diff = diff_defaults(model_id, config, home=lmstudio_home)
     except DefaultsError as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(1) from None
@@ -1199,6 +1230,11 @@ def restore_default(
     yes: bool = typer.Option(
         False, "--yes", "-y", help="Restore without asking for confirmation"
     ),
+    lmstudio_home: Path | None = typer.Option(
+        None,
+        "--lmstudio-home",
+        help="LM Studio home dir (env LM_OPTIMIZER_LMSTUDIO_HOME; default ~/.lmstudio)",
+    ),
 ):
     """Restore a model's LM Studio defaults from a backup.
 
@@ -1208,7 +1244,9 @@ def restore_default(
     from lm_optimizer.services.lmstudio_defaults import DefaultsError, restore_defaults
 
     try:
-        preview = restore_defaults(model, backup=backup, dry_run=True)
+        preview = restore_defaults(
+            model, backup=backup, dry_run=True, home=lmstudio_home
+        )
     except DefaultsError as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(1) from None
@@ -1221,7 +1259,9 @@ def restore_default(
         result = (
             preview
             if dry_run
-            else restore_defaults(model, backup=backup, dry_run=False)
+            else restore_defaults(
+                model, backup=backup, dry_run=False, home=lmstudio_home
+            )
         )
     except DefaultsError as e:
         console.print(f"[red]{e}[/red]")
