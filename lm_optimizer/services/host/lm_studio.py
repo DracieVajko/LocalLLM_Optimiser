@@ -52,6 +52,8 @@ LOAD_TIMEOUT_S = 600.0
 # The server can load a model but fail to send the HTTP response (observed
 # 2026-11-03). Wait this long for the response, then poll loaded instances.
 LOAD_RESPONSE_TIMEOUT_S = 30.0
+UNLOADED_RETRY_ATTEMPTS = 120
+UNLOADED_RETRY_DELAY_S = 3.0
 CHAT_TIMEOUT_FLOOR_S = 300.0
 
 # Candidate load keys with type-correct probe values (reasoning_budget_message
@@ -145,6 +147,28 @@ def _is_reasoning_error(exc: httpx.HTTPStatusError) -> bool:
         ).lower()
     except Exception:
         return False
+
+
+def _is_model_unloaded_error(exc: httpx.HTTPStatusError) -> bool:
+    """True when the server says the target instance is not loaded yet.
+
+    LM Studio can report a loaded instance before its chat slot is ready; the
+    first chat then returns HTTP 500 "Model is unloaded". Retrying the chat
+    (not the load) is the correct readiness probe.
+    """
+    if exc.response.status_code != 500:
+        return False
+    try:
+        message = str(
+            exc.response.json().get("error", {}).get("message", "")
+        ).lower()
+    except Exception:
+        message = exc.response.text.lower()
+    return (
+        "model is unloaded" in message
+        or "cannot find model" in message
+        or "already been unloaded" in message
+    )
 
 
 class LMStudioClient:
@@ -827,24 +851,48 @@ class LMStudioClient:
                 body[key] = value
 
         chat_timeout = max(CHAT_TIMEOUT_FLOOR_S, float(max_output_tokens))
-        try:
-            response = await self._request_with_retry(
-                "POST", "/api/v1/chat", json_data=body, timeout_s=chat_timeout
-            )
-        except httpx.HTTPStatusError as e:
-            if use_reasoning is not None and _is_reasoning_error(e):
-                if _is_no_reasoning_error(e):
-                    logger.info("Model has no reasoning config; retrying without", model=model)
-                    self._no_reasoning_models.add(model)
-                else:
-                    logger.info("Reasoning value rejected; retrying without", model=model)
-                    self._bad_reasoning_values.setdefault(model, set()).add(use_reasoning)
-                body.pop("reasoning", None)
+        reasoning_retry_used = False
+        response = None
+        for attempt in range(UNLOADED_RETRY_ATTEMPTS + 1):
+            try:
                 response = await self._request_with_retry(
                     "POST", "/api/v1/chat", json_data=body, timeout_s=chat_timeout
                 )
-            else:
+                break
+            except httpx.HTTPStatusError as e:
+                if (
+                    _is_model_unloaded_error(e)
+                    and attempt < UNLOADED_RETRY_ATTEMPTS
+                ):
+                    logger.debug(
+                        "Model not ready for chat; retrying",
+                        model=model,
+                        attempt=attempt + 1,
+                    )
+                    await asyncio.sleep(UNLOADED_RETRY_DELAY_S)
+                    continue
+                if (
+                    not reasoning_retry_used
+                    and use_reasoning is not None
+                    and _is_reasoning_error(e)
+                ):
+                    reasoning_retry_used = True
+                    if _is_no_reasoning_error(e):
+                        logger.info(
+                            "Model has no reasoning config; retrying without",
+                            model=model,
+                        )
+                        self._no_reasoning_models.add(model)
+                    else:
+                        logger.info("Reasoning value rejected; retrying without", model=model)
+                        self._bad_reasoning_values.setdefault(model, set()).add(
+                            use_reasoning
+                        )
+                    body.pop("reasoning", None)
+                    continue
                 raise
+        if response is None:
+            raise RuntimeError("Chat retry loop exhausted without a response")
         data = response.json()
 
         parts = data.get("output") or []
