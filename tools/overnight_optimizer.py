@@ -86,12 +86,13 @@ def _cli(args: list[str], timeout: int) -> int:
 
 
 def _winner(model_id: str):
-    for run in run_repo.get_by_model(model_id, limit=10):
-        if run.status.value not in ("success", "completed", "partial_success"):
+    for summary in run_repo.get_by_model(model_id, limit=10):
+        if summary.status.value not in ("success", "completed", "partial_success"):
             continue
-        best = run.get_best_config()
+        full = run_repo.get(str(summary.id))
+        best = full.get_best_config() if full is not None else None
         if best is not None:
-            return run, best
+            return full, best
     return None, None
 
 
