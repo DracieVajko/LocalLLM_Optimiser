@@ -107,8 +107,10 @@ class TestQuickConnect:
 
         m1 = MagicMock()
         m1.id = "ternary-bonsai-2-27b-pq2-0"
+        m1.size_bytes = 100
         m2 = MagicMock()
         m2.id = "openai/gpt-oss-20b"
+        m2.size_bytes = 200
         fake = MagicMock()
         fake.connect = AsyncMock()
         fake.list_models = AsyncMock(return_value=[m1, m2])

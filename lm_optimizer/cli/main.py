@@ -2438,12 +2438,17 @@ def _display_models_small_first(models: list) -> list:
     Both `models --full-ids` and `auto --skip-indices` use this, so the
     numbers shown to the user always mean the same models.
     """
+
+    def _size(model) -> float:
+        size = getattr(model, "size_bytes", None)
+        # MagicMock/test doubles and missing metadata must not break sorting.
+        if isinstance(size, (int, float)) and size > 0:
+            return float(size)
+        return float("inf")
+
     return sorted(
         models,
-        key=lambda m: (
-            getattr(m, "size_bytes", None) or float("inf"),
-            (getattr(m, "id", "") or "").lower(),
-        ),
+        key=lambda m: (_size(m), (getattr(m, "id", "") or "").lower()),
     )
 
 
