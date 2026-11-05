@@ -122,10 +122,49 @@ def test_auto_respects_global_skip_matrix():
 
 
 def test_auto_command_exposes_model_detail_option():
+    import inspect
+
+    from lm_optimizer.cli.main import app, auto
+    from typer.testing import CliRunner
+
+    # 1. The option is registered on the function with the exact name --model-detail.
+    sig = inspect.signature(auto)
+    assert "model_detail" in sig.parameters
+    param = sig.parameters["model_detail"]
+    assert "--model-detail" in param.default.param_decls, (
+        f"Expected --model-detail in param_decls, got {param.default.param_decls!r}"
+    )
+
+    # 2. `auto --help` exposes the option. Rich may truncate long option names
+    #    in narrow terminals (e.g. "--model-det…"), so accept either the full
+    #    name or any line that clearly refers to this option.
+    result = CliRunner().invoke(app, ["auto", "--help"])
+    assert result.exit_code == 0
+    lines = result.output.splitlines()
+    found = any(
+        "--model-detail" in line or ("model" in line.lower() and "det" in line.lower())
+        for line in lines
+    )
+    assert found, f"--model-detail not found in help output:\n{result.output}"
+
+
+def test_auto_model_detail_accepts_valid_value():
+    """--model-detail actually reaches the application logic."""
     from typer.testing import CliRunner
 
     from lm_optimizer.cli.main import app
 
-    result = CliRunner().invoke(app, ["auto", "--help"])
-    assert result.exit_code == 0
-    assert "--model-detail" in result.output
+    # dry-run so no model is actually loaded; --model-detail should be parsed
+    # and accepted without error.
+    result = CliRunner().invoke(
+        app,
+        [
+            "auto",
+            "--model-detail",
+            "qwen=quick",
+            "--dry-run",
+            "--non-interactive",
+            "--yes",
+        ],
+    )
+    assert result.exit_code == 0, result.output
