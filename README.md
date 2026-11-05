@@ -175,7 +175,8 @@ use the `unit`/`integration` markers to run one side.
 |`lab quality-lab <model> [--category C] [--seeds N]`|deterministic quality tasks, hard gates, reliability|yes|
 |`lab recommend [--min-tps N] [--min-context N] [--vram-only]`|model recommendations from the local fingerprint + local measurements|no|
 |`lab duel <model-a> <model-b> [--type T] [--mode M]`|controlled/best-profile duel, blind A/B judging; types: micro_quality, web, research, blender, agentic, complete_sandbox, complete_model|yes|
-|`lab sandbox --task T --model M`|single-model sandbox task with repair loop (web, research, blender, email_write, calendar_event, email_and_calendar, web_fetch_brief)|yes|
+|`lab sandbox --task T --model M`|single-model sandbox task with repair loop (web, research, blender, email_write, calendar_event, email_and_calendar, web_fetch_brief, web_search, deep_research)|yes|
+|`lab sandbox-all --model M [--tasks T1,T2]`|run every sandbox task (or a subset) for one model, with repair loops and per-task reports|yes|
 
 Benchmark styles: `precise` (code/math temp 0.1), `balanced` (suite defaults),
 `creative` (summarization temp 0.9). Every command first unloads stale models and

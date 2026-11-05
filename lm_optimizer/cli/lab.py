@@ -845,6 +845,38 @@ def sandbox(
     console.print(f"\nReport saved: {path}")
 
 
+@app.command("sandbox-all")
+def sandbox_all(
+    model: str = typer.Option(..., "--model", help="Model that produces the solutions"),
+    tasks: str | None = typer.Option(
+        None, "--tasks", help="Comma-separated task ids (default: all)"
+    ),
+):
+    """Run every sandbox task (or a subset) for one model.
+
+    Loads the model once per task with its best validated config and records
+    each result in results/sandbox_runs.jsonl for the web UI.
+    """
+    setup_logging()
+    from lm_optimizer.services.sandbox_lab import SANDBOX_TASKS
+
+    if tasks:
+        task_ids = [t.strip() for t in tasks.split(",") if t.strip()]
+    else:
+        task_ids = sorted(SANDBOX_TASKS)
+    unknown = [t for t in task_ids if t not in SANDBOX_TASKS]
+    if unknown:
+        console.print(f"[red]Unknown sandbox task(s): {', '.join(unknown)}[/red]")
+        console.print("Available: " + ", ".join(sorted(SANDBOX_TASKS)))
+        sys.exit(2)
+
+    console.print(f"Running {len(task_ids)} sandbox task(s) for {model}")
+    for index, task_id in enumerate(task_ids, 1):
+        console.print(f"\n[bold]=== [{index}/{len(task_ids)}] {task_id} ===[/bold]")
+        sandbox(task=task_id, model=model)
+    console.print(f"\n[bold green]All {len(task_ids)} sandbox task(s) finished.[/bold green]")
+
+
 @app.command("community-import")
 def community_import(
     file: Path = typer.Argument(..., help="JSON file with community benchmark records"),
