@@ -88,7 +88,7 @@ echo.
 echo Starting LM Studio Auto Optimizer Web UI...
 call :log "starting web server"
 REM Start server in a new window; readiness is verified by polling /api/status below.
-start "" "%PYBIN%" -m lm_optimizer.web_main
+start "LM Studio Optimizer Server" "%PYBIN%" -m lm_optimizer.web_main
 echo [INFO] Waiting for http://127.0.0.1:8080 ...
 set READY=0
 for /L %%i in (1,1,30) do call :poll_once
@@ -119,7 +119,7 @@ echo.
 echo Press any key to STOP the server and return to the menu.
 pause >nul
 call :log "stopping server"
-taskkill /FI "WINDOWTITLE eq LM Studio Auto Optimizer - server*" >nul 2>&1
+taskkill /FI "WINDOWTITLE eq LM Studio Optimizer Server*" >nul 2>&1
 goto menu
 
 REM --- Optimize one model -------------------------------------------------
