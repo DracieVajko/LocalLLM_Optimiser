@@ -64,9 +64,10 @@ echo  [5] Check LM Studio connection
 echo  [6] List available models
 echo  [7] Install / repair environment
 echo  [8] Cleanup logs and caches
-echo  [9] Exit
+echo  [9] Delete failed sandbox runs
+echo  [10] Exit
 echo.
-choice /C 123456789 /N /M "Select 1-9: "
+choice /C 1234567890 /N /M "Select 1-10: "
 set choice=%errorlevel%
 if "%choice%"=="1" goto webui
 if "%choice%"=="2" goto optimize_one
@@ -76,7 +77,8 @@ if "%choice%"=="5" goto check
 if "%choice%"=="6" goto models
 if "%choice%"=="7" goto install
 if "%choice%"=="8" goto cleanup
-if "%choice%"=="9" goto end
+if "%choice%"=="9" goto cleanup_failed_sandbox
+if "%choice%"=="0" goto end
 echo Invalid choice.
 goto menu
 
@@ -280,6 +282,20 @@ echo.
 set /p cconfirm="Type YES to continue: "
 if /i not "%cconfirm%"=="YES" goto menu
 "%PYBIN%" tools\cleanup.py --yes --logs-only
+echo.
+echo Done. Press any key for menu.
+pause >nul
+goto menu
+
+REM --- Cleanup failed sandbox runs -------------------------------------------
+:cleanup_failed_sandbox
+echo.
+echo This will delete ALL failed sandbox runs (history + artifact directories).
+echo This cannot be undone.
+echo.
+set /p cconfirm="Type YES to continue: "
+if /i not "%cconfirm%"=="YES" goto menu
+"%PYBIN%" -c "from lm_optimizer.services.sandbox_history import clear_failed_sandbox_runs; print('Deleted:', clear_failed_sandbox_runs())"
 echo.
 echo Done. Press any key for menu.
 pause >nul

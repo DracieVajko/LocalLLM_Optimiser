@@ -1666,6 +1666,14 @@ def get_sandbox_task_run(index: int):
     return runs[index]
 
 
+@router.post("/sandbox/runs/clear-failed")
+def clear_failed_sandbox_task_runs():
+    """Delete all failed single-model sandbox runs (history + artifact dirs)."""
+    from lm_optimizer.services.sandbox_history import clear_failed_sandbox_runs
+
+    return clear_failed_sandbox_runs()
+
+
 @router.get("/sandbox/files")
 def get_sandbox_file(file_path: str):
     """Serve a file produced by a sandbox task (HTML, JSON, TXT, PY, etc.).

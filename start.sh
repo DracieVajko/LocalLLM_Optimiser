@@ -61,9 +61,10 @@ menu() {
     echo "  [6] List available models"
     echo "  [7] Install / repair environment"
     echo "  [8] Cleanup logs and caches"
-    echo "  [9] Exit"
+    echo "  [9] Delete failed sandbox runs"
+    echo "  [10] Exit"
     echo ""
-    read -rp "Select 1-9: " choice
+    read -rp "Select 1-10: " choice
     case "$choice" in
         1) webui ;;
         2) optimize_one ;;
@@ -73,7 +74,8 @@ menu() {
         6) models ;;
         7) install ;;
         8) cleanup ;;
-        9) exit 0 ;;
+        9) cleanup_failed_sandbox ;;
+        10) exit 0 ;;
         *) echo "Invalid choice."; menu ;;
     esac
 }
@@ -381,6 +383,23 @@ cleanup() {
         return
     fi
     "$PYBIN" tools/cleanup.py --yes --logs-only
+    echo ""
+    echo "Done. Press any key for menu."
+    read -r
+    menu
+}
+
+cleanup_failed_sandbox() {
+    echo ""
+    echo "This will delete ALL failed sandbox runs (history + artifact directories)."
+    echo "This cannot be undone."
+    echo ""
+    read -rp "Type YES to continue: " CCONFIRM
+    if [ "$CCONFIRM" != "YES" ]; then
+        menu
+        return
+    fi
+    "$PYBIN" -c "from lm_optimizer.services.sandbox_history import clear_failed_sandbox_runs; print('Deleted:', clear_failed_sandbox_runs())"
     echo ""
     echo "Done. Press any key for menu."
     read -r

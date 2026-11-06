@@ -72,3 +72,56 @@ def list_runs(limit: int = 100, *, path: Path | None = None) -> list[dict[str, A
     except OSError:
         return []
     return records[-limit:][::-1]
+
+
+def clear_failed_sandbox_runs() -> dict[str, int]:
+    """Delete all failed single-model sandbox runs.
+
+    Removes both the JSONL history records with final_success=False and the
+    corresponding directories under results/sandbox/.
+
+    Returns a dict with counts of deleted records and directories.
+    """
+    import shutil
+
+    target = _history_path()
+    if not target.exists():
+        return {"records_deleted": 0, "directories_deleted": 0}
+
+    kept: list[str] = []
+    deleted_records = 0
+    deleted_dirs = 0
+
+    with target.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                kept.append(line)
+                continue
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError:
+                kept.append(line)
+                continue
+            if isinstance(item, dict) and item.get("final_success") is False:
+                deleted_records += 1
+                workdir = item.get("workdir") or ""
+                if workdir:
+                    wd_path = Path(workdir)
+                    # Safety: only delete inside results/sandbox/
+                    try:
+                        wd_resolved = wd_path.resolve()
+                        sandbox_root = Path("results/sandbox").resolve()
+                        wd_resolved.relative_to(sandbox_root)
+                        if wd_resolved.exists() and wd_resolved.is_dir():
+                            shutil.rmtree(wd_resolved)
+                            deleted_dirs += 1
+                    except (ValueError, OSError):
+                        pass  # skip unsafe or missing paths
+            else:
+                kept.append(line)
+
+    # Rewrite the JSONL file without failed records.
+    target.write_text("\n".join(kept) + ("\n" if kept else ""), encoding="utf-8")
+
+    return {"records_deleted": deleted_records, "directories_deleted": deleted_dirs}
