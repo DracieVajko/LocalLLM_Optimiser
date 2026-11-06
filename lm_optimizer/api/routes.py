@@ -6,7 +6,7 @@ import statistics
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from lm_optimizer.api.schemas import (
     ApplyConfigRequest,
@@ -1664,6 +1664,34 @@ def get_sandbox_task_run(index: int):
     if index < 0 or index >= len(runs):
         raise HTTPException(status_code=404, detail="Sandbox run not found")
     return runs[index]
+
+
+@router.get("/sandbox/files")
+def get_sandbox_file(file_path: str):
+    """Serve a file produced by a sandbox task (HTML, JSON, TXT, PY, etc.).
+
+    Query param ``file_path`` is relative to ``results/sandbox/``;
+    traversal escapes are rejected.
+    """
+    from pathlib import Path
+
+    base = Path("results/sandbox").resolve()
+    # Normalize backslashes (Windows) to forward slashes before joining.
+    normalized = file_path.replace("\\", "/")
+    target = (base / normalized).resolve()
+
+    # Reject traversal outside the sandbox root.
+    try:
+        target.relative_to(base)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Forbidden path")
+
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="Sandbox file not found")
+
+    # Serve HTML inline so the browser renders it; everything else as text.
+    media_type = "text/html" if target.suffix.lower() == ".html" else "text/plain"
+    return PlainTextResponse(target.read_text(encoding="utf-8", errors="replace"), media_type=media_type)
 
 
 @router.get("/sandbox/{job_id}", response_model=SandboxResponse)

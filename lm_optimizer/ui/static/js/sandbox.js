@@ -244,7 +244,25 @@ async function showSandboxRunDetail(index) {
             + (crit ? '<tr><td class="font-bold">Critical failures</td><td>' + crit + '</td></tr>' : '')
             + (artifacts ? '<tr><td class="font-bold">Artifacts</td><td>' + artifacts + '</td></tr>' : '')
             + (x.error ? '<tr><td class="font-bold">Error</td><td class="text-red-600 text-xs">' + esc(x.error) + '</td></tr>' : '')
-            + '</tbody></table></div></div>';
+            + '</tbody></table>'
+            + '<div class="mt-4"><h4 class="font-bold">Preview</h4>'
+            + (x.artifacts || []).map(function (a) {
+                var rel = x.workdir ? x.workdir.replace(/^results[\\/]sandbox[\\/]/, '') + '/' + a : a;
+                var safeRel = rel.replace(/\\/g, '/');
+                if (a.toLowerCase().endsWith('.html')) {
+                    return '<div class="mt-2 border rounded bg-black p-1">'
+                        + '<iframe src="/sandbox/files?path=' + encodeURIComponent(safeRel) + '"'
+                        + ' class="w-full border rounded" style="height:520px" title="' + esc(a) + ' preview"></iframe>'
+                        + '</div>';
+                } else {
+                    return '<div class="mt-2 border rounded bg-black p-2">'
+                        + '<h5 class="font-bold text-xs mb-1">' + esc(a) + '</h5>'
+                        + '<iframe src="/sandbox/files?path=' + encodeURIComponent(safeRel) + '"'
+                        + ' class="w-full border rounded" style="height:320px" title="' + esc(a) + ' preview"></iframe>'
+                        + '</div>';
+                }
+            }).join('')
+            + '</div></div></div>';
     } catch (e) {
         box.innerHTML = '<p class="text-sm text-red-600">Failed to load run detail: '
             + esc((e && e.message) || e) + '</p>';
