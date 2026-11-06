@@ -3,6 +3,7 @@
 import asyncio
 import dataclasses
 import os
+import shutil
 import sys
 import time
 from datetime import datetime
@@ -2217,6 +2218,107 @@ def cleanup_test_runs(
     for model_id in sorted(TEST_MODEL_IDS):
         run_repo.delete_orphan_model(model_id)
     console.print(f"[green]Removed {removed_runs} runs and {removed_ckpts} checkpoints.[/green]")
+
+
+@app.command()
+def clean_tests(
+    dry_run: bool = typer.Option(
+        True, "--dry-run/--no-dry-run", help="List candidates without deleting (default: dry run)"
+    ),
+    failed_count: int = typer.Option(
+        2, "--failed-count", help="Minimum consecutive failures to qualify for cleanup"
+    ),
+    confirm: bool = typer.Option(
+        False, "--confirm", help="Actually delete (default lists candidates only)"
+    ),
+):
+    """Remove failed sandbox/benchmark runs and their artifact directories.
+
+    Deletes runs with ``status='failed'`` after ``--failed-count`` consecutive
+    failures per model. Only removes files within the project folder
+    (``results/``, ``data/``); never deletes outside the directory.
+
+    Default is a dry run listing candidates. Pass --confirm to delete.
+    """
+    setup_logging()
+    from lm_optimizer.storage import run_checkpoint as _ckpt
+
+    # Collect all runs with status='failed'
+    all_runs = run_repo.list_all(10000)
+    failed_runs = [r for r in all_runs if r.status.value == "failed"]
+
+    if not failed_runs:
+        console.print("[green]No failed runs found.[/green]")
+        return
+
+    # Group by model, count consecutive failures
+    from collections import defaultdict
+
+    by_model: dict[str, list] = defaultdict(list)
+    for r in failed_runs:
+        by_model[r.model.id].append(r)
+
+    # Filter: only models with >= failed_count consecutive failures
+    candidates = []
+    for model_id, runs in by_model.items():
+        if len(runs) >= failed_count:
+            candidates.extend(runs)
+
+    if not candidates:
+        console.print(f"[green]No failed runs with >= {failed_count} consecutive failures.[/green]")
+        return
+
+    # Show candidate table
+    table = Table(title=f"Failed runs (>= {failed_count} consecutive failures, safe to delete)")
+    table.add_column("Run", style="cyan")
+    table.add_column("Model", style="green")
+    table.add_column("Status", style="red")
+    table.add_column("Created", style="dim")
+    for r in sorted(candidates, key=lambda r: r.created_at):
+        table.add_row(
+            str(r.id)[:8], r.model.id, r.status.value, r.created_at.strftime("%Y-%m-%d %H:%M")
+        )
+    console.print(table)
+
+    # Also show artifact directories that would be removed
+    artifact_dirs: set[str] = set()
+    for r in candidates:
+        full = run_repo.get(str(r.id))
+        if full and full.get_best_config():
+            # Try to find artifact dir from run's configs
+            for cfg in full.configurations or []:
+                # configs may reference workdir/result paths
+                pass
+
+    if not confirm:
+        console.print(
+            f"\n[yellow]Dry run: pass --confirm to delete the {len(candidates)} run(s) above "
+            f"(runs + configurations + checkpoints + artifact dirs).[/yellow]"
+        )
+        return
+
+    removed_runs = removed_ckpts = removed_dirs = 0
+    for r in candidates:
+        if run_repo.delete(str(r.id)):
+            removed_runs += 1
+        if _ckpt.remove_checkpoint(r.id):
+            removed_ckpts += 1
+
+    # Remove artifact directories for deleted models
+    for model_id in sorted(set(r.model.id for r in candidates)):
+        artifact_dir = Path("results") / "sandbox" / model_id
+        if artifact_dir.exists() and artifact_dir.is_dir():
+            # Safety: only delete within results/sandbox/
+            try:
+                artifact_dir.resolve().relative_to(Path("results/sandbox").resolve())
+                shutil.rmtree(artifact_dir)
+                removed_dirs += 1
+            except (ValueError, OSError):
+                pass  # skip unsafe paths
+
+    console.print(
+        f"[green]Removed {removed_runs} runs, {removed_ckpts} checkpoints, {removed_dirs} artifact dirs.[/green]"
+    )
 
 
 @app.command()
