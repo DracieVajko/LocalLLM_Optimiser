@@ -317,6 +317,11 @@ class SearchSpaceGenerator:
 
     def _estimate_model_vram(self, model: ModelIdentity) -> float:
         """Estimate VRAM requirement for model."""
+        # Prefer actual file size when available (ModelIdentity.size_bytes)
+        # over quantization-string parsing, which misestimates Q2/Q3/Q1.
+        if getattr(model, "size_bytes", None):
+            return (model.size_bytes / (1024 ** 3)) * 1.15  # +15 % KV/overhead
+
         if not model.parameter_count:
             return 0.0
 
