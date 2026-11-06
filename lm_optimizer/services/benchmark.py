@@ -26,7 +26,7 @@ logger = get_logger(__name__)
 BENCHMARK_SUITE = _BENCHMARK_SUITE
 
 # Categories whose answer quality is judged (speed probes are excluded).
-QUALITY_CASE_CATEGORIES = frozenset({"instruction", "reasoning", "context", "coding", "format"})
+QUALITY_CASE_CATEGORIES = frozenset({"instruction", "reasoning", "context", "coding", "format", "recall"})
 
 
 class PhaseTimer:
