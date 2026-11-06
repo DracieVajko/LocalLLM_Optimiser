@@ -1233,6 +1233,11 @@ def save_best_report(
         "- Speeds are medians over repetitions; quality reads the most complete sample.",
         "- Score = run-relative / model-relative / hardware-relative normalized "
         "components x profile weights (see breakdown above).",
+        "- IMPORTANT: Score is a WITHIN-RUN rank and is NOT comparable across "
+        "different models or runs. A 2.8 tok/s model may score 0.844 while a "
+        "4.1 tok/s model scores 0.467 because each is ranked against its own "
+        "run's candidates. Always compare models using absolute metrics: "
+        "gen tok/s, TTFT, quality, context length.",
         "",
     ]
 

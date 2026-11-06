@@ -2465,28 +2465,29 @@ class AdaptiveOptimizer:
         for r in results:
             if r.status != ConfigurationStatus.PASSED or r.score is None:
                 continue
-            if r.quality_score is None:
-                continue
+            # Use quality_score if available, otherwise default to 1.0
+            # so that configs without quality_score are still considered
+            r_quality = r.quality_score.overall if r.quality_score is not None and hasattr(r.quality_score, "overall") else 1.0
 
             dominated = False
             for other in results:
                 if (
                     other.status != ConfigurationStatus.PASSED
                     or other.score is None
-                    or other.quality_score is None
                     or other is r
                 ):
                     continue
+                other_quality = other.quality_score.overall if other.quality_score is not None and hasattr(other.quality_score, "overall") else 1.0
 
                 other_better = (
-                    other.quality_score.overall >= r.quality_score.overall
+                    other_quality >= r_quality
                     and other.get_avg_generation_tok_s() >= r.get_avg_generation_tok_s()
                     and other.get_avg_prompt_tok_s() >= r.get_avg_prompt_tok_s()
                     and other.context_length >= r.context_length
                     and (other.peak_vram_gb or float("inf")) <= (r.peak_vram_gb or float("inf"))
                 )
                 other_strictly_better = (
-                    other.quality_score.overall > r.quality_score.overall
+                    other_quality > r_quality
                     or other.get_avg_generation_tok_s() > r.get_avg_generation_tok_s()
                     or other.get_avg_prompt_tok_s() > r.get_avg_prompt_tok_s()
                     or other.context_length > r.context_length
@@ -2499,6 +2500,13 @@ class AdaptiveOptimizer:
 
             if not dominated:
                 frontier.append(r)
+
+        # Ensure at least one config is in the Pareto frontier if there are passed configs
+        passed_configs = [r for r in results if r.status == ConfigurationStatus.PASSED and r.score is not None]
+        if passed_configs and not frontier:
+            # Add the config with the highest score
+            best = max(passed_configs, key=lambda r: r.score or 0.0)
+            frontier.append(best)
 
         return frontier
 

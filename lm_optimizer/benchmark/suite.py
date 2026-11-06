@@ -95,7 +95,7 @@ BENCHMARK_SUITE: list[BenchmarkPrompt] = [
         min_tokens=100,
         max_tokens=768,
         temperature=0.1,
-        stop_sequences=["```", "def ", "class "],
+        stop_sequences=["```"],
     ),
     # Test E: Structured output (JSON)
     BenchmarkPrompt(

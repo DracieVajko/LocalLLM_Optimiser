@@ -18,19 +18,11 @@ from lm_optimizer.logging_config import get_logger
 logger = get_logger(__name__)
 
 
-def _checks_from_scores(scores: dict) -> tuple[float, float]:
-    """Count heuristic checks passed using raw scores (0-1 scale).
-
-    Returns (passed_score, total) where passed_score is the average of
-    all check scores, avoiding cliff effects from binary pass/fail at 0.9.
-    """
+def _checks_from_scores(scores: dict) -> tuple[int, int]:
+    """Count heuristic checks passed (score >= 0.9 counts as passed)."""
     total = len(scores)
-    if total == 0:
-        return 0.0, 0
-    # Use average of raw scores rather than binary pass/fail to avoid
-    # cliff effects at quality thresholds (e.g. 0.9333 vs 0.9833)
-    passed_score = sum(scores.values()) / len(scores)
-    return passed_score, float(total)
+    passed = sum(1 for v in scores.values() if v >= 0.9)
+    return passed, total
 
 
 # Closers that complete a thought (accepted as proper endings after markdown
@@ -88,6 +80,10 @@ class QualityScore:
     details: dict = field(default_factory=dict)
     checks_passed: int | None = None
     checks_total: int | None = None
+    # Critical checks (task_completion, no_truncation, no_malformed) must all
+    # be >= 1.0 for the config to pass. Non-critical checks contribute to the
+    # score but don't individually fail the gate.
+    critical_checks_failed: bool = False
 
     def __post_init__(self):
         if self.details is None:
@@ -208,12 +204,19 @@ class QualityEvaluator:
         overall = sum(scores.values()) / len(scores)
         passed, total = _checks_from_scores(scores)
         details["checks"] = f"{passed}/{total}"
+        # Critical checks: task_completion (no missing fields), no_truncation, no_malformed
+        critical_failed = (
+            scores.get("task_completion", 1.0) < 1.0
+            or scores.get("no_truncation", 1.0) < 1.0
+            or scores.get("no_malformed", 1.0) < 1.0
+        )
         return QualityScore(
             overall=overall,
             confident=True,
             details=details,
             checks_passed=passed,
             checks_total=total,
+            critical_checks_failed=critical_failed,
             **scores,
         )
 
@@ -225,10 +228,50 @@ class QualityEvaluator:
         if code != output.strip():
             details["fences_stripped"] = True
 
-        # Check for function definition
-        has_def = "def find_duplicates" in code
+        # Check for function definition (regex, not substring)
+        import re as _re
+        has_def = bool(_re.search(r"\bdef\s+find_duplicates\s*\(", code))
         scores["task_completion"] = 1.0 if has_def else 0.0
         details["has_function_def"] = has_def
+
+        # Actually compile and execute the code against assertions
+        if has_def:
+            try:
+                # Compile the code first
+                compiled = compile(code, "<coding_task>", "exec")
+                # Execute with assertions
+                namespace = {}
+                exec(compiled, namespace)
+                # Try calling the function with test cases
+                func = namespace.get("find_duplicates")
+                if func is not None:
+                    test_cases = [
+                        ([1, 2, 3], []),
+                        ([1, 1, 2], [1]),
+                        ([1, 2, 2, 3, 3], [2, 3]),
+                        ([-1, -1, 0], [-1]),
+                        ([], []),
+                    ]
+                    passed_tests = 0
+                    for nums, expected in test_cases:
+                        try:
+                            result = func(list(nums))
+                            if sorted(result) == sorted(expected):
+                                passed_tests += 1
+                        except Exception:
+                            pass
+                    correctness = passed_tests / len(test_cases) if test_cases else 0.0
+                    scores["coding_correctness"] = correctness
+                    details["tests_passed"] = f"{passed_tests}/{len(test_cases)}"
+                else:
+                    scores["coding_correctness"] = 0.0
+                    details["tests_passed"] = "0/0 (function not found)"
+            except SyntaxError as e:
+                scores["coding_correctness"] = 0.0
+                details["tests_passed"] = f"0/0 (syntax error: {e})"
+            except Exception as e:
+                scores["coding_correctness"] = 0.0
+                details["tests_passed"] = f"0/0 (execution error: {e})"
 
         # Check for O(n) claim or implementation hints
         has_complexity = any(kw in code.lower() for kw in ["o(n)", "o(1)", "linear", "constant"])
@@ -247,17 +290,24 @@ class QualityEvaluator:
         # No truncation
         scores["no_truncation"] = 1.0 if _ends_properly(code) else 0.5
         scores["no_malformed"] = 1.0
-        scores["coding_correctness"] = scores["task_completion"]
+        # coding_correctness already set by compile+exec above
 
         overall = sum(scores.values()) / len(scores)
         passed, total = _checks_from_scores(scores)
         details["checks"] = f"{passed}/{total}"
+        # Critical checks: task_completion (no missing fields), no_truncation, no_malformed
+        critical_failed = (
+            scores.get("task_completion", 1.0) < 1.0
+            or scores.get("no_truncation", 1.0) < 1.0
+            or scores.get("no_malformed", 1.0) < 1.0
+        )
         return QualityScore(
             overall=overall,
             confident=True,
             details=details,
             checks_passed=passed,
             checks_total=total,
+            critical_checks_failed=critical_failed,
             **scores,
         )
 
@@ -307,12 +357,19 @@ class QualityEvaluator:
         passed, total = _checks_from_scores(scores)
         details["checks"] = f"{passed}/{total}"
         confident = prompt_def.category in ("instruction", "reasoning", "context")
+        # Critical checks: task_completion (output tokens >= min), no_truncation, no_malformed
+        critical_failed = (
+            scores.get("task_completion", 1.0) < 1.0
+            or scores.get("no_truncation", 1.0) < 1.0
+            or scores.get("no_malformed", 1.0) < 1.0
+        )
         return QualityScore(
             overall=overall,
             confident=confident,
             details=details,
             checks_passed=passed,
             checks_total=total,
+            critical_checks_failed=critical_failed,
             **scores,
         )
 
@@ -379,5 +436,15 @@ class QualityEvaluator:
         )
 
     def passes_threshold(self, quality: QualityScore) -> bool:
-        """Check if quality meets minimum threshold."""
-        return quality.overall >= self.minimum_score
+        """Check if quality meets minimum threshold.
+
+        Uses a two-part gate (replacing the flat minimum_quality cliff):
+        1. No critical checks failed (task_completion, no_truncation, no_malformed)
+        2. Aggregate overall >= 0.90
+
+        The profile's minimum_score is still respected if set higher.
+        """
+        if getattr(quality, "critical_checks_failed", False):
+            return False
+        threshold = max(0.90, self.minimum_score)
+        return quality.overall >= threshold
