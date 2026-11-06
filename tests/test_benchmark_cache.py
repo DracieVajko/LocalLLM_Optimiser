@@ -10,6 +10,7 @@ from lm_optimizer.services.benchmark_cache import get_cached, store_cached
 @pytest.fixture
 def cache_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("LM_OPTIMIZER_BENCHMARK_CACHE", str(tmp_path))
+    monkeypatch.setenv("LM_OPTIMIZER_BENCHMARK_CACHE_RW", "on")
     return tmp_path
 
 

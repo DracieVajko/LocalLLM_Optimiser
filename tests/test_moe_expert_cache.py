@@ -122,57 +122,26 @@ class TestMoEExpertCache:
         client = LMStudioClient(base_url="http://127.0.0.1:1234")
         try:
             await client.connect()
-            try:
-                models_response = await client.get_models()
-                available_models = [
-                    m.get("key") or m.get("id") or ""
-                    for m in models_response.get("models", [])
-                ]
-            except httpx.ConnectError as e:
-                pytest.skip(f"Cannot connect to LM Studio: {e}")
-
-            moe_models = [m for m in available_models if _is_moe_model(m)]
-            if not moe_models:
-                pytest.skip("No MoE models available on this LM Studio instance")
-
-            print(f"\n{'='*70}")
-            print("MOE EXPERT CACHE BENCHMARK (MiB -> tok/s)")
-            print(f"{'='*70}")
-            print(f"{'Model':<40} {'Cache MiB':<12} {'tok/s':<10}")
-            print(f"{'-'*70}")
-
-            results: dict[str, dict[int, float | None]] = {}
-
-            for model_id in moe_models:
-                cache_results: dict[int, float | None] = {}
-                for cache_val in EXPERT_CACHE_VALUES:
-                    tok_s = await self._measure_tok_s(
-                        client, model_id, cache_val, repetitions=1
-                    )
-                    cache_results[cache_val] = tok_s
-                    display = f"{tok_s:.2f}" if tok_s is not None else "FAILED"
-                    print(f"{model_id:<40} {cache_val:<12} {display:<10}")
-                results[model_id] = cache_results
-
-            print(f"{'='*70}")
-
-            # Print summary of best cache value per model
-            print(f"\n{'BEST CACHE PER MODEL':^70}")
-            print(f"{'-'*70}")
-            for model_id, cache_results in results.items():
-                valid = {k: v for k, v in cache_results.items() if v is not None}
-                if valid:
-                    best_cache = max(valid, key=valid.get)
-                    best_tok = valid[best_cache]
-                    print(f"{model_id:<40} best={best_cache}MiB tok/s={best_tok:.2f}")
-                else:
-                    print(f"{model_id:<40} all failed")
-
-        finally:
+        except Exception as e:
             await client.close()
+            pytest.skip(f"Cannot connect to LM Studio: {e}")
+
+        try:
+            models_response = await client.get_models()
+            available_models = [
+                m.get("key") or m.get("id") or ""
+                for m in models_response.get("models", [])
+            ]
+        except httpx.ConnectError as e:
+            await client.close()
+            pytest.skip(f"Cannot connect to LM Studio: {e}")
+        except Exception as e:
+            await client.close()
+            raise  # Re-raise non-connection errors
 
         moe_models = [m for m in available_models if _is_moe_model(m)]
         if not moe_models:
+            await client.close()
             pytest.skip("No MoE models available on this LM Studio instance")
 
         print(f"\n{'='*70}")
@@ -208,29 +177,40 @@ class TestMoEExpertCache:
             else:
                 print(f"{model_id:<40} all failed")
 
+        await client.close()
+
     @pytest.mark.asyncio
     async def test_zero_cache_baseline_available(self) -> None:
         """Verify cache=0 (default) works on at least one MoE model."""
         client = LMStudioClient(base_url="http://127.0.0.1:1234")
         try:
             await client.connect()
-            try:
-                models_response = await client.get_models()
-                available_models = [
-                    m.get("key") or m.get("id") or ""
-                    for m in models_response.get("models", [])
-                ]
-            except Exception as e:
-                pytest.skip(f"Cannot list models: {e}")
-
-            moe_models = [m for m in available_models if _is_moe_model(m)]
-            if not moe_models:
-                pytest.skip("No MoE models available")
-
-            # Test that cache=0 works on first MoE model
-            model_id = moe_models[0]
-            tok_s = await self._measure_tok_s(client, model_id, 0, repetitions=1)
-            assert tok_s is not None, f"cache=0 baseline failed on {model_id}"
-            assert tok_s > 0, f"cache=0 produced 0 tok/s on {model_id}"
-        finally:
+        except Exception as e:
             await client.close()
+            pytest.skip(f"Cannot connect to LM Studio: {e}")
+
+        try:
+            models_response = await client.get_models()
+            available_models = [
+                m.get("key") or m.get("id") or ""
+                for m in models_response.get("models", [])
+            ]
+        except httpx.ConnectError as e:
+            await client.close()
+            pytest.skip(f"Cannot connect to LM Studio: {e}")
+        except Exception as e:
+            await client.close()
+            raise  # Re-raise non-connection errors
+
+        moe_models = [m for m in available_models if _is_moe_model(m)]
+        if not moe_models:
+            await client.close()
+            pytest.skip("No MoE models available")
+
+        # Test that cache=0 works on first MoE model
+        model_id = moe_models[0]
+        tok_s = await self._measure_tok_s(client, model_id, 0, repetitions=1)
+        assert tok_s is not None, f"cache=0 baseline failed on {model_id}"
+        assert tok_s > 0, f"cache=0 produced 0 tok/s on {model_id}"
+
+        await client.close()
