@@ -972,13 +972,24 @@ def save_best_report(
         + _typical_rows(configs, best)
         + [""]
         + _per_test_rows(best)
+        + (
+            [
+                "## Contexts (measured, not assumed)",
+                "",
+                f"- Maximum stable context: {trio['stable']}",
+                f"- Performance-optimal context: {trio['optimal']}",
+                f"- Balanced recommended context: {trio['recommended']}",
+                "",
+            ]
+            if any(v is not None for v in trio.values())
+            else [
+                "## Contexts (measured, not assumed)",
+                "",
+                "Contexts: not measured (only one context length was tested)",
+                "",
+            ]
+        )
         + [
-            "## Contexts (measured, not assumed)",
-            "",
-            f"- Maximum stable context: {trio['stable']}",
-            f"- Performance-optimal context: {trio['optimal']}",
-            f"- Balanced recommended context: {trio['recommended']}",
-            "",
             "## Recommended generation settings (per chat request, not load)",
             "",
             f"- temperature: {generation.get('temperature', 'suite default per test')}",

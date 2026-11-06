@@ -135,7 +135,7 @@ class TestMoEExpertCache:
         except httpx.ConnectError as e:
             await client.close()
             pytest.skip(f"Cannot connect to LM Studio: {e}")
-        except Exception as e:
+        except Exception:
             await client.close()
             raise  # Re-raise non-connection errors
 
@@ -198,7 +198,7 @@ class TestMoEExpertCache:
         except httpx.ConnectError as e:
             await client.close()
             pytest.skip(f"Cannot connect to LM Studio: {e}")
-        except Exception as e:
+        except Exception:
             await client.close()
             raise  # Re-raise non-connection errors
 

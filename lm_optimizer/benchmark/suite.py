@@ -175,12 +175,22 @@ def create_benchmark_cases(
         prompt = bp.prompt
         max_tokens = bp.max_tokens
 
-        if bp.category == "context" and context_length >= 8192:
-            # Extend the document for larger context windows
-            repeat_count = max(1, min(context_length // 2000, 8))
-            prompt = bp.prompt.replace(
-                "DOCUMENT:\n", "DOCUMENT:\n" + "\n".join(["---"] * repeat_count) + "\n"
-            )
+        if bp.category == "context" and context_length >= 4096:
+            # Scale the document to ~80% of the context window.
+            target_chars = int(0.8 * context_length * 3.6)
+            doc_text = bp.prompt
+            if "DOCUMENT:\n" in doc_text and "\n\nQUESTION:" in doc_text:
+                doc_start = doc_text.index("DOCUMENT:\n") + len("DOCUMENT:\n")
+                doc_end = doc_text.index("\n\nQUESTION:")
+                body = doc_text[doc_start:doc_end]
+                repeats = max(1, target_chars // len(body) if body else 1)
+                repeated = body * repeats
+                needle = "NOTE: the harbour access code is 7-TANGO."
+                mid = len(repeated) // 2
+                repeated = repeated[:mid] + "\n" + needle + "\n" + repeated[mid:]
+                prompt = doc_text[:doc_start] + repeated + "\n\nQUESTION: What is the harbour access code mentioned in the document? Answer with just the code."
+            else:
+                prompt = bp.prompt
 
         # Handle reasoning sweep
         if reasoning_sweep and bp.category == "reasoning":

@@ -44,6 +44,10 @@ class BenchmarkMetrics:
     # The exact prompt sent (for per-test Prompt/Thinking/Output display).
     prompt: str = ""
 
+    # Cache provenance (WP R2-1): True when this metric was served from cache
+    # rather than a fresh measurement. Never present cached data as measured.
+    from_cache: bool = False
+
     # MTP / Speculative Decoding metrics (P0)
     # Only populated when speculative decoding / MTP is active and server
     # exposes the statistics. Remain None/0 when not applicable.
