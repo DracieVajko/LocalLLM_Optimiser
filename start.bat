@@ -78,7 +78,7 @@ if "%choice%"=="6" goto models
 if "%choice%"=="7" goto install
 if "%choice%"=="8" goto cleanup
 if "%choice%"=="9" goto cleanup_failed_sandbox
-if "%choice%"=="0" goto end
+if "%choice%"=="10" goto end
 echo Invalid choice.
 goto menu
 

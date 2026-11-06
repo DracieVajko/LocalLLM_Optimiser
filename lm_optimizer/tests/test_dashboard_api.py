@@ -188,8 +188,9 @@ class TestLauncher:
                      "/api/status", "127.0.0.1:8080", ".venv",
                      "Press any key", "FAILED",
                      "Optimize one model", "Optimize all models one by one",
-                     "Check LM Studio", "List models", "Select 1-9",
-                     "Run tests", "Cleanup logs", "Install / repair"):
+                     "Check LM Studio", "List models", "Select 1-10",
+                     "Run tests", "Cleanup logs", "Install / repair",
+                     "Delete failed sandbox runs"):
             assert item in text, f"launcher missing: {item}"
         low = text.lower()
         # Browser opens only after readiness; no bulk auto-runs.
@@ -200,6 +201,9 @@ class TestLauncher:
         assert "full-ids" in low
         assert "model number or full id" in low
         assert "status --quick" in low
+        # Ten-option menu: exit option present
+        assert "[10] exit" in low
+        assert "[9] delete failed sandbox runs" in low
 
     def test_launcher_exits_early_when_server_unreachable(self):
         """Option 2/3 must check the server BEFORE asking anything else.
@@ -224,6 +228,24 @@ class TestLauncher:
         # Per-model depth is chosen inside the CLI, one model at a time.
         assert "quick/standard/full/benchmark" in low
         assert "--model-detail" not in low
+
+    def test_windows_choice_exit_mapping(self):
+        """Windows CHOICE returns ERRORLEVEL by position, not character.
+
+        With choice /C 1234567890, pressing '0' returns ERRORLEVEL=10 (the
+        position), not 0. The exit mapping must match position 10, not '0'.
+        """
+        from pathlib import Path
+
+        text = Path("start.bat").read_text(encoding="utf-8", errors="replace")
+        low = text.lower()
+
+        # choice /C must include '0' as the last character option
+        assert "choice /c 1234567890" in low
+        # ERRORLEVEL 10 (position of '0') must map to end, not ERRORLEVEL 0
+        assert 'if "%choice%"=="10" goto end' in low
+        # ERRORLEVEL 0 must NOT map to end (would never fire)
+        assert 'if "%choice%"=="0" goto end' not in low
 
     def test_optimization_uses_same_services(self):
         import inspect

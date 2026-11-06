@@ -79,6 +79,7 @@ python_functions = "test_*"
 markers = [
     "unit: fast, isolated unit test (lm_optimizer/tests)",
     "integration: cross-module or tooling test (tests/)",
+    "expert_cache: optional MoE expert cache benchmark (requires live LM Studio)",
 ]
 
 [tool.setuptools.packages.find]
