@@ -798,6 +798,20 @@ def _tried_values_rows(configs, best, bc) -> list[str]:
     return lines
 
 
+def _build_header_section(run, exploratory, style):
+    """Build the report header section (title, date, profile, run, optimizer, elapsed)."""
+    return [
+        f"# Best settings: {run.model.id}" if not exploratory
+        else f"# Exploratory settings (NOT quality-validated): {run.model.id}",
+        "",
+        f"- Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        f"- Profile: {run.profile.value} (style: {style})",
+        f"- Run: {run.id} (status: {run.status.value})",
+        f"- Optimizer: {run.optimizer_version}",
+        f"- Elapsed: {run.duration_seconds:.1f}s" if run.duration_seconds else "- Elapsed: N/A",
+    ]
+
+
 def save_best_report(
     run: OptimizationRun,
     out_dir: str | Path = "results",
@@ -863,16 +877,7 @@ def save_best_report(
         return _tried(configs, get)
 
     lines = (
-        [
-            f"# Best settings: {run.model.id}" if not exploratory
-            else f"# Exploratory settings (NOT quality-validated): {run.model.id}",
-            "",
-            f"- Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-            f"- Profile: {run.profile.value} (style: {style})",
-            f"- Run: {run.id} (status: {run.status.value})",
-            f"- Optimizer: {run.optimizer_version}",
-            f"- Elapsed: {run.duration_seconds:.1f}s" if run.duration_seconds else "- Elapsed: N/A",
-        ]
+        _build_header_section(run, exploratory, style)
         + (
             [
                 "- quality_validated: false (quality phase skipped — speed-only exploration)",
