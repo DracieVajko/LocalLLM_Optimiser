@@ -175,9 +175,9 @@ def create_benchmark_cases(
         prompt = bp.prompt
         max_tokens = bp.max_tokens
 
-        if bp.category == "context" and context_length > 8192:
+        if bp.category == "context" and context_length >= 8192:
             # Extend the document for larger context windows
-            repeat_count = min(context_length // 4000, 4)
+            repeat_count = max(1, min(context_length // 2000, 8))
             prompt = bp.prompt.replace(
                 "DOCUMENT:\n", "DOCUMENT:\n" + "\n".join(["---"] * repeat_count) + "\n"
             )

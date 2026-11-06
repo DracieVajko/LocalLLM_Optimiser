@@ -2281,7 +2281,6 @@ def clean_tests(
     console.print(table)
 
     # Also show artifact directories that would be removed
-    artifact_dirs: set[str] = set()
     for r in candidates:
         full = run_repo.get(str(r.id))
         if full and full.get_best_config():

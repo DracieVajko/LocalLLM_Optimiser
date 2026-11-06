@@ -18,11 +18,19 @@ from lm_optimizer.logging_config import get_logger
 logger = get_logger(__name__)
 
 
-def _checks_from_scores(scores: dict) -> tuple[int, int]:
-    """Count heuristic checks passed (score >= 0.9 counts as passed)."""
+def _checks_from_scores(scores: dict) -> tuple[float, float]:
+    """Count heuristic checks passed using raw scores (0-1 scale).
+
+    Returns (passed_score, total) where passed_score is the average of
+    all check scores, avoiding cliff effects from binary pass/fail at 0.9.
+    """
     total = len(scores)
-    passed = sum(1 for v in scores.values() if v >= 0.9)
-    return passed, total
+    if total == 0:
+        return 0.0, 0
+    # Use average of raw scores rather than binary pass/fail to avoid
+    # cliff effects at quality thresholds (e.g. 0.9333 vs 0.9833)
+    passed_score = sum(scores.values()) / len(scores)
+    return passed_score, float(total)
 
 
 # Closers that complete a thought (accepted as proper endings after markdown

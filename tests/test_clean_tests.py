@@ -10,14 +10,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-import pytest
 from typer.testing import CliRunner
 
 from lm_optimizer.cli.main import app
 from lm_optimizer.database.repositories import run_repo
 from lm_optimizer.domain.models import (
     ConfigurationStatus,
-    LoadConfiguration,
     ModelIdentity,
     OptimizationProfile,
     OptimizationRun,

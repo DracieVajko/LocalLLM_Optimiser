@@ -696,10 +696,9 @@ class BenchmarkService:
                 return result
             logger.debug("Preheat complete", **preheat.to_dict())
 
-            # Measured runs. A cache hit is only safe for single-repetition
-            # measurements: when reps > 1 the caller explicitly wants multiple
-            # real samples to average out noise, so bypass the memo.
-            cache_eligible = reps == 1
+            # Measured runs. Always measure fresh - cache is only for
+            # explicit pre-computed lookups, never for actual benchmark runs.
+            cache_eligible = False  # Never use cache for speed measurements
             for run_idx in range(reps):
                 logger.debug("Measured run", run=run_idx + 1)
                 for case in active_cases:
@@ -1094,20 +1093,20 @@ class BenchmarkService:
             successful = [m for m in test_metrics if m.success]
             if not successful:
                 all_passed = False
-                first_error = next(
-                    (
-                        getattr(m, "error", None)
-                        for m in test_metrics
-                        if getattr(m, "error", None)
-                    ),
-                    "All runs failed",
-                )
+                # Preserve specific per-test errors instead of generic "All tests failed"
+                test_errors = [
+                    str(getattr(m, "error", None) or "")
+                    for m in test_metrics
+                    if getattr(m, "error", None)
+                ]
+                unique_errors = list(set(test_errors))
+                error_msg = "; ".join(unique_errors[:3]) if unique_errors else "All tests failed"
                 aggregated.append(
                     BenchmarkMetrics(
                         test_name=test_name,
                         category=test_metrics[0].category,
                         success=False,
-                        error=str(first_error)[:300],
+                        error=error_msg[:300],
                     )
                 )
                 continue

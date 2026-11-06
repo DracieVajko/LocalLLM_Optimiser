@@ -321,20 +321,36 @@ class SearchSpaceGenerator:
             return 0.0
 
         quantization = (model.quantization or "").lower()
-        bytes_per_param = 2.0
+        bytes_per_param = 0.0
 
-        if "q4" in quantization or "4bit" in quantization:
+        # Parse quantization from model name or quantization field
+        q = quantization.lower()
+        if "q2" in q or "2bit" in q or "q2_k" in q:
+            bytes_per_param = 0.25
+        elif "q3" in q or "3bit" in q or "q3_k" in q:
+            bytes_per_param = 0.375
+        elif "q4" in q or "4bit" in q or "q4_k" in q:
             bytes_per_param = 0.5
-        elif "q5" in quantization or "5bit" in quantization:
+        elif "q5" in q or "5bit" in q or "q5_k" in q:
             bytes_per_param = 0.625
-        elif "q6" in quantization or "6bit" in quantization:
+        elif "q6" in q or "6bit" in q or "q6_k" in q:
             bytes_per_param = 0.75
-        elif "q8" in quantization or "8bit" in quantization:
+        elif "q8" in q or "8bit" in q or "q8_k" in q:
             bytes_per_param = 1.0
-        elif "fp16" in quantization or "half" in quantization:
+        elif "fp16" in q or "half" in q or "f16" in q:
             bytes_per_param = 2.0
-        elif "fp32" in quantization or "float" in quantization:
+        elif "fp32" in q or "float" in q or "f32" in q:
             bytes_per_param = 4.0
+        elif "int8" in q:
+            bytes_per_param = 1.0
+        elif "int4" in q:
+            bytes_per_param = 0.5
+        else:
+            # Default to Q4 (0.5 bytes/param) instead of fp16 (2.0 bytes/param)
+            # since most modern models are quantized. fp16 overestimates VRAM
+            # needs by 4x compared to Q4, causing models to be incorrectly
+            # rejected as "won't fit" when they would actually fit.
+            bytes_per_param = 0.5
 
         weights_gb = (model.parameter_count * bytes_per_param) / (1024**3)
-        return weights_gb * 1.3  # 30% overhead
+        return weights_gb * 1.3  # 30% overhead for KV cache and overhead for KV cache and overhead

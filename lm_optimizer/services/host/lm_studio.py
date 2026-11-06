@@ -820,6 +820,7 @@ class LMStudioClient:
         min_p: float | None = None,
         presence_penalty: float | None = None,
         reasoning: str | None = None,
+        stop_sequences: list[str] | None = None,
     ) -> dict:
         """Generate completion via the native /api/v1/chat endpoint.
 
@@ -849,6 +850,8 @@ class LMStudioClient:
         ):
             if value is not None:
                 body[key] = value
+        if stop_sequences:
+            body["stop"] = stop_sequences
 
         chat_timeout = max(CHAT_TIMEOUT_FLOOR_S, float(max_output_tokens))
         reasoning_retry_used = False

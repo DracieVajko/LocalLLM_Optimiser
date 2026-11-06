@@ -116,10 +116,13 @@ def lookup(model_id: str, architecture: str | None = None) -> dict:
     """Return {lineage, settings, source} for a model key (+ optional arch)."""
     key = (model_id or "").lower()
     arch = (architecture or "").lower()
+    # Match on model id first (most specific), then fall back to architecture.
     for entry in DEFAULTS:
-        if any(m in key for m in entry["match"]) or (
-            arch and arch in entry["arch"]
-        ):
+        if any(m in key for m in entry["match"]):
+            return entry
+    # Architecture-based fallback: only match when no model-id match found
+    for entry in DEFAULTS:
+        if arch and arch in entry["arch"]:
             return entry
     logger.debug("No generation lineage match", model=model_id)
     return GENERIC

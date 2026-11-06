@@ -1598,6 +1598,8 @@ class AdaptiveOptimizer:
                 c.config.physical_batch_size,
                 c.config.parallel,
                 c.config.context_checkpoints,
+                c.config.flash_attention,
+                c.config.offload_kv_cache_to_gpu,
             )
             for c in self.state.tested_configs
         }
@@ -1913,20 +1915,35 @@ class AdaptiveOptimizer:
 
         # Run validation repetitions
         validation_results = []
+        validation_errors = []
         for i in range(self.state.run.validation_repetitions):
             if self.state.should_cancel:
                 break
             result = await self._test_config(config, best.context_length, min_speed=self.state.run.advanced_settings.get("min_speed", 0.0))
             if result and result.status == ConfigurationStatus.PASSED:
                 validation_results.append(result)
+            elif result is not None:
+                # Record failure details instead of silently dropping
+                validation_results.append(result)  # Include failed results for tracking
+                validation_errors.append(result.error or f"Validation failed (status: {result.status})")
 
         if validation_results:
-            # Use median result
-            self.state.best_config = self._median_result(validation_results)
-            # Ensure best is in tested list
-            if self.state.best_config.id not in [c.id for c in self.state.tested_configs]:
-                self.state.tested_configs.append(self.state.best_config)
-            self.state.run.best_config_id = self.state.best_config.id
+            # Use median result from successful validations only
+            passed_results = [r for r in validation_results if r.status == ConfigurationStatus.PASSED]
+            if passed_results:
+                self.state.best_config = self._median_result(passed_results)
+                # Ensure best is in tested list
+                if self.state.best_config.id not in [c.id for c in self.state.tested_configs]:
+                    self.state.tested_configs.append(self.state.best_config)
+                self.state.run.best_config_id = self.state.best_config.id
+            else:
+                # All validations failed - record failure
+                self.state.run.status = RunStatus.FAILED
+                self.state.run.error = "; ".join(set(validation_errors))[:300] if validation_errors else "All validation repetitions failed"
+        else:
+            # No validation results at all
+            self.state.run.status = RunStatus.FAILED
+            self.state.run.error = "All validation repetitions failed"
 
         # Calculate Pareto frontier
         self.state.pareto_frontier = self._compute_pareto_frontier(self.state.tested_configs)
