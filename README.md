@@ -109,20 +109,14 @@ restored byte-for-byte after the test.
 **Windows** (`.bat`):
 
 ```bat
-start_optimizer.bat          REM primary Windows launcher (menu: Web UI, checks, models, benchmark, optimize)
-run-all.bat                  REM utility: everything overnight (tests + tuning + ceilings)
-run-model.bat <key> [ctx]    REM utility: one model
-run-model.bat ALL [ctx]      REM utility: all models one by one (small first)
-run-web.bat                  REM utility: web UI on http://127.0.0.1:8080
+start.bat          REM unified launcher: Web UI, optimize, tests, cleanup, install
 ```
 
-**Linux** (`.sh`, macOS uses the same scripts — untested):
+**Linux/macOS** (`.sh`):
 
 ```bash
-chmod +x run-web.sh run-optimizer.sh
-./run-web.sh                 # web UI on http://127.0.0.1:8080
-./run-optimizer.sh status    # CLI passthrough, e.g. ./run-optimizer.sh models
-./run-optimizer.sh auto      # all models one by one (small first); --skip a,b to skip
+chmod +x start.sh
+./start.sh         # unified launcher: Web UI, optimize, tests, cleanup, install
 ```
 
 > macOS: same `.sh` launchers are expected to work (Metal detection is coded,

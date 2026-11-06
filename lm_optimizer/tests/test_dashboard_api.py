@@ -180,15 +180,16 @@ class TestLauncher:
     def test_start_optimizer_menu(self):
         from pathlib import Path
 
-        bat = Path("start_optimizer.bat")
+        bat = Path("start.bat")
         assert bat.exists(), "primary Windows launcher missing"
         text = bat.read_text(encoding="utf-8", errors="replace")
         # Staged startup with visible progress (never silently closes).
-        for item in ("[1/4]", "[2/4]", "[3/4]", "[4/4]", "startup.log",
+        for item in ("[1/3]", "[2/3]", "[3/3]", "startup.log",
                      "/api/status", "127.0.0.1:8080", ".venv",
                      "Press any key", "FAILED",
                      "Optimize one model", "Optimize all models one by one",
-                     "Check LM Studio", "List models", "Select 1-6"):
+                     "Check LM Studio", "List models", "Select 1-9",
+                     "Run tests", "Cleanup logs", "Install / repair"):
             assert item in text, f"launcher missing: {item}"
         low = text.lower()
         # Browser opens only after readiness; no bulk auto-runs.
@@ -208,7 +209,7 @@ class TestLauncher:
         """
         from pathlib import Path
 
-        text = Path("start_optimizer.bat").read_text(encoding="utf-8", errors="replace")
+        text = Path("start.bat").read_text(encoding="utf-8", errors="replace")
         low = text.lower()
 
         assert ":preflight" in low
