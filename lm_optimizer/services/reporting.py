@@ -707,7 +707,9 @@ def _tested_configs_rows(configs, ordered, pareto, tested, best) -> list[str]:
             f"{c.get_avg_prompt_tok_s():.0f} | {c.get_avg_estimated_ttft_ms():.0f} | "
             f"{vram} | {q} | {_score_str(c.score)} | PASS |"
         )
-    if len(pareto) != len(tested):
+    if not pareto and len(tested) > 0:
+        lines += ["", "Pareto-optimal: not computed (quality not finalized)."]
+    elif len(pareto) != len(tested):
         lines += ["", f"Pareto-optimal: {len(pareto)} of {len(tested)} passed."]
     else:
         lines += ["", "Pareto-optimal: all tested configurations are non-dominated."]
