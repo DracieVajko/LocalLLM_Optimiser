@@ -718,6 +718,18 @@ class BenchmarkService:
                 return result
             logger.debug("Preheat complete", **preheat.to_dict())
 
+            # Burn-in: one throwaway run to warm page cache and CUDA context.
+            # Metrics are discarded; duration recorded as burn_in_ms.
+            burn_in_ms = 0.0
+            try:
+                burn_start = time.perf_counter()
+                if active_cases:
+                    await self._run_single_case(model_id, active_cases[0], active_reasoning)
+                burn_in_ms = (time.perf_counter() - burn_start) * 1000
+            except Exception:
+                pass
+            generation["burn_in_ms"] = burn_in_ms
+
             # Measured runs. Always measure fresh - cache is only for
             # explicit pre-computed lookups, never for actual benchmark runs.
             cache_eligible = False  # Never use cache for speed measurements
