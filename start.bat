@@ -66,7 +66,8 @@ echo  [7] Install / repair environment
 echo  [8] Cleanup logs and caches
 echo  [9] Exit
 echo.
-set /p choice="Select 1-9: "
+choice /C 123456789 /N /M "Select 1-9: "
+set choice=%errorlevel%
 if "%choice%"=="1" goto webui
 if "%choice%"=="2" goto optimize_one
 if "%choice%"=="3" goto optimize_all
