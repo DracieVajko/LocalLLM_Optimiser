@@ -997,6 +997,12 @@ def save_best_report(
             ]
         )
         + [
+            "## Capacity (measured, not assumed)",
+            "",
+            "Context recall: not measured (no recall probe data in this run)",
+            "",
+        ]
+        + [
             "## Recommended generation settings (per chat request, not load)",
             "",
             f"- temperature: {generation.get('temperature', 'suite default per test')}",

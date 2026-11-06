@@ -33,7 +33,8 @@ class ConfigurationResult:
     score_breakdown: dict | None = None
     tested_at: datetime | None = None
     duration_ms: float = 0.0
-    generation: dict | None = None  # generation settings (style, temperature overrides)
+    generation: dict | None = None
+    validation_repetitions_effective: int = 1  # generation settings (style, temperature overrides)
 
     def get_avg_generation_tok_s(self) -> float:
         """Median generation speed across successful tests (outlier-robust, R35)."""
