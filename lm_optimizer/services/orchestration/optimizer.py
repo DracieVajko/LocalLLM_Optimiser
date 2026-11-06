@@ -1829,28 +1829,68 @@ class AdaptiveOptimizer:
             return
 
         best = self.state.best_config
-        tested = {
-            (
-                c.config.eval_batch_size,
-                c.config.physical_batch_size,
-                c.config.parallel,
-                c.config.context_checkpoints,
-            )
-            for c in self.state.tested_configs
-            if c.context_length == best.context_length
-            and c.config.gpu_ratio == best.config.gpu_ratio
+        # WP C3: Freeze no-op dimensions, sweep gpu_ratio via CLI channel only.
+        # batch/phys/parallel/ck are frozen (confirmed no-op across 2 campaigns).
+        frozen = {
+            "eval_batch_size": 2048,
+            "physical_batch_size": 512,
+            "parallel": 1,
+            "context_checkpoints": 32,
+            "flash_attention": True,
+            "offload_kv_cache_to_gpu": True,
         }
-        for candidate in self._generate_stage4_configs(self.state.search_space, best.config, tested):
+        # Determine gpu_ratio candidates
+        gpu_ratios = [1.0, 0.7, 0.5]
+        # Check advanced settings for override
+        adv = self.state.run.advanced_settings or {}
+        if adv.get("gpu_ratios"):
+            gpu_ratios = list(adv["gpu_ratios"])
+
+        # Stopping rule: if first two are within noise floor (6%), skip rest
+        tested_ratios = []
+        for gr in gpu_ratios:
             if self.state.should_cancel:
                 break
             while self.state.should_pause:
                 await asyncio.sleep(1)
+
+            # Build candidate with frozen params
+            from lm_optimizer.domain.models import LoadConfiguration
+            candidate = LoadConfiguration(
+                context_length=best.context_length,
+                gpu_ratio=gr,
+                flash_attention=frozen["flash_attention"],
+                offload_kv_cache_to_gpu=frozen["offload_kv_cache_to_gpu"],
+                eval_batch_size=frozen["eval_batch_size"],
+                physical_batch_size=frozen["physical_batch_size"],
+                parallel=frozen["parallel"],
+                context_checkpoints=frozen["context_checkpoints"],
+                num_experts=best.config.num_experts,
+            )
+
+            # Check if already tested
+            already = any(
+                c.context_length == candidate.context_length
+                and c.config.gpu_ratio == candidate.gpu_ratio
+                and c.config.eval_batch_size == candidate.eval_batch_size
+                for c in self.state.tested_configs
+            )
+            if already:
+                continue
 
             result = await self._test_config(candidate, best.context_length, min_speed=self.state.run.advanced_settings.get("min_speed", 0.0))
             if result and result.status == ConfigurationStatus.PASSED:
                 self.state.tested_configs.append(result)
                 self._update_best(result)
                 await self._maybe_measure_throughput(result)
+                tested_ratios.append((gr, result.get_avg_generation_tok_s()))
+                # Stopping rule: if first two within 6% noise floor, skip remaining
+                if len(tested_ratios) >= 2:
+                    first_speed = tested_ratios[0][1]
+                    second_speed = tested_ratios[1][1]
+                    if first_speed > 0 and abs(second_speed - first_speed) / first_speed < 0.06:
+                        logger.info("gpu_ratio stopping rule: first two within 6% noise floor")
+                        break
             elif result is not None:
                 self._log_event("CONFIG_REJECTED", str(result.status.value))
 
