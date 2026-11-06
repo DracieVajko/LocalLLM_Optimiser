@@ -774,6 +774,24 @@ class BenchmarkService:
             mem_after = _sample_mem()
             # Record phase timings
             generation["phase_timings_ms"]["total"] = sum(generation["phase_timings_ms"].values())
+            # Run recall probe if context is large enough
+            try:
+                from lm_optimizer.services.recall_probe import run_recall_probe, RecallProbeSpec
+                if context_length >= 4096:
+                    spec = RecallProbeSpec(target_tokens=context_length)
+                    recall_result = run_recall_probe(self.client, model_id, context_length, spec)
+                    generation["recall"] = {
+                        "target_tokens": recall_result.target_tokens,
+                        "prompt_tokens": recall_result.prompt_tokens,
+                        "status": recall_result.status,
+                        "truncated": recall_result.truncated,
+                        "answer_raw": recall_result.answer_raw,
+                        "estimated_cost_s": recall_result.estimated_cost_s,
+                        "actual_cost_s": recall_result.actual_cost_s,
+                    }
+            except Exception as exc:
+                logger.debug("Recall probe skipped", error=str(exc)[:120])
+
             # Aggregate metrics
             result = self._aggregate_results(
                 config_id=config_id,
