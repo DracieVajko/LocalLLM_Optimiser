@@ -1936,6 +1936,8 @@ class AdaptiveOptimizer:
                 if self.state.best_config.id not in [c.id for c in self.state.tested_configs]:
                     self.state.tested_configs.append(self.state.best_config)
                 self.state.run.best_config_id = self.state.best_config.id
+                self.state.run.status = RunStatus.SUCCESS
+                self.state.run.validation_repetitions_effective = len(passed_results)
             else:
                 # All validations failed - record failure
                 self.state.run.status = RunStatus.FAILED
