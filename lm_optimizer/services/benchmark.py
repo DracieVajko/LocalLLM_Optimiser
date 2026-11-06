@@ -779,7 +779,7 @@ class BenchmarkService:
                 from lm_optimizer.services.recall_probe import run_recall_probe, RecallProbeSpec
                 if context_length >= 4096:
                     spec = RecallProbeSpec(target_tokens=context_length)
-                    recall_result = run_recall_probe(self.client, model_id, context_length, spec)
+                    recall_result = await run_recall_probe(self.client, model_id, context_length, spec)
                     generation["recall"] = {
                         "target_tokens": recall_result.target_tokens,
                         "prompt_tokens": recall_result.prompt_tokens,

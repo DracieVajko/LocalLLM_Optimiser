@@ -202,7 +202,7 @@ def estimate_cost_s(target_tokens: int, fill_ratio: float, prompt_tok_s: float =
     return 30.0 + prefill_s + 5.0
 
 
-def run_recall_probe(
+async def run_recall_probe(
     client: Any,
     model_id: str,
     ctx: int,
@@ -244,7 +244,7 @@ def run_recall_probe(
 
     # Call client
     try:
-        response = client.chat_completion(
+        response = await client.chat_completion(
             model=model_id,
             input_text=prompt,
             temperature=spec.temperature,
@@ -302,7 +302,7 @@ def run_recall_probe(
     return result
 
 
-def run_recall_probe_deep(
+async def run_recall_probe_deep(
     client: Any,
     model_id: str,
     ctx: int,
@@ -324,7 +324,7 @@ def run_recall_probe_deep(
             max_probe_cost_s=spec.max_probe_cost_s,
             chars_per_token=spec.chars_per_token,
         )
-        r = run_recall_probe(client, model_id, ctx, s)
+        r = await run_recall_probe(client, model_id, ctx, s)
         results.append(r)
 
     all_pass = all(r.status == "pass" for r in results)

@@ -378,7 +378,7 @@ def recall_probe(
         try:
             await client.connect()
             if depths:
-                result = run_recall_probe_deep(
+                result = await run_recall_probe_deep(
                     client, model, ctx,
                     depth_points=depths,
                     spec=RecallProbeSpec(target_tokens=ctx, max_probe_cost_s=max_cost),
@@ -395,7 +395,7 @@ def recall_probe(
                 spec = RecallProbeSpec(
                     target_tokens=ctx, depth=depth, max_probe_cost_s=max_cost,
                 )
-                result = run_recall_probe(client, model, ctx, spec)
+                result = await run_recall_probe(client, model, ctx, spec)
                 console.print("status: " + str(result.status))
                 console.print("prompt_tokens: " + str(result.prompt_tokens))
                 console.print("truncated: " + str(result.truncated))
