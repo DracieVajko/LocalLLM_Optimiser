@@ -885,7 +885,11 @@ def save_best_report(
         + [
             "## Results",
             "",
-            f"- Generation: {best.get_avg_generation_tok_s():.1f} tok/s",
+            f"- Generation: {best.get_avg_generation_tok_s():.1f} tok/s" + (
+                " (single measurement - not a stability claim)"
+                if len([m for m in best.metrics if m.success]) < 2
+                else ""
+            ),
             f"- Prompt: {best.get_avg_prompt_tok_s():.0f} tok/s",
             f"- Est. TTFT: {best.get_avg_estimated_ttft_ms():.0f} ms",
             (
