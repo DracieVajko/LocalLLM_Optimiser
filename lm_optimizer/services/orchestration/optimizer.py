@@ -1819,6 +1819,19 @@ class AdaptiveOptimizer:
             add(anchor.eval_batch_size, anchor.physical_batch_size, anchor.parallel, checkpoints)
         return out
 
+    def _budget_remaining_min(self) -> float:
+        """Estimated remaining budget in minutes."""
+        budget = (self.state.run.advanced_settings or {}).get("budget_min", 180)
+        started = self.state.started_at
+        if not started:
+            return float(budget)
+        from datetime import datetime
+        elapsed_min = (datetime.now() - started).total_seconds() / 60.0
+        return max(0.0, float(budget) - elapsed_min)
+
+    def _over_budget(self) -> bool:
+        return self._budget_remaining_min() <= 0
+
     async def _stage_batch_optimization(self) -> None:
         """Stage 4: Optimize eval batch size and load concurrency parameters."""
         logger.info("Stage 4: Batch optimization")
@@ -1927,6 +1940,11 @@ class AdaptiveOptimizer:
             log_best_effort("best-effort operation failed", exc)
     async def _stage_validation(self) -> None:
         """Stage 5: Final validation with multiple runs."""
+        if self._over_budget():
+            logger.info("Skipping validation: budget exhausted")
+            self.state.run.stage = OptimizationStage.COMPLETE
+            run_repo.save(self.state.run)
+            return
         logger.info("Stage 5: Final validation")
         self.state.run.stage = OptimizationStage.VALIDATION
         run_repo.save(self.state.run)
