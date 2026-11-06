@@ -29,6 +29,26 @@ BENCHMARK_SUITE = _BENCHMARK_SUITE
 QUALITY_CASE_CATEGORIES = frozenset({"instruction", "reasoning", "context", "coding", "format"})
 
 
+class PhaseTimer:
+    """Context manager that times a named phase and records it."""
+
+    def __init__(self, name: str, timings: dict):
+        self.name = name
+        self.timings = timings
+        self._start = 0.0
+
+    def __enter__(self):
+        self._start = time.perf_counter()
+        return self
+
+    def __exit__(self, *exc):
+        elapsed_ms = (time.perf_counter() - self._start) * 1000
+        self.timings[self.name] = self.timings.get(self.name, 0.0) + elapsed_ms
+        return False
+
+
+
+
 def _looks_incomplete(text: str) -> bool:
     """True when an answer ends mid-thought (no closing punctuation).
 
@@ -660,6 +680,7 @@ class BenchmarkService:
             )
             generation = {
                 "style": active_style,
+                "phase_timings_ms": {},
                 "temperature_overrides": STYLE_TEMPERATURE_OVERRIDES.get(active_style, {}),
                 "reasoning": active_reasoning,
                 "load_channel": channel,
@@ -668,6 +689,7 @@ class BenchmarkService:
                 "max_tokens_scale": getattr(self.config, "max_tokens_scale", 1.0),
                 "mem_before": _sample_mem(),
             }
+            generation["phase_timings_ms"]["load"] = load_time_ms
             all_metrics: list[BenchmarkMetrics] = []
 
             # PREHEAT phase (LOAD done above; VERIFY+PREHEAT identical across
@@ -738,6 +760,8 @@ class BenchmarkService:
             # Peak memory from before/after snapshots (real measurement;
             # None when the host cannot report it — never estimated).
             mem_after = _sample_mem()
+            # Record phase timings
+            generation["phase_timings_ms"]["total"] = sum(generation["phase_timings_ms"].values())
             # Aggregate metrics
             result = self._aggregate_results(
                 config_id=config_id,
@@ -752,6 +776,8 @@ class BenchmarkService:
             peak_vram, peak_ram = _peak_usage(generation.get("mem_before"), mem_after)
             result.peak_vram_gb = peak_vram
             result.peak_ram_gb = peak_ram
+            if not result.duration_ms:
+                result.duration_ms = generation["phase_timings_ms"].get("total", 0.0)
 
         except Exception as e:
             logger.error("Benchmark failed", error=str(e))

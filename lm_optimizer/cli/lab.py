@@ -354,6 +354,60 @@ async def _chat(client, model: str, prompt: str, max_tokens: int) -> str:
 # --- P5 Recommender -------------------------------------------------------
 
 
+@app.command("recall")
+def recall_probe(
+    model: str = typer.Argument(..., help="Model ID to probe"),
+    ctx: int = typer.Option(8192, "--ctx", help="Context size to probe"),
+    depth: float = typer.Option(0.5, "--depth", help="Needle depth (0-1)"),
+    depth_set: str = typer.Option(None, "--depth-set", help="Comma-separated depths"),
+    max_cost: float = typer.Option(900.0, "--max-cost", help="Max probe cost in seconds"),
+):
+    """Run a deterministic context-recall probe on one model (WP C2)."""
+    import asyncio
+    setup_logging()
+    from lm_optimizer.services.recall_probe import (
+        RecallProbeSpec, run_recall_probe, run_recall_probe_deep,
+    )
+
+    depths = None
+    if depth_set:
+        depths = tuple(float(d.strip()) for d in depth_set.split(","))
+
+    async def _run():
+        client = _client()
+        try:
+            await client.connect()
+            if depths:
+                result = run_recall_probe_deep(
+                    client, model, ctx,
+                    depth_points=depths,
+                    spec=RecallProbeSpec(target_tokens=ctx, max_probe_cost_s=max_cost),
+                )
+                console.print("recall_all_depths: " + str(result["recall_all_depths"]))
+                console.print("worst_depth: " + str(result["worst_depth"]))
+                for r in result["depth_results"]:
+                    console.print(
+                        "  depth=" + str(r["depth"]) + " status=" + str(r["status"]) +
+                        " prompt_tokens=" + str(r["prompt_tokens"]) +
+                        " answer=" + str(r["answer_raw"])[:60]
+                    )
+            else:
+                spec = RecallProbeSpec(
+                    target_tokens=ctx, depth=depth, max_probe_cost_s=max_cost,
+                )
+                result = run_recall_probe(client, model, ctx, spec)
+                console.print("status: " + str(result.status))
+                console.print("prompt_tokens: " + str(result.prompt_tokens))
+                console.print("truncated: " + str(result.truncated))
+                console.print("answer: " + str(result.answer_raw)[:60])
+                console.print("estimated_cost_s: " + f"{result.estimated_cost_s:.0f}")
+                console.print("actual_cost_s: " + f"{result.actual_cost_s:.0f}")
+        finally:
+            await client.close()
+
+    asyncio.run(_run())
+
+
 @app.command("recommend")
 def recommend(
     min_tps: float = typer.Option(5.0, "--min-tps"),
