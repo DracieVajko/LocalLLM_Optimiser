@@ -889,8 +889,15 @@ def save_best_report(
             f"- Prompt: {best.get_avg_prompt_tok_s():.0f} tok/s",
             f"- Est. TTFT: {best.get_avg_estimated_ttft_ms():.0f} ms",
             (
-                f"- Quality: {qs_best.overall:.3f} "
-                f"({qs_best.checks_passed}/{qs_best.checks_total} checks)"
+                (
+                    f"- Quality: {qs_best.overall:.3f} "
+                    f"({qs_best.checks_passed}/{qs_best.checks_total} checks)"
+                    + (
+                        " (single sample - not a stability claim)"
+                        if getattr(best, "validation_repetitions_effective", 1) < 2
+                        else ""
+                    )
+                )
                 if (qs_best := best.quality_score) is not None
                 else "- Quality: N/A"
             ),
