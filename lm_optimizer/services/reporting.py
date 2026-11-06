@@ -947,7 +947,7 @@ def save_best_report(
             f"| context_checkpoints | {_fmt(bc.context_checkpoints)} | "
             f"{_verdict(bc.context_checkpoints, tried(lambda c: c.config.context_checkpoints), SERVER_DEFAULTS['context_checkpoints'])} |",
             f"| num_experts (MoE only) | {_fmt(bc.num_experts)} | model-dependent |",
-            f"| gpu_ratio | {_fmt(bc.gpu_ratio)} | CLI/GUI-only, never sent (see notes) |",
+            f"| gpu_ratio | {_fmt(bc.gpu_ratio)} | sent via CLI (lms load --gpu) |",
             "",
             "Apply via REST: POST /api/v1/models/load with the flat parameters above "
             "(gpu_ratio excluded). GUI-only items (KV quant, offload ratio, threads) "

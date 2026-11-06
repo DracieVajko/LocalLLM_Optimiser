@@ -4739,7 +4739,7 @@ def _display_benchmark_result(result, model_id: str):
     table.add_row("Context Length", str(result.context_length))
     table.add_row(
         "GPU Ratio",
-        f"{cfg.gpu_ratio:.2f} (not sent via REST)" if cfg.gpu_ratio else "Auto",
+        f"{cfg.gpu_ratio:.2f} (sent via CLI lms load --gpu)" if cfg.gpu_ratio else "Auto",
     )
     table.add_row("Flash Attention", "Enabled" if cfg.flash_attention else "Disabled")
     table.add_row("KV Cache GPU", "Yes" if cfg.offload_kv_cache_to_gpu else "No")
