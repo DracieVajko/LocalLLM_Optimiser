@@ -140,7 +140,11 @@ def should_stop_repeating(configs: list, threshold: int = 3) -> dict:
 
 
 def failure_signature_rows(configs: list) -> list[str]:
-    """Display rows per error signature with counts, contexts and durations."""
+    """Display rows per error signature with counts, contexts and durations.
+
+    Groups by the normalised key but displays the RAW error of the first item
+    in each group, so model ids, GB values and exit codes stay readable.
+    """
     groups: dict[str, list] = {}
     for c in (configs or []):
         if getattr(c, "status", None) == ConfigurationStatus.PASSED:
@@ -150,7 +154,9 @@ def failure_signature_rows(configs: list) -> list[str]:
     for sig, items in sorted(groups.items(), key=lambda kv: -len(kv[1])):
         ctxs = sorted({getattr(c, "context_length", "?") for c in items})
         total_ms = sum(float(getattr(c, "duration_ms", 0.0) or 0.0) for c in items)
+        # Display the raw error of the first item, not the masked signature
+        raw_error = (getattr(items[0], "error", None) or "unknown")[:200]
         rows.append(
-            f"- {sig}: {len(items)}x across ctx {ctxs}, total {total_ms:.0f} ms"
+            f"- {raw_error}: {len(items)}x across ctx {ctxs}, total {total_ms:.0f} ms"
         )
     return rows or ["- No failures recorded."]

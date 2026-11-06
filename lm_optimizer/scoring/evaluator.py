@@ -44,16 +44,20 @@ def _ends_properly(text: str) -> bool:
 
 
 def _strip_fences(output: str) -> str:
-    """Remove one pair of ``` code fences (the server rejects `stop`, so models
+    """Remove ALL pairs of ``` code fences (the server rejects `stop`, so models
     fence code by default; judge the code inside, not the wrapper)."""
     s = output.strip()
-    if s.startswith("```"):
-        lines = s.split("\n", 1)
-        s = lines[1] if len(lines) > 1 else ""
-        if s.rstrip().endswith("```"):
-            s = s.rstrip()
-            s = s[: -len("```")].rstrip()
-    return s
+    # Strip all leading and trailing fence lines
+    lines = s.split("\n")
+    result = []
+    in_fence = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            continue
+        result.append(line)
+    return "\n".join(result).strip()
 
 
 def _words_for_repetition(text: str) -> list[str]:

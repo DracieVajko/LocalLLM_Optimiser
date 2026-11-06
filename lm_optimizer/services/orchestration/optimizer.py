@@ -2116,7 +2116,7 @@ class AdaptiveOptimizer:
             # Phase gate: only a passed benchmark may continue. Failed loads
             # MUST NOT receive metrics evaluation, quality, score or Pareto.
             if result.status != "passed":
-                return _stamp(self._record_failed_candidate(result, context_length))
+                return _stamp(self._record_failed_candidate(result, context_length, t0=t0))
 
             # LOADED + VERIFIED (benchmark success implies the load served).
             result.status = ConfigurationStatus.PASSED
@@ -2203,7 +2203,7 @@ class AdaptiveOptimizer:
             return failed
 
     def _record_failed_candidate(
-        self, result: ConfigurationResult, context_length: int
+        self, result: ConfigurationResult, context_length: int, t0: float = None
     ) -> ConfigurationResult:
         """Persist and annotate a load/benchmark failure (never scored)."""
         from lm_optimizer.services.failure_states import classify_error
@@ -2216,6 +2216,11 @@ class AdaptiveOptimizer:
             **(result.generation or {}),
             "stage": self.state.run.stage.value,
         }
+        # Ensure duration_ms is set before saving (recorded from the caller's t0)
+        if not result.duration_ms and t0 is not None:
+            result.duration_ms = (time.perf_counter() - t0) * 1000.0
+        elif not result.duration_ms:
+            result.duration_ms = 0.0
         try:
             config_repo.save(result)
         except Exception as e:
@@ -2238,7 +2243,7 @@ class AdaptiveOptimizer:
         return result
 
     def _evaluate_candidate_quality(
-        self, result: ConfigurationResult, context_length: int
+        self, result: ConfigurationResult, context_length: int, t0: float = None
     ) -> bool:
         """Evaluate quality and persist a failure; True when the gate passes."""
         quality_scores = self.quality.evaluate_all(
@@ -2794,7 +2799,7 @@ class AdaptiveOptimizer:
         return True
 
     async def _record_probe_result(
-        self, result: ConfigurationResult, context_length: int
+        self, result: ConfigurationResult, context_length: int, t0: float = None
     ) -> ConfigurationResult:
         """Gate + persist one speed probe (failures: classified, scoreless)."""
         from lm_optimizer.services.failure_states import classify_error
