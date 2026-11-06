@@ -1655,6 +1655,17 @@ def list_sandbox_task_runs(limit: int = 100):
     return {"runs": list_runs(limit)}
 
 
+@router.get("/sandbox/run/{index}")
+def get_sandbox_task_run(index: int):
+    """Detail of one single-model sandbox task run by index (0 = newest)."""
+    from lm_optimizer.services.sandbox_history import list_runs
+
+    runs = list_runs(1000)
+    if index < 0 or index >= len(runs):
+        raise HTTPException(status_code=404, detail="Sandbox run not found")
+    return runs[index]
+
+
 @router.get("/sandbox/{job_id}", response_model=SandboxResponse)
 def get_sandbox(job_id: str):
     """Poll a sandbox duel result (in-memory first, history fallback)."""

@@ -183,9 +183,9 @@
                 return;
             }
             box.innerHTML = '<div class="table-container"><table class="table"><thead><tr>'
-                + '<th>Time</th><th>Model</th><th>Task</th><th>Score</th><th>Result</th><th>Duration</th>'
+                + '<th>Time</th><th>Model</th><th>Task</th><th>Score</th><th>Result</th><th>Duration</th><th>Actions</th>'
                 + '</tr></thead><tbody>'
-                + runs.map(function (x) {
+                + runs.map(function (x, idx) {
                     var ok = x.final_success
                         ? '<span class="badge badge-success">PASS</span>'
                         : '<span class="badge badge-error">FAIL</span>';
@@ -196,8 +196,16 @@
                         + '<td class="font-mono">' + score + '</td>'
                         + '<td>' + ok + '</td>'
                         + '<td class="font-mono">' + (x.duration_s ? Number(x.duration_s).toFixed(0) + 's' : '-') + '</td>'
+                        + '<td><button class="btn btn-outline btn-sm view-sandbox-run" data-index="' + idx + '">View</button></td>'
                         + '</tr>';
                 }).join('') + '</tbody></table></div>';
+            document.querySelectorAll('.view-sandbox-run').forEach(function (btn) {
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var idx = btn.dataset.index;
+                    showSandboxRunDetail(idx);
+                });
+            });
         } catch (e) {
             box.innerHTML = '<p class="text-sm text-red-600">Failed to load sandbox runs: '
                 + esc((e && e.message) || e) + '</p>';
@@ -206,3 +214,39 @@
     el('sb-refresh-runs').addEventListener('click', loadTaskRuns);
     loadTaskRuns();
 })();
+
+async function showSandboxRunDetail(index) {
+    var box = el('sb-runs');
+    try {
+        var r = await fetch('/api/sandbox/run/' + encodeURIComponent(index));
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        var x = await r.json();
+        var crit = (x.critical_failures || []).length ? '<ul class="text-xs text-red-600 mt-1">'
+            + (x.critical_failures || []).map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('')
+            + '</ul>' : '';
+        var artifacts = (x.artifacts || []).length ? '<ul class="text-xs text-gray-600 mt-1">'
+            + (x.artifacts || []).map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('')
+            + '</ul>' : '';
+        box.innerHTML = '<div class="card mt-4"><div class="card-body">'
+            + '<div class="flex items-center justify-between mb-2">'
+            + '<h3 class="font-bold text-lg">Sandbox Run Detail</h3>'
+            + '<button class="btn btn-outline btn-sm" onclick="location.reload()">Back to list</button>'
+            + '</div>'
+            + '<table class="table text-sm"><tbody>'
+            + '<tr><td class="font-bold">Time</td><td>' + esc(x.ts || '') + '</td></tr>'
+            + '<tr><td class="font-bold">Model</td><td class="font-mono">' + esc(x.model || '') + '</td></tr>'
+            + '<tr><td class="font-bold">Task</td><td>' + esc(x.task || '') + '</td></tr>'
+            + '<tr><td class="font-bold">Score</td><td class="font-mono">' + (x.final_score == null ? '-' : Number(x.final_score).toFixed(3)) + '</td></tr>'
+            + '<tr><td class="font-bold">Result</td><td>' + (x.final_success ? '<span class="badge badge-success">PASS</span>' : '<span class="badge badge-error">FAIL</span>') + '</td></tr>'
+            + '<tr><td class="font-bold">Repairs</td><td>' + (x.repair_count || 0) + '</td></tr>'
+            + '<tr><td class="font-bold">Duration</td><td class="font-mono">' + (x.duration_s ? Number(x.duration_s).toFixed(0) + 's' : '-') + '</td></tr>'
+            + '<tr><td class="font-bold">Workdir</td><td class="font-mono text-xs truncate" title="' + esc(x.workdir || '') + '">' + esc(x.workdir || '') + '</td></tr>'
+            + (crit ? '<tr><td class="font-bold">Critical failures</td><td>' + crit + '</td></tr>' : '')
+            + (artifacts ? '<tr><td class="font-bold">Artifacts</td><td>' + artifacts + '</td></tr>' : '')
+            + (x.error ? '<tr><td class="font-bold">Error</td><td class="text-red-600 text-xs">' + esc(x.error) + '</td></tr>' : '')
+            + '</tbody></table></div></div>';
+    } catch (e) {
+        box.innerHTML = '<p class="text-sm text-red-600">Failed to load run detail: '
+            + esc((e && e.message) || e) + '</p>';
+    }
+}

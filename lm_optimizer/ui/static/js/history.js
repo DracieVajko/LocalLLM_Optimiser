@@ -14,6 +14,7 @@ const HistoryPage = {
         UI.init();
         await this.loadRuns();
         await this.loadDuels();
+        await this.loadSandboxTaskRuns();
         this.render();
         this.attachEvents();
         // Deep link from the Sandbox page to its history section.
@@ -31,6 +32,19 @@ const HistoryPage = {
             console.error('Failed to load duels:', error);
             this.state.duels = [];
             this.state.duelsError = (error && error.message) || String(error);
+        }
+    },
+
+    async loadSandboxTaskRuns() {
+        try {
+            const response = await fetch('/api/sandbox/runs?limit=200');
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            const j = await response.json();
+            this.state.sandboxTaskRuns = j.runs || [];
+        } catch (error) {
+            console.error('Failed to load sandbox task runs:', error);
+            this.state.sandboxTaskRuns = [];
+            this.state.sandboxTaskRunsError = (error && error.message) || String(error);
         }
     },
 
@@ -140,6 +154,14 @@ const HistoryPage = {
                 <div class="card" id="duels-table-container">
                     ${this.renderDuelsTable()}
                 </div>
+
+                <!-- Sandbox Task Runs (single-model lab sandbox) -->
+                <div class="flex items-center justify-between mt-8 mb-2" id="sandbox-task-runs">
+                    <h2 class="text-xl font-bold text-gray-900">Sandbox Task Runs</h2>
+                </div>
+                <div class="card" id="sandbox-task-runs-container">
+                    ${this.renderSandboxTaskRunsTable()}
+                </div>
             </div>
         `;
 
@@ -232,6 +254,40 @@ const HistoryPage = {
         const sa = result.side_a, sb = result.side_b;
         inner += `<div class="grid md:grid-cols-2 gap-4 mt-2">${sideBlock('A', sa)}${sideBlock('B', sb)}</div>`;
         return inner;
+    },
+
+    renderSandboxTaskRunsTable() {
+        const runs = this.state.sandboxTaskRuns || [];
+        if (this.state.sandboxTaskRunsError && !runs.length) {
+            return `<div class="card-body"><p class="text-sm text-red-600">Sandbox task runs failed to load: ${this.state.sandboxTaskRunsError}</p></div>`;
+        }
+        if (!runs.length) {
+            return `<div class="card-body"><p class="text-sm text-gray-500">No sandbox task runs yet — run one from the Sandbox page.</p></div>`;
+        }
+        return `
+            <div class="card-body p-0">
+                <div class="table-container">
+                    <table class="table">
+                        <thead><tr>
+                            <th>Time</th><th>Model</th><th>Task</th><th>Score</th><th>Result</th><th>Duration</th><th>Actions</th>
+                        </tr></thead>
+                        <tbody>
+                            ${runs.map((x, idx) => `
+                                <tr class="sandbox-task-row hover:bg-gray-50" data-index="${idx}">
+                                    <td class="font-mono text-sm">${new Date(x.ts || 0).toLocaleString()}</td>
+                                    <td class="font-mono text-sm">${esc(x.model || '')}</td>
+                                    <td>${esc(x.task || '')}</td>
+                                    <td class="font-mono">${x.final_score == null ? '-' : Number(x.final_score).toFixed(3)}</td>
+                                    <td><span class="badge ${x.final_success ? 'badge-success' : 'badge-error'}">${x.final_success ? 'PASS' : 'FAIL'}</span></td>
+                                    <td class="font-mono">${x.duration_s ? Number(x.duration_s).toFixed(0) + 's' : '—'}</td>
+                                    <td><button class="btn btn-outline btn-sm view-sandbox-run" data-index="${idx}">View</button></td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
     },
 
     renderModelOptions() {
@@ -536,6 +592,58 @@ const HistoryPage = {
                 document.getElementById('duels-table-container').innerHTML = this.renderDuelsTable();
                 this.attachEvents();
             });
+        }
+
+        // Sandbox task run View buttons
+        document.querySelectorAll('.view-sandbox-run').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const idx = btn.dataset.index;
+                this.showSandboxTaskRunDetail(parseInt(idx, 10));
+            });
+        });
+    },
+
+    async showSandboxTaskRunDetail(index) {
+        try {
+            const r = await fetch('/api/sandbox/run/' + encodeURIComponent(index));
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const x = await r.json();
+            const crit = (x.critical_failures || []).length ? '<ul class="text-xs text-red-600 mt-1">'
+                + (x.critical_failures || []).map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('')
+                + '</ul>' : '';
+            const artifacts = (x.artifacts || []).length ? '<ul class="text-xs text-gray-600 mt-1">'
+                + (x.artifacts || []).map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('')
+                + '</ul>' : '';
+            const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => (
+                { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+            const detailHtml = `
+                <div class="card mt-4"><div class="card-body p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="font-bold text-lg">Sandbox Task Run Detail</h3>
+                        <button class="btn btn-outline btn-sm" onclick="document.getElementById('sandbox-task-detail').innerHTML=''">Close</button>
+                    </div>
+                    <div id="sandbox-task-detail-content" class="table text-sm"><tbody>
+                        <tr><td class="font-bold">Time</td><td>${esc(x.ts || '')}</td></tr>
+                        <tr><td class="font-bold">Model</td><td class="font-mono">${esc(x.model || '')}</td></tr>
+                        <tr><td class="font-bold">Task</td><td>${esc(x.task || '')}</td></tr>
+                        <tr><td class="font-bold">Score</td><td class="font-mono">${x.final_score == null ? '-' : Number(x.final_score).toFixed(3)}</td></tr>
+                        <tr><td class="font-bold">Result</td><td>${x.final_success ? '<span class="badge badge-success">PASS</span>' : '<span class="badge badge-error">FAIL</span>'}</td></tr>
+                        <tr><td class="font-bold">Repairs</td><td>${x.repair_count || 0}</td></tr>
+                        <tr><td class="font-bold">Duration</td><td class="font-mono">${x.duration_s ? Number(x.duration_s).toFixed(0) + 's' : '—'}</td></tr>
+                        <tr><td class="font-bold">Workdir</td><td class="font-mono text-xs truncate" title="${esc(x.workdir || '')}">${esc(x.workdir || '')}</td></tr>
+                        ${crit ? '<tr><td class="font-bold">Critical failures</td><td>' + crit + '</td></tr>' : ''}
+                        ${artifacts ? '<tr><td class="font-bold">Artifacts</td><td>' + artifacts + '</td></tr>' : ''}
+                        ${x.error ? '<tr><td class="font-bold">Error</td><td class="text-red-600 text-xs">' + esc(x.error) + '</td></tr>' : ''}
+                    </tbody></table>
+                    <div class="mt-3"><a class="underline text-blue-600 text-xs" href="/results" target="_blank" rel="noopener">Open Results folder</a></div>
+                </div></div>
+            `;
+            const container = document.getElementById('sandbox-task-runs-container');
+            container.insertAdjacentHTML('afterend', '<div id="sandbox-task-detail">' + detailHtml + '</div>');
+            document.getElementById('sandbox-task-detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (err) {
+            UI.showToast('Failed to load run detail: ' + ((err && err.message) || err), 'error');
         }
     },
 
