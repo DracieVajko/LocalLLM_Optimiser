@@ -87,8 +87,8 @@ REM --- Web UI -------------------------------------------------------------
 echo.
 echo Starting LM Studio Auto Optimizer Web UI...
 call :log "starting web server"
-start "LM Studio Auto Optimizer - server" "%PYBIN%" -m lm_optimizer.web_main
-if errorlevel 1 goto fail_start
+REM Start server in a new window; readiness is verified by polling /api/status below.
+start "" "%PYBIN%" -m lm_optimizer.web_main
 echo [INFO] Waiting for http://127.0.0.1:8080 ...
 set READY=0
 for /L %%i in (1,1,30) do call :poll_once
