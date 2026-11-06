@@ -71,8 +71,8 @@ class TestSpeedProbe:
             )
         )
         assert len(result.metrics) == 1  # reps aggregate to one median metric
-        # 2 preheat chats (1 verify + 1 warmup) + 2 measured probe chats.
-        assert c.chat_completion.await_count == 4
+        # 1 preheat verify + 1 warmup + 1 burn-in + 2 measured probe chats.
+        assert c.chat_completion.await_count == 5
 
     def test_probe_load_failure(self):
         c = _client()
@@ -104,5 +104,5 @@ class TestRunCases:
         assert result.status == "passed"
         assert len(result.metrics) == 2  # one median metric per case
         assert {m.test_name for m in result.metrics} == {"a", "b"}
-        # warmup_repetitions=0 -> no preheat chats, only measured (2x2).
-        assert c.chat_completion.await_count == 4
+        # warmup_repetitions=0 -> no preheat chats, but burn-in (1) + measured (2x2).
+        assert c.chat_completion.await_count == 5
