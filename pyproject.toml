@@ -81,6 +81,10 @@ markers = [
     "integration: cross-module or tooling test (tests/)",
     "expert_cache: optional MoE expert cache benchmark (requires live LM Studio)",
 ]
+# The expert_cache benchmark requires a live LM Studio instance with MoE
+# models available. It is not part of the CI/default suite; run it explicitly
+# with: pytest tests/test_moe_expert_cache.py -m expert_cache -v -s
+addopts = ["-m", "not expert_cache"]
 
 [tool.setuptools.packages.find]
 where = ["."]
