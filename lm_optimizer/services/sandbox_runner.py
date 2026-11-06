@@ -238,6 +238,52 @@ class SandboxRunner:
                         custom[check.name] = (check.passed, check.detail)
                 except Exception as e:  # noqa: BLE001
                     logger.warning("Web validation failed", error=str(e)[:160])
+
+            # Blender tasks: run the produced script with blender, then
+            # validate the resulting .blend file is a real binary.
+            if self.task.kind.value == "blender" and self.command:
+                blend_path = self.workdir / "scene.blend"
+                frame_dir = self.workdir / "frames"
+                exec_result = run_command(
+                    self.command, self.workdir, self.policy, self.task.timeout_s
+                )
+                custom["blend_runs"] = (
+                    exec_result.ok,
+                    f"exit={exec_result.exit_code} stderr={exec_result.stderr[:200]}",
+                )
+                if blend_path.exists() and blend_path.is_file():
+                    data = blend_path.read_bytes()
+                    custom["blend_is_binary"] = (
+                        data[:7] == b"BLENDER",
+                        f"size={len(data)} magic={data[:7]!r}",
+                    )
+                    custom["blend_min_size"] = (
+                        len(data) > 100_000,
+                        f"size={len(data)} (>100KB)",
+                    )
+                else:
+                    custom["blend_is_binary"] = (
+                        False,
+                        f"scene.blend not created (size={blend_path.stat().st_size if blend_path.exists() else 0})",
+                    )
+                    custom["blend_min_size"] = (False, "no .blend file")
+                if frame_dir.exists() and frame_dir.is_dir():
+                    png_count = len(list(frame_dir.glob("*.png")))
+                    custom["frames_rendered"] = (
+                        png_count > 0,
+                        f"{png_count} frame(s) rendered",
+                    )
+                else:
+                    custom["frames_rendered"] = (
+                        False,
+                        "no frames directory",
+                    )
+                # Merge execution result into score too
+                if not exec_result.ok:
+                    custom["blender_command_failed"] = (
+                        False,
+                        f"blender exited {exec_result.exit_code}: {exec_result.stderr[:200]}",
+                    )
             score, failing, critical = score_attempt(
                 self.task,
                 files,
@@ -287,10 +333,14 @@ class SandboxRunner:
 
         Artifact names are untrusted input: a name that resolves outside the
         sandbox root is rejected (never written) and falls back to output.txt.
+
+        The model's raw text is written to the first artifact name
+        (typically ``build_scene.py`` for blender tasks, ``index.html`` for
+        web tasks, etc.). Other artifact names (e.g. ``scene.blend``) are
+        produced by running commands, not by writing the model's raw text.
         """
         self.workdir.mkdir(parents=True, exist_ok=True)
         text = produced or ""
-        # A model may answer with a single file; the task decides the name.
         primary = self.task.artifacts[0] if self.task.artifacts else "output.txt"
         if primary.endswith("/"):
             primary = primary.rstrip("/") + "/output.txt"
@@ -307,7 +357,8 @@ class SandboxRunner:
 def build_command_for(task: SandboxTask) -> str:
     """Default command that executes the produced artifact."""
     if task.kind.value == "blender":
-        return "blender --background --python output.py"
+        primary = task.artifacts[0] if task.artifacts else "build_scene.py"
+        return f"blender --background --python {primary}"
     if task.kind.value == "web":
         return ""
     return ""

@@ -1,0 +1,104 @@
+{
+  "$comment": "Reference shape for results/runs/<run_id>/models/<model>/<task>/attempt-N/manifest.json — see docs/plans/SANDBOX-V2-REDESIGN.md §6.2",
+  "schema": "lmopt/sandbox-attempt@2",
+  "run_id": "7ae5ffae-3924-4819-a2c6-f470e3a3844a",
+  "model": "swift-qwen3.8-27b@q2_k",
+  "model_id_display": "Swift Qwen3.8 27B",
+  "model_sha256": "9f2c1e7b0d34a5c6e8f9012345678abcdef0123456789abcdef0123456789ab",
+  "host": {
+    "gpu": "NVIDIA GeForce RTX 3060 Laptop GPU 6.0GB",
+    "cpu_threads": 16,
+    "ram_gb": 31.4,
+    "lmstudio_cli": "43d4b26",
+    "backend": "llama.cpp-win-x86_64-nvidia-cuda12-avx2 (2.68.0)"
+  },
+  "task_id": "blender_skyblock",
+  "task_schema_version": 2,
+  "attempt": 1,
+  "started_at": "2026-11-06T04:18:14+01:00",
+  "duration_s": 1531.8,
+  "load": {
+    "channel": "REST",
+    "verification": "MATCH",
+    "context_length": 8192,
+    "flash_attention": true,
+    "offload_kv_cache_to_gpu": true,
+    "eval_batch_size": 2048,
+    "parallel": 4,
+    "requested": { "context_length": 8192, "flash_attention": true },
+    "applied": { "context_length": 8192, "flash_attention": true }
+  },
+  "generation": {
+    "temperature": 0.2,
+    "max_output_tokens": 6144,
+    "completion_tokens": 4180,
+    "generation_tok_s": 2.8,
+    "ttft_ms": 4764,
+    "finish_reason": "stop",
+    "truncated": false
+  },
+  "exec": {
+    "command": "blender --background --python build_scene.py",
+    "exit_code": 0,
+    "duration_s": 41.2,
+    "stdout_tail": "Info: Saved \"scene.blend\"",
+    "stderr_tail": ""
+  },
+  "artifacts": [
+    {
+      "path": "build_scene.py",
+      "kind": "python",
+      "produced_by": "model",
+      "bytes": 14877,
+      "sha256": "3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b",
+      "valid": true,
+      "validator": "python_parses",
+      "min_bytes": 1
+    },
+    {
+      "path": "scene.blend",
+      "kind": "blender",
+      "produced_by": "runner",
+      "bytes": 1208349,
+      "sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f901a2b3c4d5e6f708192a3b4c5d6e7f809",
+      "valid": true,
+      "validator": "blend_opens",
+      "min_bytes": 100000,
+      "facts": {
+        "blender_version": "4.2.1",
+        "objects": { "MESH": 34, "CAMERA": 1, "LIGHT": 1, "EMPTY": 2 },
+        "materials": ["grass", "dirt", "stone", "trunk", "leaves", "chest"],
+        "frame_range": [1, 120],
+        "animated_objects": ["Camera"],
+        "camera": "Camera",
+        "lights": ["Sun"],
+        "render_engine": "BLENDER_EEVEE_NEXT",
+        "resolution": [1280, 720]
+      }
+    },
+    {
+      "path": "frames/",
+      "kind": "png",
+      "produced_by": "runner",
+      "valid": true,
+      "validator": "frames_rendered",
+      "facts": { "count": 5, "black_frame_ratio": 0.0, "size_bytes": [41233, 42001, 41888, 41902] }
+    }
+  ],
+  "layers": {
+    "L1_valid": true,
+    "L2_conformance": 0.94,
+    "L3_quality": 0.8,
+    "L4_behaviour": 1.0
+  },
+  "score": 0.752,
+  "status": "passed",
+  "repair": {
+    "attempts_used": 1,
+    "first_pass_success": false,
+    "fixed_checks": ["has_keyframes"],
+    "added_tokens": 412,
+    "efficiency": 0.0024
+  },
+  "notes": "Attempt 0 was truncated at max_output_tokens=2048 before save_as_mainfile; see attempt-0/manifest.json"
+}

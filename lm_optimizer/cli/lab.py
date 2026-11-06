@@ -767,7 +767,7 @@ def sandbox(
     """
     setup_logging()
     from lm_optimizer.services.sandbox_lab import SANDBOX_TASKS, SandboxPolicy
-    from lm_optimizer.services.sandbox_runner import SandboxRunner
+    from lm_optimizer.services.sandbox_runner import SandboxRunner, build_command_for
 
     definition = SANDBOX_TASKS.get(task)
     if definition is None:
@@ -786,7 +786,12 @@ def sandbox(
         timeout_s=definition.timeout_s,
         allowed_executables=definition.allowed_executables,
     )
-    runner = SandboxRunner(task=definition, policy=policy, workdir=workdir)
+    runner = SandboxRunner(
+        task=definition,
+        policy=policy,
+        workdir=workdir,
+        command=build_command_for(definition),
+    )
 
     async def _generate(feedback: str) -> str:
         if not model:
@@ -811,7 +816,9 @@ def sandbox(
                 prompt = definition.prompt
                 if feedback:
                     prompt = feedback + "\n\n" + definition.prompt
-                return await _chat(client, model, prompt, 2048)
+                return await _chat(
+                    client, model, prompt, definition.max_output_tokens
+                )
             finally:
                 try:
                     await client.ensure_unloaded(model)

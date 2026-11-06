@@ -73,6 +73,8 @@ class SandboxTask:
     network_allowed: bool = False
     allowed_executables: tuple[str, ...] = ()
     artifacts: tuple[str, ...] = ()
+    max_output_tokens: int = 2048
+    network_allowed: bool = False
 
 
 # --- 13.1 Web task --------------------------------------------------------
@@ -85,11 +87,12 @@ WEB_TASK = SandboxTask(
         "Build a self-contained HTML dashboard (single file, no external "
         "network calls) that shows four metrics, a filter, a model detail "
         "view, a light/dark theme toggle, and works on both mobile and "
-        "desktop widths."
+        "desktop widths. Output ONLY the complete HTML starting with "
+        "<!DOCTYPE html>, no markdown fences, no explanations."
     ),
     checks=[
         SandboxCheck("index_html_exists", "files", ["index.html"], weight=1.0, critical=True),
-        SandboxCheck("has_viewport_meta", "regex", r'name=["\']viewport["\']', weight=1.0),
+        SandboxCheck("has_viewport", "regex", r'name=["\']viewport["\']', weight=1.0),
         SandboxCheck("has_media_query", "regex", r"@media", weight=1.0),
         SandboxCheck("has_theme_toggle", "regex", r"(dark|theme)", weight=1.0),
         SandboxCheck("no_external_scripts", "regex", r"<script[^>]+src=[\"']https?://", weight=1.5, negate=True),
@@ -98,6 +101,7 @@ WEB_TASK = SandboxTask(
     ],
     max_repair_attempts=2,
     timeout_s=300.0,
+    max_output_tokens=4096,
     network_allowed=False,
     allowed_executables=(),
     artifacts=("index.html",),
@@ -145,22 +149,30 @@ RESEARCH_TASK = SandboxTask(
     kind=SandboxTaskKind.RESEARCH,
     title="Source-grounded research synthesis",
     prompt=(
-        "Using only the provided source documents, answer: which load "
+        "Using ONLY the provided source documents below, answer: which load "
         "parameters does the LM Studio REST API v1 accept, what is the "
         "measured effect of MTP speculative decoding on a dense 27B, and "
         "how should the conflicting Q3/Q4 speed claim be resolved? "
         "Cite every claim by source name. If the sources do not answer "
-        "something, say so explicitly."
-    ),
+        "something, say so explicitly.\n\n"
+        "SOURCE DOCUMENTS:\n"
+        "--- primary_official ---\n{primary_official}\n\n"
+        "--- technical_secondary ---\n{technical_secondary}\n\n"
+        "--- outdated_source ---\n{outdated_source}\n\n"
+        "--- conflicting_source ---\n{conflicting_source}\n\n"
+        "--- irrelevant_source ---\n{irrelevant_source}\n\n"
+        "END OF SOURCES.\n"
+    ).format(**RESEARCH_PACKAGE),
     checks=[
         SandboxCheck("cites_primary", "regex", r"primary_official", weight=2.0, critical=True),
         SandboxCheck("cites_technical", "regex", r"technical_secondary", weight=1.5),
         SandboxCheck("cites_conflicting", "regex", r"conflicting_source", weight=1.0),
-        SandboxCheck("no_irrelevant_source", "regex", r"cassette", weight=2.0),
+        SandboxCheck("no_irrelevant_source", "regex", r"cassette", weight=2.0, negate=True),
         SandboxCheck("mentions_unknown", "regex", r"(not (stated|provided|mentioned)|no (information|mention))", weight=1.0),
     ],
     max_repair_attempts=1,
     timeout_s=240.0,
+    max_output_tokens=4096,
     network_allowed=False,
     allowed_executables=(),
     artifacts=(),
@@ -174,10 +186,13 @@ BLENDER_TASK = SandboxTask(
     kind=SandboxTaskKind.BLENDER,
     title="Minecraft-inspired Skyblock scene",
     prompt=(
-        "Write a Blender Python script that builds a floating block island "
-        "scene: a grass/dirt/stone block island, a tree, a chest, a block "
-        "avatar, a sun light, and a camera that orbits the island. Set an "
-        "exact frame range, render the frames and save the .blend file."
+        "Write a Blender Python script named build_scene.py that builds a "
+        "floating block island scene: a grass/dirt/stone block island, a "
+        "tree, a chest, a block avatar, a sun light, and a camera that "
+        "orbits the island. Set an exact frame range, render the frames, "
+        "and save the .blend file as scene.blend. Output ONLY the complete "
+        "Python script in a markdown code fence, starting with ```python "
+        "and ending with ```. Do not include any other text."
     ),
     checks=[
         SandboxCheck("script_defines_scene", "regex", r"(bpy\.ops\.mesh|def\s+\w+)", weight=2.0, critical=True),
@@ -190,12 +205,16 @@ BLENDER_TASK = SandboxTask(
         SandboxCheck("has_frame_range", "regex", r"frame_(start|end)", weight=1.0),
         SandboxCheck("saves_blend", "regex", r"save_as_mainfile", weight=1.0, critical=True),
         SandboxCheck("renders", "regex", r"bpy\.ops\.render", weight=1.0),
+        SandboxCheck("blend_is_binary", "custom", None, weight=2.0, critical=True),
+        SandboxCheck("blend_min_size", "custom", None, weight=1.0, critical=True),
+        SandboxCheck("frames_rendered", "custom", None, weight=1.0),
     ],
     max_repair_attempts=2,
     timeout_s=600.0,
+    max_output_tokens=6144,
     network_allowed=False,
     allowed_executables=("blender",),
-    artifacts=("scene.blend", "frames/"),
+    artifacts=("build_scene.py", "scene.blend", "frames/"),
 )
 
 
@@ -230,6 +249,7 @@ EMAIL_TASK = SandboxTask(
     ],
     max_repair_attempts=1,
     timeout_s=180.0,
+    max_output_tokens=1024,
     network_allowed=False,
     allowed_executables=(),
     artifacts=("email.txt",),
@@ -260,6 +280,7 @@ CALENDAR_TASK = SandboxTask(
     ],
     max_repair_attempts=1,
     timeout_s=180.0,
+    max_output_tokens=1024,
     network_allowed=False,
     allowed_executables=(),
     artifacts=("calendar.json",),
@@ -273,9 +294,12 @@ EMAIL_CALENDAR_TASK = SandboxTask(
         "From these notes: 'Kickoff with Acme on 2026-11-10 at 10:00 "
         "Europe/Bratislava; attendees alice@example.com and "
         "bob@example.com; next step send the API draft by 2026-11-07.' "
-        "Write (1) a short follow-up email with Subject and next step, then "
-        "the separator line '--- CALENDAR ---', then (2) one JSON object "
-        "with title, start, end, attendees, location. No markdown fences."
+        "The kickoff is scheduled for 45 minutes (10:00–10:45 "
+        "Europe/Bratislava). Write (1) a short follow-up email with Subject "
+        "and next step, then the separator line '--- CALENDAR ---', then "
+        "(2) one JSON object with title, start, end, attendees, location. "
+        "Use ISO 8601 datetimes: start 2026-11-10T10:00, end 2026-11-10T10:45. "
+        "No markdown fences."
     ),
     checks=[
         SandboxCheck("has_subject", "regex", r"Subject:\s*\S+", weight=2.0, critical=True),
@@ -288,6 +312,7 @@ EMAIL_CALENDAR_TASK = SandboxTask(
     ],
     max_repair_attempts=1,
     timeout_s=240.0,
+    max_output_tokens=2048,
     network_allowed=False,
     allowed_executables=(),
     artifacts=("response.txt",),
@@ -313,6 +338,7 @@ WEB_FETCH_TASK = SandboxTask(
     ],
     max_repair_attempts=1,
     timeout_s=180.0,
+    max_output_tokens=1024,
     network_allowed=False,
     allowed_executables=(),
     artifacts=("web_fetch.json",),
@@ -346,6 +372,7 @@ WEB_SEARCH_TASK = SandboxTask(
     ],
     max_repair_attempts=1,
     timeout_s=240.0,
+    max_output_tokens=3072,
     network_allowed=False,
     allowed_executables=(),
     artifacts=("web_search.py",),
@@ -374,6 +401,7 @@ DEEP_RESEARCH_TASK = SandboxTask(
     ],
     max_repair_attempts=1,
     timeout_s=240.0,
+    max_output_tokens=3072,
     network_allowed=False,
     allowed_executables=(),
     artifacts=("deep_research.txt",),
@@ -647,6 +675,20 @@ def score_attempt(
     weight_sum = 0.0
     failing: list[str] = []
     critical: list[str] = []
+
+    def _strip_md_fences(text: str) -> str:
+        """Strip ```...``` markdown fences from text, returning inner content."""
+        text = text.strip()
+        if text.startswith("```"):
+            lines = text.split("\n", 1)
+            if len(lines) > 1:
+                # Remove opening ```lang line
+                rest = lines[1]
+                if rest.endswith("```"):
+                    rest = rest[:-3].rstrip()
+                return rest
+        return text
+
     for check in task.checks:
         ok = False
         detail = ""
@@ -671,7 +713,8 @@ def score_attempt(
             detail = f"exit={exit_code}"
         elif check.kind == "json":
             try:
-                doc = json.loads("\n".join(files.values()))
+                combined = "\n".join(files.values())
+                doc = json.loads(_strip_md_fences(combined))
                 ok = all(k in doc for k in (check.value or []))
                 detail = "ok" if ok else "missing keys"
             except Exception:
