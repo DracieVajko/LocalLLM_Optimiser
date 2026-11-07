@@ -16,7 +16,6 @@ Maps optimizer concepts to llama.cpp flags:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from lm_optimizer.domain.models import LoadConfiguration
 

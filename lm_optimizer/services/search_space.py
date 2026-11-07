@@ -26,6 +26,7 @@ class SearchSpace:
     physical_batch_sizes: list[int] = field(default_factory=list)
     parallels: list[int] = field(default_factory=list)
     context_checkpoints_options: list[int] = field(default_factory=list)
+    n_cpu_moe_options: list[int] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -38,6 +39,7 @@ class SearchSpace:
             "physical_batch_sizes": self.physical_batch_sizes,
             "parallels": self.parallels,
             "context_checkpoints_options": self.context_checkpoints_options,
+            "n_cpu_moe_options": self.n_cpu_moe_options,
         }
 
     def estimate_size(self) -> int:
@@ -52,6 +54,7 @@ class SearchSpace:
             * max(1, len(self.physical_batch_sizes))
             * max(1, len(self.parallels))
             * max(1, len(self.context_checkpoints_options))
+            * max(1, len(self.n_cpu_moe_options))
         )
 
 
@@ -111,6 +114,10 @@ class SearchSpaceGenerator:
         space.physical_batch_sizes = self._generate_physical_batch_sizes(caps, advanced)
         space.parallels = self._generate_parallels(caps, advanced)
         space.context_checkpoints_options = self._generate_context_checkpoints(caps, advanced)
+
+        # n-cpu-moe options (MoE only, llama.cpp channel)
+        if model.is_moe and caps.supports_n_cpu_moe:
+            space.n_cpu_moe_options = self._generate_n_cpu_moe_options(model, hardware, caps, advanced)
 
         # Expert counts (MoE only)
         if model.is_moe and caps.supports_num_experts:
@@ -314,6 +321,26 @@ class SearchSpaceGenerator:
                 candidates.append(value)
 
         return sorted(candidates[:3])
+
+    def _generate_n_cpu_moe_options(
+        self, model: ModelIdentity, hardware: HardwareInfo, caps: LMStudioCapabilities, advanced: dict
+    ) -> list[int]:
+        """Generate n-cpu-moe candidates for MoE models."""
+        if not caps.supports_n_cpu_moe or not model.is_moe:
+            return []
+
+        primary_gpu = hardware.gpus[0] if hardware.gpus else None
+        vram_gb = primary_gpu.vram_gb if primary_gpu else 0
+        model_size_gb = (model.size_bytes or 0) / (1024**3) if model.size_bytes else 0.0
+
+        candidates = [0]
+        if model_size_gb > vram_gb:
+            overflow_ratio = 1.0 - (vram_gb / model_size_gb)
+            partial = max(1, int(32 * overflow_ratio * 0.5))
+            full = max(1, int(32 * overflow_ratio))
+            candidates.extend([partial, full])
+
+        return sorted(set(c for c in candidates if c >= 0))
 
     def _estimate_model_vram(self, model: ModelIdentity) -> float:
         """Estimate VRAM requirement for model."""

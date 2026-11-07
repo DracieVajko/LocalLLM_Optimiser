@@ -7,9 +7,7 @@ interface compatible with the BackendClient protocol.
 from __future__ import annotations
 
 import asyncio
-import json
 import subprocess
-import time
 from typing import Any
 
 from lm_optimizer.logging_config import get_logger

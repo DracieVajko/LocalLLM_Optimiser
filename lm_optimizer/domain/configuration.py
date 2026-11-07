@@ -51,6 +51,8 @@ class LoadConfiguration:
     speculative_draft_model: str | None = None
     rope_freq_base: float | None = None
     rope_freq_scale: float | None = None
+    # llama.cpp-only: not sent via REST (unrecognized key). Used for llama-server CLI translation.
+    n_cpu_moe: int | None = None
 
     def to_dict(self) -> dict:
         """Convert to dict, excluding None values."""
@@ -81,6 +83,7 @@ class LMStudioCapabilities:
     # recognized by the live REST v1 API).
     supports_speculative_draft: bool = False
     supports_speculative_mtp: bool = False
+    supports_n_cpu_moe: bool = False
     # Runtime-only facts on this build: KV cache quantization, CPU threads,
     # mmap and keep-in-memory are NOT settable through REST (400
     # unrecognized_keys in every spelling tried). They are observed, never
