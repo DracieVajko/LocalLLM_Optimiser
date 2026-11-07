@@ -68,7 +68,7 @@ class BackendComparison:
 class BackendComparator:
     """Compare backends for a given model and recommend the best one."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.results: dict[str, list[BackendResult]] = {}
 
     def add_result(self, result: BackendResult) -> None:

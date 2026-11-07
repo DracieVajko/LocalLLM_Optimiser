@@ -77,7 +77,7 @@ _LOAD_CONFIG_NAMES = frozenset({"config", "load_config", "load_configuration", "
 _GENERATE_OPTIONS_NAMES = frozenset({"options", "opts", "config", "params", "generation_kwargs"})
 
 
-def _require_async_method(client: Any, name: str) -> None:
+def _require_async_method(client: object, name: str) -> None:
     try:
         static = inspect.getattr_static(client, name)
     except AttributeError:
@@ -93,7 +93,7 @@ def _require_async_method(client: Any, name: str) -> None:
         raise AssertionError(f"BackendClient non-conformance: {name!r} must be async")
 
 
-def assert_conforms(client: Any) -> None:
+def assert_conforms(client: object) -> None:
     """Assert that ``client`` structurally satisfies BackendClient.
 
     Checks presence/types only — never performs I/O and never invokes
