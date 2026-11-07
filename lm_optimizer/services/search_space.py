@@ -28,6 +28,7 @@ class SearchSpace:
     context_checkpoints_options: list[int] = field(default_factory=list)
     n_cpu_moe_options: list[int] = field(default_factory=list)
     kv_cache_quant_options: list[str] = field(default_factory=list)
+    speculative_options: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -42,6 +43,7 @@ class SearchSpace:
             "context_checkpoints_options": self.context_checkpoints_options,
             "n_cpu_moe_options": self.n_cpu_moe_options,
             "kv_cache_quant_options": self.kv_cache_quant_options,
+            "speculative_options": self.speculative_options,
         }
 
     def estimate_size(self) -> int:
@@ -58,6 +60,7 @@ class SearchSpace:
             * max(1, len(self.context_checkpoints_options))
             * max(1, len(self.n_cpu_moe_options))
             * max(1, len(self.kv_cache_quant_options))
+            * max(1, len(self.speculative_options))
         )
 
 
@@ -125,6 +128,10 @@ class SearchSpaceGenerator:
         # KV cache quantization (llama.cpp channel)
         if caps.supports_kv_cache_quantization:
             space.kv_cache_quant_options = self._generate_kv_cache_quant_options(caps, advanced)
+
+        # Speculative decoding / MTP (llama.cpp channel)
+        if caps.supports_speculative_draft or caps.supports_speculative_mtp:
+            space.speculative_options = self._generate_speculative_options(caps, advanced)
 
         # Expert counts (MoE only)
         if model.is_moe and caps.supports_num_experts:
@@ -361,6 +368,20 @@ class SearchSpaceGenerator:
             options.append("q8_0")
         if advanced.get("test_kv_q4", False):
             options.append("q4_0")
+        return options
+
+    def _generate_speculative_options(
+        self, caps: LMStudioCapabilities, advanced: dict
+    ) -> list[dict]:
+        """Generate speculative decoding candidates."""
+        if not (caps.supports_speculative_draft or caps.supports_speculative_mtp):
+            return []
+
+        options = [{"enabled": False}]  # always try without speculative first
+        if caps.supports_speculative_mtp and advanced.get("test_mtp", False):
+            options.append({"enabled": True, "mtp": True})
+        if caps.supports_speculative_draft and advanced.get("test_draft_simple", False):
+            options.append({"enabled": True, "draft_simple": True})
         return options
 
     def _estimate_model_vram(self, model: ModelIdentity) -> float:

@@ -5,7 +5,6 @@ from __future__ import annotations
 from lm_optimizer.services.backend_comparison import (
     BackendComparator,
     BackendResult,
-    BackendComparison,
     record_backend_result,
     recommend_backend,
     compare_backends,

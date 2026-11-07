@@ -46,7 +46,6 @@ def test_load_config_has_kv_cache_quant_field():
 
 
 def test_kv_quant_to_cache_type_mapping():
-    from lm_optimizer.backends.llamacpp.config import kv_quant_to_cache_type
     assert kv_quant_to_cache_type("q8_0") == "q8_0"
     assert kv_quant_to_cache_type("q4_0") == "q4_0"
     assert kv_quant_to_cache_type("f16") == "f16"

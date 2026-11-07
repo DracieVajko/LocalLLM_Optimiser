@@ -7,9 +7,7 @@ TTFT, quality, and stability.
 
 from __future__ import annotations
 
-import statistics
 from dataclasses import dataclass, field
-from typing import Any
 
 from lm_optimizer.logging_config import get_logger
 
