@@ -586,54 +586,70 @@ def _default_catalog() -> list:
               capabilities=["chat", "tools"]),
     ]
 # --- P4 Duel --------------------------------------------------------------
-@app.command("duel")
-def duel(
-    model_a: str = typer.Argument(...),
-    model_b: str = typer.Argument(...),
-    duel_type: str = typer.Option("micro_quality", "--type"),
-    mode: str = typer.Option("controlled", "--mode"),
-    blind: bool = typer.Option(True, "--blind/--no-blind"),
-    context_length: int = typer.Option(16384, "--context"),
-    seeds: int = typer.Option(1, "--seeds"),
-):
-    """Duel two models on the same tasks (P4).
-    Controlled mode uses identical context, sampling and seed for both
-    sides; the judge (if any) sees anonymized Candidate A/B only.
-    """
-    setup_logging()
-    from lm_optimizer.services.duel import (
-        DUEL_TASKS,
-        DuelConfig,
-        DuelMode,
-        DuelSide,
-        DuelType,
-        run_duel,
-    )
+# --- P4 Duel --------------------------------------------------------------
+def _resolve_duel_task_ids(duel_type: str, tasks: str | None) -> tuple[object, list[str]]:
+    """Resolve the duel type and the task ids it will run."""
+    from lm_optimizer.services.duel import DUEL_TASKS, DuelType
+
     try:
         dt = DuelType(duel_type)
     except ValueError:
-        console.print(f"[red]Unknown duel type: {duel_type}[/red]")
-        sys.exit(2)
+        raise ValueError(
+            f"Unknown duel type {duel_type!r}. "
+            f"Available: {', '.join(t.value for t in DuelType)}"
+        ) from None
+    if tasks and tasks.strip().lower() not in ("all", "*"):
+        task_ids = [t.strip() for t in tasks.split(",") if t.strip()]
+    else:
+        task_ids = list(DUEL_TASKS[dt])
+    return dt, task_ids
+
+
+def _run_duel_one(
+    model_a: str,
+    model_b: str,
+    *,
+    duel_type: str = "micro_quality",
+    mode: str = "controlled",
+    blind: bool = True,
+    context_length: int = 16384,
+    tasks: str | None = None,
+    custom_prompt: str | None = None,
+) -> dict:
+    """Measure both sides on the same task set and return the duel payload."""
+    from dataclasses import replace as _replace
+
+    from lm_optimizer.services.duel import (
+        DuelMode,
+        DuelSide,
+        compute_verdict,
+    )
+    from lm_optimizer.services.quality_lab import default_tasks, run_task
+
+    dt, task_ids = _resolve_duel_task_ids(duel_type, tasks)
     try:
         dm = DuelMode(mode)
     except ValueError:
-        console.print(f"[red]Unknown duel mode: {mode}[/red]")
-        sys.exit(2)
+        raise ValueError(
+            f"Unknown duel mode {mode!r}. Available: "
+            f"{', '.join(m.value for m in DuelMode)}"
+        ) from None
+
     side_a = DuelSide(model_id=model_a, context_length=context_length)
     side_b = DuelSide(model_id=model_b, context_length=context_length)
-    config = DuelConfig(
-        duel_type=dt,
-        mode=dm,
-        context_length=context_length,
-        blind=blind,
-    )
+    all_tasks = {t.id: t for t in default_tasks()}
+    if custom_prompt:
+        all_tasks = {
+            task_id: _replace(task, prompt=custom_prompt)
+            for task_id, task in all_tasks.items()
+        }
+
     import asyncio
-    async def _run_duel():
-        """Run both sides on the SAME tasks with the SAME conditions."""
+
+    async def _measure() -> dict[str, dict]:
         from lm_optimizer.domain.models import LoadConfiguration
         from lm_optimizer.services.benchmark import BenchmarkService
-        from lm_optimizer.services.quality_lab import default_tasks, run_task
-        tasks = {t.id: t for t in default_tasks()}
+
         client = _client()
         results: dict[str, dict] = {}
         try:
@@ -649,7 +665,7 @@ def duel(
                 ok, _i, _l, _ch, _ap, err = await svc._channel_load(side.model_id, cfg)
                 if not ok:
                     console.print(f"[red]Load failed for {side.model_id}: {err}[/red]")
-                    for task_id in DUEL_TASKS[dt]:
+                    for task_id in task_ids:
                         side.outcomes[task_id] = {
                             "score": 0.0,
                             "error": f"load failed: {err}"[:200],
@@ -658,8 +674,8 @@ def duel(
                         }
                     results[side.model_id] = side.outcomes
                     continue
-                for task_id in DUEL_TASKS[dt]:
-                    task = tasks.get(task_id)
+                for task_id in task_ids:
+                    task = all_tasks.get(task_id)
                     if task is None:
                         side.outcomes[task_id] = {
                             "score": 0.0,
@@ -681,7 +697,9 @@ def duel(
                         "output": outcome.output,
                         "error": outcome.error,
                         "critical_failure": (
-                            "quality_failed" if not outcome.passed and not outcome.error else ""
+                            "quality_failed"
+                            if not outcome.passed and not outcome.error
+                            else ""
                         ),
                     }
                     console.print(
@@ -701,47 +719,278 @@ def duel(
             except Exception as exc:
                 log_best_effort("best-effort operation failed", exc)
         return results
-    async def _runner(side, task_id):
-        from lm_optimizer.services.quality_lab import default_tasks
-        task = next((t for t in default_tasks() if t.id == task_id), None)
-        if task is None:
-            return {"score": 0.0, "error": f"unknown task {task_id}", "gate_passed": False}
-        # Outcomes are measured up-front (both models share the same host
-        # and the job lock forbids parallel loads), so the duel controller
-        # reads them from the side.
-        return side.outcomes.get(task_id) or {
-            "score": 0.0,
-            "error": "not measured",
-            "gate_passed": False,
-        }
-    asyncio.run(_run_duel())
-    payload = asyncio.run(run_duel(side_a, side_b, config, _runner))
+
+    asyncio.run(_measure())
+
+    verdict = compute_verdict(side_a, side_b, task_ids)
+    return {
+        "duel_type": dt.value,
+        "mode": dm.value,
+        "tasks": task_ids,
+        "side_a": side_a.as_dict(),
+        "side_b": side_b.as_dict(),
+        "verdict": verdict.as_dict(),
+    }
+
+
+@app.command("duel")
+def duel(
+    model_a: str = typer.Argument(...),
+    model_b: str = typer.Argument(...),
+    duel_type: str = typer.Option("micro_quality", "--type"),
+    mode: str = typer.Option("controlled", "--mode"),
+    blind: bool = typer.Option(True, "--blind/--no-blind"),
+    context_length: int = typer.Option(16384, "--context"),
+    seeds: int = typer.Option(1, "--seeds"),
+    tasks: str | None = typer.Option(
+        None, "--tasks", help="Comma-separated task ids (default: the type's set)"
+    ),
+    custom_prompt: str | None = typer.Option(
+        None, "--custom-prompt", help="Override every task prompt (default: task prompt)"
+    ),
+):
+    """Duel two models on the same tasks (P4).
+
+    Controlled mode uses identical context, sampling and seed for both
+    sides; the judge (if any) sees anonymized Candidate A/B only.
+    """
+    setup_logging()
+    try:
+        payload = _run_duel_one(
+            model_a,
+            model_b,
+            duel_type=duel_type,
+            mode=mode,
+            blind=blind,
+            context_length=context_length,
+            tasks=tasks,
+            custom_prompt=custom_prompt,
+        )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        sys.exit(2)
     console.print(json.dumps(payload["verdict"], indent=2, ensure_ascii=False))
     path = _write_json(
         f"duel-{model_a.replace('/', '_')}-{model_b.replace('/', '_')}.json", payload
     )
     console.print(f"\nReport saved: {path}")
-@app.command("sandbox")
-def sandbox(
-    task: str = typer.Option("web_dashboard", "--task", help="Sandbox task id"),
-    model: str = typer.Option("", "--model", help="Model that produces the solution"),
+
+
+@app.command("duel-matrix")
+def duel_matrix(
+    models: str = typer.Option(
+        ..., "--models", help="Comma-separated ids or a glob; every pair is dueled"
+    ),
+    tasks: str | None = typer.Option(
+        None, "--tasks", help="Comma-separated task ids (default: the duel type's set)"
+    ),
+    duel_type: str = typer.Option("micro_quality", "--type"),
+    mode: str = typer.Option("controlled", "--mode"),
+    blind: bool = typer.Option(True, "--blind/--no-blind"),
+    context_length: int = typer.Option(16384, "--context"),
+    custom_prompt: str | None = typer.Option(
+        None, "--custom-prompt", help="Override every task prompt"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Print the planned pairs without running them"
+    ),
 ):
-    """Run a sandbox task with the repair loop (P4).
-    The model writes into an isolated workdir; the acceptance criteria are
-    checked automatically; on failure the model receives the EVIDENCE (not
-    the solution) and the remaining repair budget.
+    """Duel every pair of the selected models on the selected tasks.
+
+    Examples:
+      lab duel-matrix --models a,b --tasks web_dashboard
+      lab duel-matrix --models qwen/* --type complete_sandbox
+      lab duel-matrix --models a,b,c --custom-prompt "Explain X"
     """
     setup_logging()
+    import itertools
+
+    try:
+        _dt, task_ids = _resolve_duel_task_ids(duel_type, tasks)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        sys.exit(2)
+
+    model_ids = _resolve_models(models)
+    if len(model_ids) < 2:
+        console.print("[red]duel-matrix needs at least two models.[/red]")
+        sys.exit(2)
+
+    pairs = list(itertools.combinations(model_ids, 2))
+    console.print(
+        f"[bold]Duel matrix:[/bold] {len(model_ids)} model(s) -> "
+        f"{len(pairs)} pair(s) x {len(task_ids)} task(s)"
+    )
+    console.print("Models: " + ", ".join(model_ids))
+    console.print("Tasks:  " + ", ".join(task_ids))
+    for a, b in pairs:
+        console.print(f"  [dim]pair[/dim] {a} vs {b}")
+    if custom_prompt:
+        console.print("[yellow]custom prompt override active[/yellow]")
+
+    if dry_run:
+        console.print("[green]Dry run: nothing executed.[/green]")
+        return
+
+    summary_path = Path("results") / "duel_matrix.jsonl"
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    from datetime import datetime
+
+    wins_a = 0
+    wins_b = 0
+    draws = 0
+    failures = 0
+    try:
+        for index, (model_a, model_b) in enumerate(pairs, 1):
+            console.print(
+                f"\n[bold]=== [{index}/{len(pairs)}] {model_a} vs {model_b} ===[/bold]"
+            )
+            entry: dict = {
+                "model_a": model_a,
+                "model_b": model_b,
+                "duel_type": duel_type,
+                "tasks": task_ids,
+                "timestamp": datetime.now().isoformat(timespec="seconds"),
+            }
+            try:
+                payload = _run_duel_one(
+                    model_a,
+                    model_b,
+                    duel_type=duel_type,
+                    mode=mode,
+                    blind=blind,
+                    context_length=context_length,
+                    tasks=",".join(task_ids),
+                    custom_prompt=custom_prompt,
+                )
+                verdict = payload.get("verdict") or {}
+                winner = verdict.get("winner") or "draw"
+                entry["winner"] = winner
+                entry["verdict"] = verdict
+                if winner == model_a:
+                    wins_a += 1
+                elif winner == model_b:
+                    wins_b += 1
+                else:
+                    draws += 1
+                console.print(f"[dim]winner: {winner}[/dim]")
+            except Exception as exc:  # noqa: BLE001
+                failures += 1
+                entry["error"] = str(exc)[:300]
+                console.print(f"[red]pair failed: {exc}[/red]")
+            with summary_path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Interrupted; partial results kept.[/yellow]")
+    console.print(
+        f"\n[bold]Duel matrix finished: {wins_a} A-wins, {wins_b} B-wins, "
+        f"{draws} draws, {failures} failures.[/bold] Summary: {summary_path}"
+    )
+
+
+# --- P4 Sandbox -----------------------------------------------------------
+MIN_SANDBOX_CONTEXT = 4096
+
+
+def _available_model_ids() -> list[str]:
+    """Chat-capable model ids reported by LM Studio (excludes embeddings)."""
+    import asyncio
+
+    async def _list() -> list[str]:
+        client = _client()
+        try:
+            await client.connect(echo_probe=False)
+            models = await client.list_models()
+            out: list[str] = []
+            for model in models:
+                if (model.model_type or "llm").lower() != "llm":
+                    continue
+                out.append(model.id)
+            return out
+        finally:
+            try:
+                await client.close()
+            except Exception as exc:
+                log_best_effort("best-effort operation failed", exc)
+
+    try:
+        return asyncio.run(_list())
+    except Exception as exc:  # noqa: BLE001
+        console.print(f"[red]Cannot list models from LM Studio: {exc}[/red]")
+        return []
+
+
+def _resolve_models(spec: str) -> list[str]:
+    """Resolve a model selector.
+
+    Accepts ``all`` (every chat model LM Studio reports), a comma-separated
+    list of ids, or a glob such as ``qwen/*``.
+    """
+    raw = (spec or "all").strip()
+    if raw.lower() in ("all", "*"):
+        return _available_model_ids()
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    if len(parts) == 1 and any(ch in parts[0] for ch in "*?["):
+        import fnmatch
+
+        available = _available_model_ids()
+        matched = fnmatch.filter(available, parts[0])
+        return matched
+    return parts
+
+
+def _resolve_tasks(spec: str | None, available: list[str]) -> list[str]:
+    """Resolve a task selector against the known task ids."""
+    raw = (spec or "all").strip()
+    if raw.lower() in ("all", "*"):
+        return sorted(available)
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    if len(parts) == 1 and any(ch in parts[0] for ch in "*?["):
+        import fnmatch
+
+        return fnmatch.filter(sorted(available), parts[0])
+    return parts
+
+
+def _load_prompt_overrides(path: Path | None) -> dict[str, str]:
+    """Load a JSON map of task_id -> custom prompt (optional)."""
+    if path is None:
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Cannot read prompt file {path}: {exc}") from None
+    if not isinstance(data, dict):
+        raise ValueError("Prompt file must be a JSON object {task_id: prompt}")
+    return {str(key): str(value) for key, value in data.items()}
+
+
+def _run_sandbox_one(
+    task_id: str,
+    model: str,
+    *,
+    custom_prompt: str | None = None,
+    context_length: int | None = None,
+) -> dict:
+    """Execute one sandbox task for one model and return the result dict."""
+    from dataclasses import replace as _replace
+
     from lm_optimizer.services.sandbox_lab import SANDBOX_TASKS, SandboxPolicy
     from lm_optimizer.services.sandbox_runner import SandboxRunner, build_command_for
-    definition = SANDBOX_TASKS.get(task)
+
+    definition = SANDBOX_TASKS.get(task_id)
     if definition is None:
-        console.print(f"[red]Unknown sandbox task: {task}[/red]")
-        console.print("Available: " + ", ".join(sorted(SANDBOX_TASKS)))
-        sys.exit(2)
+        raise ValueError(
+            f"Unknown sandbox task {task_id!r}. "
+            f"Available: {', '.join(sorted(SANDBOX_TASKS))}"
+        )
+    if custom_prompt:
+        definition = _replace(definition, prompt=custom_prompt)
+
     from datetime import datetime
+
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    base_dir = Path("results") / "sandbox" / task
+    base_dir = Path("results") / "sandbox" / task_id
     workdir = base_dir / stamp
     policy = SandboxPolicy(
         workdir=workdir,
@@ -755,14 +1004,14 @@ def sandbox(
         workdir=workdir,
         command=build_command_for(definition),
     )
-    MIN_CTX_FOR_SANDBOX = 4096
-
     async def _generate(feedback: str) -> str:
         if not model:
             return ""
-        from dataclasses import replace
+        from dataclasses import replace as _replace_cfg
+
         from lm_optimizer.cli.sandbox_duel import _load_best_config
         from lm_optimizer.domain.models import LoadConfiguration
+
         client = _client()
         try:
             await client.connect(echo_probe=False)
@@ -771,18 +1020,17 @@ def sandbox(
             await client.unload_all()
             try:
                 cfg, ctx = _load_best_config(model)
-                # Ensure context length is sufficient for sandbox tasks.
-                # Best configs from early runs may have ctx=2048 which is too
-                # small for meaningful sandbox evaluation; bump it up.
-                if ctx is not None and ctx < MIN_CTX_FOR_SANDBOX:
-                    cfg = replace(cfg, context_length=MIN_CTX_FOR_SANDBOX)
-                    ctx = MIN_CTX_FOR_SANDBOX
+                effective = context_length or max(MIN_SANDBOX_CONTEXT, ctx or 0)
+                if ctx is not None and ctx < effective:
+                    cfg = _replace_cfg(cfg, context_length=effective)
                     console.print(
                         f"[yellow]context_length raised from {ctx} to "
-                        f"{MIN_CTX_FOR_SANDBOX} for sandbox run[/yellow]"
+                        f"{effective} for sandbox run[/yellow]"
                     )
             except ValueError:
-                cfg = LoadConfiguration(context_length=MIN_CTX_FOR_SANDBOX)
+                cfg = LoadConfiguration(
+                    context_length=context_length or MIN_SANDBOX_CONTEXT
+                )
             loaded = await client.load_model(model, cfg)
             if not getattr(loaded, "success", False):
                 return ""
@@ -803,51 +1051,250 @@ def sandbox(
                 await client.close()
             except Exception as exc:
                 log_best_effort("best-effort operation failed", exc)
+
     import asyncio
+
     result = asyncio.run(runner.run_async(_generate))
     # Artifact retention: keep the newest N runs per task (spec §13.5).
     from lm_optimizer.services.sandbox_runner import apply_retention
+
     removed = apply_retention(base_dir, policy)
     if removed:
         console.print(f"[dim]retention: pruned {len(removed)} old sandbox run(s)[/dim]")
     from lm_optimizer.services.sandbox_history import record_run
+
+    payload = result.as_dict()
     record_run(
         model or "(none)",
-        task,
-        result.as_dict(),
+        task_id,
+        payload,
         workdir=str(workdir),
         duration_s=sum(a.duration_s for a in result.attempts),
     )
-    console.print(json.dumps(result.as_dict(), indent=2, ensure_ascii=False))
-    path = _write_json(f"sandbox-{task}.json", result.as_dict())
+    payload["workdir"] = str(workdir)
+    return payload
+
+
+@app.command("sandbox")
+def sandbox(
+    task: str = typer.Option("web_dashboard", "--task", help="Sandbox task id"),
+    model: str = typer.Option("", "--model", help="Model that produces the solution"),
+    custom_prompt: str | None = typer.Option(
+        None, "--custom-prompt", help="Override the task prompt (default: task prompt)"
+    ),
+    context_length: int | None = typer.Option(
+        None, "--context", help="Force context length (default: best config, min 4096)"
+    ),
+):
+    """Run one sandbox task with the repair loop (P4).
+
+    The model writes into an isolated workdir; the acceptance criteria are
+    checked automatically; on failure the model receives the EVIDENCE (not
+    the solution) and the remaining repair budget.
+    """
+    setup_logging()
+    try:
+        payload = _run_sandbox_one(
+            task,
+            model,
+            custom_prompt=custom_prompt,
+            context_length=context_length,
+        )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        sys.exit(2)
+    console.print(json.dumps(payload, indent=2, ensure_ascii=False))
+    clean = {k: v for k, v in payload.items() if k != "workdir"}
+    path = _write_json(f"sandbox-{task}.json", clean)
     console.print(f"\nReport saved: {path}")
+
+
 @app.command("sandbox-all")
 def sandbox_all(
     model: str = typer.Option(..., "--model", help="Model that produces the solutions"),
     tasks: str | None = typer.Option(
-        None, "--tasks", help="Comma-separated task ids (default: all)"
+        None, "--tasks", help="Comma-separated task ids or 'all' (default: all)"
+    ),
+    custom_prompt: str | None = typer.Option(
+        None, "--custom-prompt", help="Override every task prompt"
+    ),
+    prompts_file: Path | None = typer.Option(
+        None, "--prompts-file", help="JSON map {task_id: prompt} for per-task overrides"
+    ),
+    context_length: int | None = typer.Option(
+        None, "--context", help="Force context length for every run"
     ),
 ):
     """Run every sandbox task (or a subset) for one model.
+
     Loads the model once per task with its best validated config and records
     each result in results/sandbox_runs.jsonl for the web UI.
     """
     setup_logging()
     from lm_optimizer.services.sandbox_lab import SANDBOX_TASKS
-    if tasks:
-        task_ids = [t.strip() for t in tasks.split(",") if t.strip()]
-    else:
-        task_ids = sorted(SANDBOX_TASKS)
+
+    task_ids = _resolve_tasks(tasks, list(SANDBOX_TASKS))
     unknown = [t for t in task_ids if t not in SANDBOX_TASKS]
     if unknown:
         console.print(f"[red]Unknown sandbox task(s): {', '.join(unknown)}[/red]")
         console.print("Available: " + ", ".join(sorted(SANDBOX_TASKS)))
         sys.exit(2)
-    console.print(f"Running {len(task_ids)} sandbox task(s) for {model}")
+    try:
+        overrides = _load_prompt_overrides(prompts_file)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        sys.exit(2)
+    total = len(task_ids)
+    ok = 0
+    failed = 0
+    console.print(f"Running {total} sandbox task(s) for {model}")
     for index, task_id in enumerate(task_ids, 1):
-        console.print(f"\n[bold]=== [{index}/{len(task_ids)}] {task_id} ===[/bold]")
-        sandbox(task=task_id, model=model)
-    console.print(f"\n[bold green]All {len(task_ids)} sandbox task(s) finished.[/bold green]")
+        console.print(f"\n[bold]=== [{index}/{total}] {task_id} ===[/bold]")
+        try:
+            payload = _run_sandbox_one(
+                task_id,
+                model,
+                custom_prompt=custom_prompt or overrides.get(task_id),
+                context_length=context_length,
+            )
+        except Exception as exc:  # noqa: BLE001
+            failed += 1
+            console.print(f"[red]{task_id} failed: {exc}[/red]")
+            continue
+        if payload.get("final_success"):
+            ok += 1
+        else:
+            failed += 1
+        console.print(
+            f"[dim]score={payload.get('final_score')} "
+            f"passed={payload.get('final_success')}[/dim]"
+        )
+    console.print(
+        f"\n[bold]{total} task(s) finished: {ok} passed, {failed} failed.[/bold]"
+    )
+
+
+@app.command("sandbox-matrix")
+def sandbox_matrix(
+    models: str = typer.Option(
+        "all", "--models", help="'all', comma-separated ids, or a glob (qwen/*)"
+    ),
+    tasks: str = typer.Option(
+        "all", "--tasks", help="'all', comma-separated task ids, or a glob"
+    ),
+    custom_prompt: str | None = typer.Option(
+        None, "--custom-prompt", help="Override the prompt for every run"
+    ),
+    prompts_file: Path | None = typer.Option(
+        None, "--prompts-file", help="JSON map {task_id: prompt} for per-task overrides"
+    ),
+    context_length: int | None = typer.Option(
+        None, "--context", help="Force context length for every run"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Print the matrix without running anything"
+    ),
+):
+    """Run a model x task sandbox matrix (the flexible sweep).
+
+    Examples:
+      lab sandbox-matrix --models all --tasks all
+      lab sandbox-matrix --models qwen/* --tasks web_dashboard,email_write
+      lab sandbox-matrix --models a,b --tasks all --custom-prompt "Explain X"
+      lab sandbox-matrix --models all --tasks all --prompts-file prompts.json
+    """
+    setup_logging()
+    from lm_optimizer.services.sandbox_lab import SANDBOX_TASKS
+
+    model_ids = _resolve_models(models)
+    if not model_ids:
+        console.print("[red]No models matched.[/red]")
+        sys.exit(2)
+    task_ids = _resolve_tasks(tasks, list(SANDBOX_TASKS))
+    unknown = [t for t in task_ids if t not in SANDBOX_TASKS]
+    if unknown:
+        console.print(f"[red]Unknown sandbox task(s): {', '.join(unknown)}[/red]")
+        console.print("Available: " + ", ".join(sorted(SANDBOX_TASKS)))
+        sys.exit(2)
+    try:
+        overrides = _load_prompt_overrides(prompts_file)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        sys.exit(2)
+
+    total = len(model_ids) * len(task_ids)
+    console.print(
+        f"[bold]Sandbox matrix:[/bold] {len(model_ids)} model(s) x "
+        f"{len(task_ids)} task(s) = {total} run(s)"
+    )
+    console.print("Models: " + ", ".join(model_ids))
+    console.print("Tasks:  " + ", ".join(task_ids))
+    if custom_prompt:
+        console.print("[yellow]custom prompt override active[/yellow]")
+    if overrides:
+        console.print(f"[yellow]{len(overrides)} per-task prompt override(s)[/yellow]")
+
+    if dry_run:
+        for model_id in model_ids:
+            for task_id in task_ids:
+                console.print(f"  [dim]would run[/dim] {model_id} x {task_id}")
+        console.print("[green]Dry run: nothing executed.[/green]")
+        return
+
+    summary_path = Path("results") / "sandbox_matrix.jsonl"
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    from datetime import datetime
+
+    ok = 0
+    failed = 0
+    index = 0
+    try:
+        for model_id in model_ids:
+            console.print(f"\n[bold cyan]=== MODEL: {model_id} ===[/bold cyan]")
+            for task_id in task_ids:
+                index += 1
+                console.print(
+                    f"\n[bold]=== [{index}/{total}] {model_id} x {task_id} ===[/bold]"
+                )
+                entry: dict = {
+                    "model": model_id,
+                    "task": task_id,
+                    "timestamp": datetime.now().isoformat(timespec="seconds"),
+                }
+                try:
+                    payload = _run_sandbox_one(
+                        task_id,
+                        model_id,
+                        custom_prompt=custom_prompt or overrides.get(task_id),
+                        context_length=context_length,
+                    )
+                    entry.update(
+                        {
+                            "ok": bool(payload.get("final_success")),
+                            "score": payload.get("final_score"),
+                            "repairs": payload.get("repair_count"),
+                            "workdir": payload.get("workdir"),
+                        }
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    entry.update({"ok": False, "error": str(exc)[:300]})
+                with summary_path.open("a", encoding="utf-8") as handle:
+                    handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+                if entry.get("ok"):
+                    ok += 1
+                else:
+                    failed += 1
+                console.print(
+                    f"[dim]score={entry.get('score')} ok={entry.get('ok')}[/dim]"
+                )
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Interrupted; partial results kept.[/yellow]")
+    console.print(
+        f"\n[bold]Matrix finished: {ok} passed, {failed} failed "
+        f"(of {total}). Summary: {summary_path}[/bold]"
+    )
+
+
 @app.command("community-import")
 def community_import(
     file: Path = typer.Argument(..., help="JSON file with community benchmark records"),
