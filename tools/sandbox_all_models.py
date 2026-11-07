@@ -86,7 +86,7 @@ def main() -> int:
         for task in TASKS:
             total += 1
             log(f"--- [{total}/{len(MODELS) * len(TASKS)}] {model} x {task} ---")
-            rc = cli(["lab", "sandbox", "--task", task, "--model", model], timeout=900)
+            rc = cli(["lab", "sandbox", "--task", task, "--model", model], timeout=3600)
             entry = {
                 "model": model,
                 "task": task,
