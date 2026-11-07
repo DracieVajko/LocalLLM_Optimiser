@@ -112,8 +112,8 @@ def from_load_config(
     args.ubatch_size = config.physical_batch_size or 512
     args.parallel = config.parallel or 1
     args.threads = threads
-    args.cache_type_k = kv_quant
-    args.cache_type_v = kv_quant
+    args.cache_type_k = config.kv_cache_quant or "f16"
+    args.cache_type_v = config.kv_cache_quant or "f16"
 
     # GPU layers: derive from gpu_ratio (default: full offload)
     ratio = 1.0 if config.gpu_ratio is None else float(config.gpu_ratio)
@@ -124,8 +124,10 @@ def from_load_config(
     else:
         args.n_gpu_layers = 0  # CPU only
 
-    # MoE: n-cpu-moe
-    if is_moe and num_experts and num_experts > 0:
+    # MoE: n-cpu-moe (use explicit config if provided)
+    if config.n_cpu_moe is not None:
+        args.n_cpu_moe = config.n_cpu_moe
+    elif is_moe and num_experts and num_experts > 0:
         # For MoE, keep attention on GPU, shift experts to CPU
         # n_cpu_moe = number of layers whose experts go to CPU
         if vram_gb > 0 and model_size_gb > vram_gb:

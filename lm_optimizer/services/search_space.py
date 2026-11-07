@@ -27,6 +27,7 @@ class SearchSpace:
     parallels: list[int] = field(default_factory=list)
     context_checkpoints_options: list[int] = field(default_factory=list)
     n_cpu_moe_options: list[int] = field(default_factory=list)
+    kv_cache_quant_options: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -40,6 +41,7 @@ class SearchSpace:
             "parallels": self.parallels,
             "context_checkpoints_options": self.context_checkpoints_options,
             "n_cpu_moe_options": self.n_cpu_moe_options,
+            "kv_cache_quant_options": self.kv_cache_quant_options,
         }
 
     def estimate_size(self) -> int:
@@ -55,6 +57,7 @@ class SearchSpace:
             * max(1, len(self.parallels))
             * max(1, len(self.context_checkpoints_options))
             * max(1, len(self.n_cpu_moe_options))
+            * max(1, len(self.kv_cache_quant_options))
         )
 
 
@@ -118,6 +121,10 @@ class SearchSpaceGenerator:
         # n-cpu-moe options (MoE only, llama.cpp channel)
         if model.is_moe and caps.supports_n_cpu_moe:
             space.n_cpu_moe_options = self._generate_n_cpu_moe_options(model, hardware, caps, advanced)
+
+        # KV cache quantization (llama.cpp channel)
+        if caps.supports_kv_cache_quantization:
+            space.kv_cache_quant_options = self._generate_kv_cache_quant_options(caps, advanced)
 
         # Expert counts (MoE only)
         if model.is_moe and caps.supports_num_experts:
@@ -341,6 +348,20 @@ class SearchSpaceGenerator:
             candidates.extend([partial, full])
 
         return sorted(set(c for c in candidates if c >= 0))
+
+    def _generate_kv_cache_quant_options(
+        self, caps: LMStudioCapabilities, advanced: dict
+    ) -> list[str]:
+        """Generate KV cache quantization candidates."""
+        if not caps.supports_kv_cache_quantization:
+            return ["f16"]  # default
+
+        options = ["f16"]
+        if advanced.get("test_kv_q8", True):
+            options.append("q8_0")
+        if advanced.get("test_kv_q4", False):
+            options.append("q4_0")
+        return options
 
     def _estimate_model_vram(self, model: ModelIdentity) -> float:
         """Estimate VRAM requirement for model."""

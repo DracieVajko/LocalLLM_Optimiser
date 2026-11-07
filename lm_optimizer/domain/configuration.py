@@ -53,6 +53,7 @@ class LoadConfiguration:
     rope_freq_scale: float | None = None
     # llama.cpp-only: not sent via REST (unrecognized key). Used for llama-server CLI translation.
     n_cpu_moe: int | None = None
+    kv_cache_quant: str | None = None
 
     def to_dict(self) -> dict:
         """Convert to dict, excluding None values."""

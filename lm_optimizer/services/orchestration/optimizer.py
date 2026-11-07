@@ -1319,6 +1319,7 @@ class AdaptiveOptimizer:
                     eval_batch_size=loaded.load_config.eval_batch_size,
                     num_experts=loaded.load_config.num_experts,
                     n_cpu_moe=getattr(loaded.load_config, 'n_cpu_moe', None),
+                    kv_cache_quant=getattr(loaded.load_config, 'kv_cache_quant', None),
                 )
             # Check client's loaded models cache
             if hasattr(self.client, "_loaded_models") and model.id in self.client._loaded_models:
@@ -1631,6 +1632,7 @@ class AdaptiveOptimizer:
                             context_checkpoints=bc.context_checkpoints,
                             num_experts=bc.num_experts,
                             n_cpu_moe=getattr(bc, 'n_cpu_moe', None),
+                            kv_cache_quant=getattr(bc, 'kv_cache_quant', None),
                         )
                     )
             for kv in space.kv_cache_options:
@@ -1647,6 +1649,7 @@ class AdaptiveOptimizer:
                             context_checkpoints=bc.context_checkpoints,
                             num_experts=bc.num_experts,
                             n_cpu_moe=getattr(bc, 'n_cpu_moe', None),
+                            kv_cache_quant=getattr(bc, 'kv_cache_quant', None),
                         )
                     )
 
@@ -1709,6 +1712,7 @@ class AdaptiveOptimizer:
                             context_checkpoints=bc.context_checkpoints,
                             num_experts=bc.num_experts,
                             n_cpu_moe=getattr(bc, 'n_cpu_moe', None),
+                            kv_cache_quant=getattr(bc, 'kv_cache_quant', None),
                         )
 
                         result = await self._test_config(config, ctx, min_speed=self.state.run.advanced_settings.get("min_speed", 0.0))
@@ -1806,6 +1810,7 @@ class AdaptiveOptimizer:
                     context_checkpoints=checkpoints,
                     num_experts=anchor.num_experts,
                     n_cpu_moe=getattr(anchor, 'n_cpu_moe', None),
+                    kv_cache_quant=getattr(anchor, 'kv_cache_quant', None),
                 )
             )
 
@@ -1885,6 +1890,7 @@ class AdaptiveOptimizer:
                 context_checkpoints=frozen["context_checkpoints"],
                 num_experts=best.config.num_experts,
                 n_cpu_moe=getattr(best.config, 'n_cpu_moe', None),
+                kv_cache_quant=getattr(best.config, 'kv_cache_quant', None),
             )
 
             # Check if already tested
@@ -1972,6 +1978,7 @@ class AdaptiveOptimizer:
             context_checkpoints=bc.context_checkpoints,
             num_experts=bc.num_experts,
             n_cpu_moe=getattr(bc, 'n_cpu_moe', None),
+            kv_cache_quant=getattr(bc, 'kv_cache_quant', None),
         )
         # Preserve RoPE if experimental and enabled
         if self.state.run.is_experimental:
@@ -2621,6 +2628,7 @@ class AdaptiveOptimizer:
                 "context_checkpoints": bc.context_checkpoints,
                 "num_experts": bc.num_experts,
                 "n_cpu_moe": getattr(bc, "n_cpu_moe", None),
+                "kv_cache_quant": getattr(bc, "kv_cache_quant", None),
             }
             base.update(kw)
             return LoadConfiguration(**base)
@@ -2771,6 +2779,8 @@ class AdaptiveOptimizer:
                 rest.add("num_experts")
             if getattr(caps, "supports_n_cpu_moe", False):
                 rest.add("n_cpu_moe")
+            if getattr(caps, "supports_kv_cache_quantization", False):
+                rest.add("kv_cache_quant")
         rest.add("context_length")
         advanced = {}
         try:
