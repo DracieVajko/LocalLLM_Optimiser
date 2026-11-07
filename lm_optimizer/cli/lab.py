@@ -1578,9 +1578,58 @@ def recommend_model(
 
 
 @app.command("clean")
+@app.command("clean-tests")
 def clean_tests(
-    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be cleaned"),
+    dry_run: bool = typer.Option(True, "--dry-run", help="Show what would be cleaned (default)"),
+    confirm: bool = typer.Option(False, "--confirm", help="Actually delete failed runs"),
     failed_count: int = typer.Option(2, "--failed-count", help="Consecutive failures before cleanup"),
 ):
     """Clean failed artifacts and DB entries. Never deletes outside this folder."""
-    console.print(f"[yellow]Clean (dry_run={dry_run}, threshold={failed_count}) — only within project folder.[/yellow]")
+    if confirm:
+        dry_run = False
+
+    from lm_optimizer.database.repositories import run_repo
+    from lm_optimizer.domain.models import ConfigurationStatus
+
+    runs = run_repo.list_all(limit=10000)
+
+    # Group runs by model_id
+    from collections import defaultdict
+    model_runs: dict[str, list] = defaultdict(list)
+    for run in runs:
+        model_runs[run.model.id].append(run)
+
+    # Count consecutive failures per model (from most recent)
+    to_delete = []
+    for model_id, model_run_list in model_runs.items():
+        # Sort by created_at descending (most recent first)
+        sorted_runs = sorted(model_run_list, key=lambda r: r.created_at or r.id, reverse=True)
+        consecutive_failures = 0
+        failed_run_ids = []
+        for run in sorted_runs:
+            if run.status == ConfigurationStatus.FAILED:
+                consecutive_failures += 1
+                failed_run_ids.append(str(run.id))
+            else:
+                break  # stop at first non-failed
+
+        if consecutive_failures >= failed_count:
+            to_delete.extend(failed_run_ids)
+
+    if dry_run:
+        if not to_delete:
+            console.print("[green]No failed runs found[/green]")
+        else:
+            console.print(f"[yellow]Dry run: would delete {len(to_delete)} failed run(s)[/yellow]")
+            for run_id in sorted(to_delete):
+                console.print(f"  - {run_id}")
+    else:
+        if not to_delete:
+            console.print("[green]No failed runs to clean[/green]")
+        else:
+            deleted = 0
+            for run_id in to_delete:
+                if run_repo.delete(run_id):
+                    deleted += 1
+            console.print(f"[green]Removed {deleted} failed run(s)[/green]")
+
