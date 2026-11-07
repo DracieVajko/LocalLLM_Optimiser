@@ -1,17 +1,14 @@
 """Sandbox duel: compare two models on the same prompt."""
-
 import asyncio
 import json
 import statistics
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
-
 import typer
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
-
 from lm_optimizer.database.repositories import config_repo, run_repo
 from lm_optimizer.domain.models import (
     BenchmarkCase,
@@ -23,57 +20,42 @@ from lm_optimizer.logging_config import get_logger, setup_logging
 from lm_optimizer.services.benchmark import BenchmarkService
 from lm_optimizer.services.host.lm_studio import LMStudioClient
 from lm_optimizer.services.quality import QualityConfig, QualityEvaluator
-
 logger = get_logger(__name__)
 console = Console()
-
-
 @dataclass
 class DuelRun:
     """One measured run of a prompt on one model."""
-
     ttft_ms: float
     generation_tok_s: float
     prompt_tok_s: float
     quality_overall: float | None
     passed: bool
     error: str | None = None
-
-
 @dataclass
 class DuelModelResult:
     """Measured results for one side of the duel."""
-
     model_id: str
     config: LoadConfiguration
     context_length: int
     runs: list[DuelRun] = field(default_factory=list)
     error: str | None = None
-
     def median_ttft(self) -> float:
         vals = [r.ttft_ms for r in self.runs if r.ttft_ms > 0]
         return statistics.median(vals) if vals else 0.0
-
     def median_gen(self) -> float:
         vals = [r.generation_tok_s for r in self.runs if r.generation_tok_s > 0]
         return statistics.median(vals) if vals else 0.0
-
     def median_quality(self) -> float:
         vals = [r.quality_overall for r in self.runs if r.quality_overall is not None]
         return statistics.median(vals) if vals else 0.0
-
-
 @dataclass
 class DuelResult:
     """Full duel outcome (both sides + verdict)."""
-
     prompt: str
     model_a: DuelModelResult
     model_b: DuelModelResult
-
     def verdict(self) -> dict:
         """Per-metric winner + margin.
-
         A metric with no measurement on either side (or a side that failed to
         load) yields `winner=None`: absent data must never read as a win.
         """
@@ -81,13 +63,11 @@ class DuelResult:
         a_ttft, b_ttft = self.model_a.median_ttft(), self.model_b.median_ttft()
         a_gen, b_gen = self.model_a.median_gen(), self.model_b.median_gen()
         a_q, b_q = self.model_a.median_quality(), self.model_b.median_quality()
-
         out["TTFT"] = self._compare(a_ttft, b_ttft, lower_is_better=True)
         out["Generation speed"] = self._compare(a_gen, b_gen, lower_is_better=False)
         if a_q or b_q:
             out["Quality"] = self._compare(a_q, b_q, lower_is_better=False)
         return out
-
     @staticmethod
     def _compare(a: float, b: float, lower_is_better: bool) -> dict:
         """Compare one metric. Ties and missing data produce no winner."""
@@ -97,7 +77,6 @@ class DuelResult:
             return {"winner": "b", "margin_pct": 0.0}
         if b <= 0.0:
             return {"winner": "a", "margin_pct": 0.0}
-
         if lower_is_better:
             winner = "a" if a < b else ("b" if b < a else None)
             lo, hi = min(a, b), max(a, b)
@@ -106,8 +85,6 @@ class DuelResult:
             lo, hi = min(a, b), max(a, b)
         margin = ((hi - lo) / hi * 100.0) if hi > 0 else 0.0
         return {"winner": winner, "margin_pct": round(margin, 1)}
-
-
 def _require_style(style: str) -> str:
     valid = ["precise", "balanced", "creative"]
     if style not in valid:
@@ -115,18 +92,14 @@ def _require_style(style: str) -> str:
         console.print(f"Expected one of: {', '.join(valid)}")
         raise typer.Exit(2)
     return style
-
-
 def _load_best_config(model_id: str) -> tuple[LoadConfiguration, int]:
     """Load the validated winner config for a model from its latest run.
-
     Only PASSED winners qualify: a run that never reached a validated winner
     cannot be dueled (refuses to guess a config).
     """
     runs = run_repo.get_by_model(model_id, limit=20)
     if not runs:
         raise ValueError(f"No runs for model {model_id!r}; run auto/optimize first.")
-
     for run in runs:
         if run.status not in (
             RunStatus.SUCCESS,
@@ -141,13 +114,10 @@ def _load_best_config(model_id: str) -> tuple[LoadConfiguration, int]:
         if best is None or best.status != ConfigurationStatus.PASSED:
             continue
         return best.config, best.context_length
-
     raise ValueError(
         f"No validated winner for {model_id!r}: every run failed or has no "
         f"passing winner. Run auto-run/optimize first."
     )
-
-
 def _load_user_config(path: Path, context: int | None) -> tuple[LoadConfiguration, int]:
     """Load a user-supplied JSON load config (overrides the best preset)."""
     try:
@@ -161,8 +131,6 @@ def _load_user_config(path: Path, context: int | None) -> tuple[LoadConfiguratio
     if cfg.context_length is None:
         cfg = replace(cfg, context_length=ctx)
     return cfg, ctx
-
-
 async def _measure_side(
     client: LMStudioClient,
     model_id: str,
@@ -174,14 +142,12 @@ async def _measure_side(
     category: str = "instruction",
 ) -> DuelModelResult:
     """Run the prompt N times against one model's validated config.
-
     `BenchmarkService.run_cases` owns the load/verify/unload skeleton, so each
     repetition is a fresh full cycle: the host never holds two models at once
     and a failed repetition cannot poison the next one.
     """
     result = DuelModelResult(model_id=model_id, config=cfg, context_length=ctx)
     service = BenchmarkService(client, style="balanced")
-
     for _i in range(repetitions):
         case_name = {
             "coding": "coding_task",
@@ -210,7 +176,6 @@ async def _measure_side(
                 )
             )
             continue
-
         m = res.metrics[0] if getattr(res, "metrics", None) else None
         q_overall = None
         if m is not None:
@@ -229,10 +194,7 @@ async def _measure_side(
                 error=getattr(res, "error", None),
             )
         )
-
     return result
-
-
 def generate_duel_report(result: DuelResult, output_dir: Path, env: dict) -> str:
     """Markdown duel report: configs, per-run tables, medians, verdict."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -240,7 +202,6 @@ def generate_duel_report(result: DuelResult, output_dir: Path, env: dict) -> str
     safe_a = result.model_a.model_id.replace("/", "_")
     safe_b = result.model_b.model_id.replace("/", "_")
     path = output_dir / f"duel-{safe_a}-vs-{safe_b}-{stamp}.md"
-
     a, b = result.model_a, result.model_b
     lines = [
         f"# Duel: {a.model_id} vs {b.model_id}",
@@ -257,7 +218,6 @@ def generate_duel_report(result: DuelResult, output_dir: Path, env: dict) -> str
             f"{c.physical_batch_size} | {c.parallel} | {c.context_checkpoints} |"
         )
     lines.extend(["", "## Prompt", "", "> " + result.prompt.replace("\n", " "), ""])
-
     lines.extend(
         [
             "## Results",
@@ -276,7 +236,6 @@ def generate_duel_report(result: DuelResult, output_dir: Path, env: dict) -> str
                 f"| {side.model_id} | {idx} | {r.ttft_ms:.0f} | {r.generation_tok_s:.1f} | "
                 f"{r.prompt_tok_s:.1f} | {q} | {'yes' if r.passed else 'no'} |"
             )
-
     lines.extend(
         [
             "",
@@ -298,7 +257,6 @@ def generate_duel_report(result: DuelResult, output_dir: Path, env: dict) -> str
     for metric, v in verdict.items():
         who = label.get(v["winner"], "n/a (no data)")
         lines.append(f"| {metric} | {who} | {v['margin_pct']}% |")
-
     speed_wins = [
         m for m in ("TTFT", "Generation speed")
         if verdict.get(m, {}).get("winner") is not None
@@ -309,7 +267,6 @@ def generate_duel_report(result: DuelResult, output_dir: Path, env: dict) -> str
         lines.extend(["", f"**Overall speed winner: {overall}**"])
     else:
         lines.extend(["", "**Overall speed winner: undetermined (insufficient measurements)**"])
-
     lines.extend(
         [
             "",
@@ -320,12 +277,9 @@ def generate_duel_report(result: DuelResult, output_dir: Path, env: dict) -> str
             "",
         ]
     )
-
     content = "\n".join(lines)
     path.write_text(content, encoding="utf-8")
     return content
-
-
 def sandbox_duel(
     model_a: str = typer.Option(..., "--model-a", help="First model ID"),
     model_b: str = typer.Option(..., "--model-b", help="Second model ID"),
@@ -349,7 +303,6 @@ def sandbox_duel(
     """Compare two models on the same prompt using each one's validated winner."""
     setup_logging()
     style = _require_style(style)
-
     try:
         if config_a is not None:
             cfg_a, ctx_a = _load_user_config(config_a, context_a)
@@ -368,13 +321,11 @@ def sandbox_duel(
     except ValueError as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(1)
-
     console.print(
         f"[bold]Duel:[/bold] {model_a} "
         f"({'user config' if config_a else 'best preset'}, ctx {ctx_a}) vs "
         f"{model_b} ({'user config' if config_b else 'best preset'}, ctx {ctx_b})"
     )
-
     async def _run():
         client = LMStudioClient()
         try:
@@ -382,7 +333,6 @@ def sandbox_duel(
         except Exception as e:
             console.print(f"[red]Cannot connect to LM Studio: {e}[/red]")
             raise typer.Exit(1)
-
         quality_eval = QualityEvaluator(QualityConfig(minimum_score=quality))
         try:
             with Progress(
@@ -400,11 +350,8 @@ def sandbox_duel(
                 progress.update(t2, completed=repetitions)
         finally:
             await client.close()
-
         return DuelResult(prompt=prompt, model_a=side_a, model_b=side_b)
-
     result = asyncio.run(_run())
-
     table = Table(title="Duel Result")
     table.add_column("Metric", style="cyan")
     table.add_column(model_a, style="green")
@@ -430,9 +377,7 @@ def sandbox_duel(
         who = label.get(v["winner"], "n/a (no data)")
         table.add_row(metric, "", "", f"{who} (+{v['margin_pct']}%)")
     console.print(table)
-
     from lm_optimizer.services.host.hardware import hardware_detector
-
     hw = hardware_detector.detect()
     env = {
         "gpu": ", ".join(f"{g.name} {g.vram_gb:.1f}GB" for g in hw.gpus) or "CPU-only",
@@ -441,11 +386,8 @@ def sandbox_duel(
     }
     generate_duel_report(result, output, env)
     console.print(f"\n[green]Report: {output}[/green]")
-
-
 def _safe_lms_version() -> str:
     from lm_optimizer.services.host import lms_cli
-
     try:
         return lms_cli.lms_version()
     except Exception:

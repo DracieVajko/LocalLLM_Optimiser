@@ -1,14 +1,10 @@
 """`host-watch` - inspect and clear foreign model loads on a local backend."""
-
 from __future__ import annotations
-
 import asyncio
 from pathlib import Path
 from typing import Optional
-
 import typer
 from rich.console import Console
-
 from lm_optimizer.logging_config import get_logger, setup_logging
 from lm_optimizer.services.host.foreign_watchdog import (
     BACKEND_LMSTUDIO,
@@ -17,14 +13,10 @@ from lm_optimizer.services.host.foreign_watchdog import (
     build_watchdog,
 )
 from lm_optimizer.services.best_effort import log_best_effort
-
 logger = get_logger(__name__)
 console = Console()
-
-
 def _echo_probe_candidates(models) -> list:
     """Models ``connect(echo_probe=True)`` would legitimately load.
-
     The client picks the SMALLEST model, skipping embedding models, and loads it
     once to verify applied configs. Those loads are ours, not a foreign client.
     """
@@ -34,8 +26,6 @@ def _echo_probe_candidates(models) -> list:
         return []
     smallest = min(cands, key=lambda m: getattr(m, "size_bytes", 0) or 0)
     return [smallest]
-
-
 def host_watch(
     backend: str = typer.Option(
         "lm-studio", "--backend", "-b", help="Backend to inspect: lm-studio or ollama"
@@ -63,7 +53,6 @@ def host_watch(
     ),
 ):
     """Report (and optionally unload) models loaded by someone else.
-
     A local client can load a different model while an optimization run is
     benchmarking another one, which corrupts measurements and can abort the
     generation in flight. This command lists what the backend currently has
@@ -71,20 +60,16 @@ def host_watch(
     --unload-foreign removes exactly those (never the expected models).
     """
     setup_logging()
-
     normalized = (backend or "").strip().lower()
     if normalized not in ("lm-studio", "lmstudio", "ollama"):
         console.print(f"[red]Invalid --backend: {backend} (expected lm-studio|ollama)[/red]")
         raise typer.Exit(2)
     normalized = BACKEND_OLLAMA if normalized == "ollama" else BACKEND_LMSTUDIO
-
     extra = [p.strip() for p in (protect or "").split(",") if p.strip()]
-
     async def _one_pass() -> dict:
         from lm_optimizer.backends.ollama.client import OllamaClient
         from lm_optimizer.config import config
         from lm_optimizer.services.host.lm_studio import LMStudioClient
-
         if normalized == BACKEND_OLLAMA:
             client = OllamaClient(base_url=config.ollama_base_url)
             await client.connect(echo_probe=False)
@@ -136,7 +121,6 @@ def host_watch(
             "error": report.error,
             "summary": report.summary(),
         }
-
     iterations = 0 if watch == 0 else max(1, watch)
     results = []
     n = 0
@@ -165,13 +149,10 @@ def host_watch(
             asyncio.run(asyncio.sleep(interval))
     except KeyboardInterrupt:
         console.print("\n[yellow]stopped[/yellow]")
-
     if json_out:
         import json
-
         json_out.parent.mkdir(parents=True, exist_ok=True)
         json_out.write_text(json.dumps(results, indent=2), encoding="utf-8")
         console.print(f"[dim]findings -> {json_out}[/dim]")
-
     if fail_on_foreign and any(r["foreign"] for r in results):
         raise typer.Exit(1)

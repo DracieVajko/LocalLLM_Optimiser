@@ -13,6 +13,7 @@ import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+from lm_optimizer.services.best_effort import log_best_effort
 
 
 @dataclass
@@ -68,8 +69,8 @@ def save_cached(result: CapacityResult) -> None:
         d.mkdir(parents=True, exist_ok=True)
         path = _cache_path(result.model_id, result.size_bytes, result.host_fingerprint, result.gpu_ratio)
         path.write_text(json.dumps(asdict(result), ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        pass
+    except Exception as exc:
+        log_best_effort("capacity cache write", exc)
 
 
 # Standard context ladder (geometric)

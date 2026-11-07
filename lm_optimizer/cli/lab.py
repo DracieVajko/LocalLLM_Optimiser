@@ -1,7 +1,5 @@
 """Lab CLI: Context Explorer, Quality Lab, Model Recommender, Duel.
-
 These commands expose the P2-P5 modules as real, runnable workflows:
-
 - `lm-optimizer context-explorer <model>` - context capacity with 1.5x
   bracketing, fill ratios and retrieval validation (P2).
 - `lm-optimizer quality-lab <model>` - deterministic quality tasks with
@@ -9,22 +7,18 @@ These commands expose the P2-P5 modules as real, runnable workflows:
 - `lm-optimizer recommend` - model recommendations for this hardware (P5).
 - `lm-optimizer duel <model-a> <model-b>` - controlled/best-profile duel
   with blind evaluation (P4).
-
 All commands are read-only against the database except the duel, which
 only measures.
 """
-
 from __future__ import annotations
-
 import json
 import statistics
+from typing import Any
 import sys
 from pathlib import Path
-
 import typer
 from rich.console import Console
 from rich.table import Table
-
 from lm_optimizer.logging_config import get_logger, setup_logging
 from lm_optimizer.services.context_explorer import (
     ContextPoint,
@@ -43,41 +37,26 @@ from lm_optimizer.services.quality_lab import (
     run_task_with_seeds,
 )
 from lm_optimizer.services.best_effort import log_best_effort
-
 logger = get_logger(__name__)
 console = Console()
-
 app = typer.Typer(
     name="lab",
     help="Context Explorer, Quality Lab, Recommender and Duel workflows",
     add_completion=False,
 )
-
-
 # --- helpers ---------------------------------------------------------------
-
-
 def _client():
     from lm_optimizer.cli.main import get_client
-
     return get_client()
-
-
 def _report_dir() -> Path:
     base = Path("results")
     base.mkdir(parents=True, exist_ok=True)
     return base
-
-
 def _write_json(name: str, payload: dict) -> Path:
     path = _report_dir() / name
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     return path
-
-
 # --- P2 Context Explorer --------------------------------------------------
-
-
 @app.command("context-explorer")
 def context_explorer(
     model: str = typer.Argument(..., help="Model ID to explore"),
@@ -97,14 +76,12 @@ def context_explorer(
     ),
 ):
     """Explore the real context capacity of one model (P2).
-
     1.5x geometric bracketing (never power-of-two), fill-ratio validation
     and needle retrieval - a context that merely ALLOCATES is not usable.
     """
     setup_logging()
     from lm_optimizer.domain.models import LoadConfiguration
     from lm_optimizer.services.benchmark import BenchmarkService
-
     async def _run():
         client = _client()
         try:
@@ -118,7 +95,6 @@ def context_explorer(
             ratios = fill_ratios(detailed=detailed)
             svc = BenchmarkService(client)
             points: list[ContextPoint] = []
-
             console.print(f"[dim]Ladder: {ladder}[/dim]")
             for ctx in ladder:
                 cfg = LoadConfiguration(
@@ -153,7 +129,6 @@ def context_explorer(
                 )
                 if verdict in (PointVerdict.FAIL_OOM, PointVerdict.FAIL_LOAD):
                     break
-
             # Retrieval validation on the largest usable point.
             if retrieval:
                 usable = [p for p in points if p.ok and p.median_tok_s]
@@ -163,7 +138,6 @@ def context_explorer(
                     # still answer with the prompt filled to 50% / 90% (fast)
                     # or the full matrix (--detailed). A context that only
                     # LOADS is not usable.
-
                     cfg = LoadConfiguration(
                         context_length=best.ctx,
                         gpu_ratio=gpu_ratio,
@@ -249,13 +223,8 @@ def context_explorer(
             except Exception as exc:
                 log_best_effort("best-effort operation failed", exc)
     import asyncio
-
     asyncio.run(_run())
-
-
 # --- P3 Quality Lab -------------------------------------------------------
-
-
 @app.command("quality-lab")
 def quality_lab(
     model: str = typer.Argument(..., help="Model ID to evaluate"),
@@ -268,20 +237,17 @@ def quality_lab(
     threshold: float = typer.Option(0.97, "--threshold"),
 ):
     """Run the deterministic quality task suite on one model (P3).
-
     Hard gates run BEFORE scoring; reliability is reported as mean /
     median / worst / stdev / success rate over several seeds.
     """
     setup_logging()
     from lm_optimizer.domain.models import LoadConfiguration
     from lm_optimizer.services.benchmark import BenchmarkService
-
     wanted = {c.strip() for c in category} if category else None
     tasks = [t for t in default_tasks() if not wanted or t.category.value in wanted]
     if not tasks:
         console.print("[red]No matching tasks.[/red]")
         sys.exit(2)
-
     async def _run():
         client = _client()
         try:
@@ -297,7 +263,6 @@ def quality_lab(
             if not ok:
                 console.print(f"[red]Load failed: {err}[/red]")
                 sys.exit(1)
-
             results = []
             for task in tasks:
                 outcomes, reliability = await run_task_with_seeds(
@@ -317,7 +282,6 @@ def quality_lab(
                     f"  {task.id:<28} score={reliability.mean:.3f} "
                     f"worst={reliability.worst:.3f} pass={reliability.success_rate:.0%}"
                 )
-
             overall = statistics.fmean(
                 [r["reliability"]["mean"] for r in results]
             ) if results else 0.0
@@ -334,10 +298,7 @@ def quality_lab(
             except Exception as exc:
                 log_best_effort("best-effort operation failed", exc)
     import asyncio
-
     asyncio.run(_run())
-
-
 async def _chat(client, model: str, prompt: str, max_tokens: int) -> str:
     response = await client.chat_completion(
         model=model,
@@ -349,11 +310,7 @@ async def _chat(client, model: str, prompt: str, max_tokens: int) -> str:
     if not choices:
         return ""
     return choices[0].get("message", {}).get("content", "") or ""
-
-
 # --- P5 Recommender -------------------------------------------------------
-
-
 @app.command("recall")
 def recall_probe(
     model: str = typer.Argument(..., help="Model ID to probe"),
@@ -368,11 +325,9 @@ def recall_probe(
     from lm_optimizer.services.recall_probe import (
         RecallProbeSpec, run_recall_probe, run_recall_probe_deep,
     )
-
     depths = None
     if depth_set:
         depths = tuple(float(d.strip()) for d in depth_set.split(","))
-
     async def _run():
         client = _client()
         try:
@@ -404,10 +359,7 @@ def recall_probe(
                 console.print("actual_cost_s: " + f"{result.actual_cost_s:.0f}")
         finally:
             await client.close()
-
     asyncio.run(_run())
-
-
 @app.command("recommend")
 def recommend(
     min_tps: float = typer.Option(5.0, "--min-tps"),
@@ -417,7 +369,6 @@ def recommend(
     json_out: bool = typer.Option(False, "--json"),
 ):
     """Recommend models for THIS hardware (P5).
-
     The recommender never hardcodes a VRAM limit: it uses the detected
     fingerprint, the model FILE SIZE (not the parameter count) and treats
     local measurements as stronger evidence than community priors.
@@ -428,7 +379,6 @@ def recommend(
         RecommenderRequest,
         UseCase,
     )
-
     hw = _detect_hardware_fingerprint()
     console.print(
         f"[dim]{hw.gpu_name} | {hw.vram_gb:.1f} GB VRAM | {hw.cpu_name} | "
@@ -449,7 +399,6 @@ def recommend(
     except ValueError:
         console.print(f"[red]Unknown use case: {use_case}[/red]")
         sys.exit(2)
-
     request = RecommenderRequest(
         hardware=hw,
         use_case=use,
@@ -458,11 +407,9 @@ def recommend(
         vram_only=vram_only,
     )
     results = rec.recommend(request)
-
     if json_out:
         console.print(rec.to_json(results))
         return
-
     table = Table(title=f"Recommended models (min {min_tps} tok/s, ctx {min_context})")
     table.add_column("Model")
     table.add_column("Fit")
@@ -476,27 +423,21 @@ def recommend(
             r.reasons[0] if r.reasons else "",
         )
     console.print(table)
-
-
 def _detect_hardware_fingerprint():
     """Detect the real hardware fingerprint (never hardcode a GPU).
-
     GPU bandwidth and RAM channel count are not always detectable; when a
     value is unknown the recommender falls back to a conservative estimate
     and the recommendation says so.
     """
     from lm_optimizer.services.host.hardware import hardware_detector
     from lm_optimizer.services.recommender import HardwareFingerprint
-
     try:
         info = hardware_detector.detect()
     except Exception:
         info = None
-
     gpu = None
     if info is not None and getattr(info, "gpus", None):
         gpu = max(info.gpus, key=lambda g: getattr(g, "vram_gb", 0) or 0)
-
     # Known bandwidths for common GPUs (GB/s) - used only when the driver
     # does not report it. Unknown GPUs keep 0.0, which disables the
     # bandwidth-based speed estimate (the fit class still works).
@@ -517,16 +458,13 @@ def _detect_hardware_fingerprint():
         if key in name:
             bandwidth = value
             break
-
     ram_channels = 0
     try:
         import psutil  # type: ignore
-
         channels = psutil.virtual_memory().total
         del channels
     except Exception:
         ram_channels = 0
-
     return HardwareFingerprint(
         gpu_name=getattr(gpu, "name", "") or "",
         vram_gb=float(getattr(gpu, "vram_gb", 0) or 0),
@@ -540,11 +478,8 @@ def _detect_hardware_fingerprint():
         disk_type="",
         os_name=getattr(info, "os", "") or "",
     )
-
-
 def _load_local_measurements() -> dict[str, tuple[float, str, int | None]]:
     """Latest measured median tok/s per model from the local database.
-
     Local measurements are the strongest evidence the recommender has
     (spec 16.4: "local results have priority over community priors"). The
     measurement context is returned too - 9 tok/s at 4096 tokens is NOT
@@ -552,7 +487,6 @@ def _load_local_measurements() -> dict[str, tuple[float, str, int | None]]:
     """
     import sqlite3
     from pathlib import Path
-
     db = Path("data/optimizer.db")
     if not db.exists():
         return {}
@@ -596,13 +530,10 @@ def _load_local_measurements() -> dict[str, tuple[float, str, int | None]]:
     except Exception as e:
         logger.debug("local measurement load failed", error=str(e))
     return out
-
-
 def _default_catalog() -> list:
     """Curated catalog of candidates for this class of hardware."""
     from lm_optimizer.services.recommender import Confidence, ModelCatalogEntry
-
-    def entry(**kw):
+    def entry(**kw) -> dict[str, Any]:
         base = dict(
             repository="",
             filename="",
@@ -617,7 +548,6 @@ def _default_catalog() -> list:
         )
         base.update(kw)
         return ModelCatalogEntry(**base)
-
     return [
         entry(repository="lmstudio-community", filename="bonsai-q1_0.gguf", quant="Q1_0",
               bits_per_weight=1.0, file_size_gb=4.4, total_params_b=27.0,
@@ -655,11 +585,7 @@ def _default_catalog() -> list:
               model_id="qwen/qwen3.6-35b-a3b",
               capabilities=["chat", "tools"]),
     ]
-
-
 # --- P4 Duel --------------------------------------------------------------
-
-
 @app.command("duel")
 def duel(
     model_a: str = typer.Argument(...),
@@ -671,7 +597,6 @@ def duel(
     seeds: int = typer.Option(1, "--seeds"),
 ):
     """Duel two models on the same tasks (P4).
-
     Controlled mode uses identical context, sampling and seed for both
     sides; the judge (if any) sees anonymized Candidate A/B only.
     """
@@ -684,7 +609,6 @@ def duel(
         DuelType,
         run_duel,
     )
-
     try:
         dt = DuelType(duel_type)
     except ValueError:
@@ -695,25 +619,20 @@ def duel(
     except ValueError:
         console.print(f"[red]Unknown duel mode: {mode}[/red]")
         sys.exit(2)
-
     side_a = DuelSide(model_id=model_a, context_length=context_length)
     side_b = DuelSide(model_id=model_b, context_length=context_length)
-
     config = DuelConfig(
         duel_type=dt,
         mode=dm,
         context_length=context_length,
         blind=blind,
     )
-
     import asyncio
-
     async def _run_duel():
         """Run both sides on the SAME tasks with the SAME conditions."""
         from lm_optimizer.domain.models import LoadConfiguration
         from lm_optimizer.services.benchmark import BenchmarkService
         from lm_optimizer.services.quality_lab import default_tasks, run_task
-
         tasks = {t.id: t for t in default_tasks()}
         client = _client()
         results: dict[str, dict] = {}
@@ -739,7 +658,6 @@ def duel(
                         }
                     results[side.model_id] = side.outcomes
                     continue
-
                 for task_id in DUEL_TASKS[dt]:
                     task = tasks.get(task_id)
                     if task is None:
@@ -783,10 +701,8 @@ def duel(
             except Exception as exc:
                 log_best_effort("best-effort operation failed", exc)
         return results
-
     async def _runner(side, task_id):
         from lm_optimizer.services.quality_lab import default_tasks
-
         task = next((t for t in default_tasks() if t.id == task_id), None)
         if task is None:
             return {"score": 0.0, "error": f"unknown task {task_id}", "gate_passed": False}
@@ -798,7 +714,6 @@ def duel(
             "error": "not measured",
             "gate_passed": False,
         }
-
     asyncio.run(_run_duel())
     payload = asyncio.run(run_duel(side_a, side_b, config, _runner))
     console.print(json.dumps(payload["verdict"], indent=2, ensure_ascii=False))
@@ -806,15 +721,12 @@ def duel(
         f"duel-{model_a.replace('/', '_')}-{model_b.replace('/', '_')}.json", payload
     )
     console.print(f"\nReport saved: {path}")
-
-
 @app.command("sandbox")
 def sandbox(
     task: str = typer.Option("web_dashboard", "--task", help="Sandbox task id"),
     model: str = typer.Option("", "--model", help="Model that produces the solution"),
 ):
     """Run a sandbox task with the repair loop (P4).
-
     The model writes into an isolated workdir; the acceptance criteria are
     checked automatically; on failure the model receives the EVIDENCE (not
     the solution) and the remaining repair budget.
@@ -822,15 +734,12 @@ def sandbox(
     setup_logging()
     from lm_optimizer.services.sandbox_lab import SANDBOX_TASKS, SandboxPolicy
     from lm_optimizer.services.sandbox_runner import SandboxRunner, build_command_for
-
     definition = SANDBOX_TASKS.get(task)
     if definition is None:
         console.print(f"[red]Unknown sandbox task: {task}[/red]")
         console.print("Available: " + ", ".join(sorted(SANDBOX_TASKS)))
         sys.exit(2)
-
     from datetime import datetime
-
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     base_dir = Path("results") / "sandbox" / task
     workdir = base_dir / stamp
@@ -846,13 +755,11 @@ def sandbox(
         workdir=workdir,
         command=build_command_for(definition),
     )
-
     async def _generate(feedback: str) -> str:
         if not model:
             return ""
         from lm_optimizer.cli.sandbox_duel import _load_best_config
         from lm_optimizer.domain.models import LoadConfiguration
-
         client = _client()
         try:
             await client.connect(echo_probe=False)
@@ -884,16 +791,13 @@ def sandbox(
             except Exception as exc:
                 log_best_effort("best-effort operation failed", exc)
     import asyncio
-
     result = asyncio.run(runner.run_async(_generate))
     # Artifact retention: keep the newest N runs per task (spec §13.5).
     from lm_optimizer.services.sandbox_runner import apply_retention
-
     removed = apply_retention(base_dir, policy)
     if removed:
         console.print(f"[dim]retention: pruned {len(removed)} old sandbox run(s)[/dim]")
     from lm_optimizer.services.sandbox_history import record_run
-
     record_run(
         model or "(none)",
         task,
@@ -904,8 +808,6 @@ def sandbox(
     console.print(json.dumps(result.as_dict(), indent=2, ensure_ascii=False))
     path = _write_json(f"sandbox-{task}.json", result.as_dict())
     console.print(f"\nReport saved: {path}")
-
-
 @app.command("sandbox-all")
 def sandbox_all(
     model: str = typer.Option(..., "--model", help="Model that produces the solutions"),
@@ -914,13 +816,11 @@ def sandbox_all(
     ),
 ):
     """Run every sandbox task (or a subset) for one model.
-
     Loads the model once per task with its best validated config and records
     each result in results/sandbox_runs.jsonl for the web UI.
     """
     setup_logging()
     from lm_optimizer.services.sandbox_lab import SANDBOX_TASKS
-
     if tasks:
         task_ids = [t.strip() for t in tasks.split(",") if t.strip()]
     else:
@@ -930,27 +830,22 @@ def sandbox_all(
         console.print(f"[red]Unknown sandbox task(s): {', '.join(unknown)}[/red]")
         console.print("Available: " + ", ".join(sorted(SANDBOX_TASKS)))
         sys.exit(2)
-
     console.print(f"Running {len(task_ids)} sandbox task(s) for {model}")
     for index, task_id in enumerate(task_ids, 1):
         console.print(f"\n[bold]=== [{index}/{len(task_ids)}] {task_id} ===[/bold]")
         sandbox(task=task_id, model=model)
     console.print(f"\n[bold green]All {len(task_ids)} sandbox task(s) finished.[/bold green]")
-
-
 @app.command("community-import")
 def community_import(
     file: Path = typer.Argument(..., help="JSON file with community benchmark records"),
 ):
     """Import community benchmark records (spec 16.4).
-
     Records are validated strictly; malformed ones are reported and skipped.
     Duplicates against the shipped database are skipped, never overwritten.
     """
     setup_logging()
     from lm_optimizer.services.community_benchmarks import COMMUNITY_BENCHMARKS
     from lm_optimizer.services.community_import import import_records, load_json_file
-
     try:
         payload = load_json_file(file)
         merged, warnings = import_records(payload, existing=COMMUNITY_BENCHMARKS)
@@ -964,8 +859,6 @@ def community_import(
         f"Imported {added} new record(s); "
         f"{len(COMMUNITY_BENCHMARKS)} already present."
     )
-
-
 @app.command("community-export")
 def community_export(
     file: Path = typer.Argument(Path("results") / "community-benchmarks.json"),
@@ -973,18 +866,14 @@ def community_export(
     """Export the shipped community benchmark database to JSON."""
     setup_logging()
     import json as _json
-
     from lm_optimizer.services.community_benchmarks import COMMUNITY_BENCHMARKS
     from lm_optimizer.services.community_import import export_records
-
     file.parent.mkdir(parents=True, exist_ok=True)
     file.write_text(
         _json.dumps(export_records(COMMUNITY_BENCHMARKS), indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
     console.print(f"Exported {len(COMMUNITY_BENCHMARKS)} record(s) to {file}")
-
-
 @app.command("full-optimize")
 def full_optimize(
     model: str = typer.Argument(..., help="Model ID"),
@@ -994,14 +883,12 @@ def full_optimize(
     quality_threshold: float = typer.Option(0.97, "--quality-threshold"),
 ):
     """Run the full workflow: runtime optimization -> context -> quality (spec §15).
-
     This command only ORCHESTRATES the existing modules; it never duplicates
     their logic. Each stage is a separate, resumable invocation.
     """
     setup_logging()
     import subprocess
     import sys as _sys
-
     stages: list[tuple[str, list[str]]] = [
         (
             "runtime",
@@ -1033,7 +920,6 @@ def full_optimize(
                 ],
             )
         )
-
     console.print(f"[bold]Full optimization: {model}[/bold]")
     for name, cmd in stages:
         console.print(f"  stage: {name}")
@@ -1049,21 +935,17 @@ def full_optimize(
     for name, rc in results.items():
         status = "[green]ok[/green]" if rc == 0 else f"[red]rc={rc}[/red]"
         console.print(f"  {name}: {status}")
-
-
 @app.command("hash-model")
 def hash_model(
     model: str = typer.Argument(..., help="Model id (publisher/name)"),
     refresh: bool = typer.Option(False, "--refresh", help="Recompute even if cached"),
 ):
     """Compute the SHA256 of a model's GGUF file (spec §16.3).
-
     The hash is cached by path + size + mtime, so hashing a 16 GB file is a
     one-time cost per model version.
     """
     setup_logging()
     from lm_optimizer.services.model_hash import model_sha256
-
     result = model_sha256(model, refresh=refresh)
     if result["sha256"]:
         console.print(f"{model}")
@@ -1074,18 +956,13 @@ def hash_model(
     else:
         console.print(f"[red]{model}: {result['error']}[/red]")
         sys.exit(1)
-
-
 @app.command("hash-all")
-def hash_all():
+def hash_all() -> dict[str, Any]:
     """Hash every model currently listed by LM Studio."""
     setup_logging()
     import asyncio as _asyncio
-
     from lm_optimizer.services.model_hash import hash_all_models
-
     client = _client()
-
     async def _list():
         await client.connect()
         try:
@@ -1105,8 +982,6 @@ def hash_all():
             )
         else:
             console.print(f"  {result['model_id'][:52]:52s} [yellow]no file[/yellow]")
-
-
 @app.command("catalogue-sync")
 def catalogue_sync(
     query: str = typer.Option("qwen gguf", "--query", help="HuggingFace search query"),
@@ -1116,21 +991,17 @@ def catalogue_sync(
     ),
 ):
     """Discover GGUF models on HuggingFace and add them to the catalogue (spec §16.3).
-
     Discovered entries are marked source=huggingface and confidence D: they
     are a PRIOR, never evidence. A local measurement upgrades them.
     """
     setup_logging()
     import json as _json
-
     from lm_optimizer.services.hf_catalog import sync_catalogue
-
     try:
         result = sync_catalogue(query=query, existing=_default_catalog(), limit=limit)
     except Exception as e:  # noqa: BLE001
         console.print(f"[red]Discovery failed: {e}[/red]")
         sys.exit(1)
-
     for error in result.errors[:10]:
         console.print(f"[yellow]{error}[/yellow]")
     console.print(
@@ -1144,12 +1015,8 @@ def catalogue_sync(
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(_json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     console.print(f"Catalogue written: {output}")
-
-
 if __name__ == "__main__":
     app()
-
-
 @app.command("export-config")
 def export_config(
     run_id: str = typer.Argument(..., help="Run ID with a validated winner"),
@@ -1159,7 +1026,6 @@ def export_config(
     """Export the validated winner as a reusable load-config JSON."""
     from lm_optimizer.database.repositories import run_repo
     from lm_optimizer.services.config_export import build_load_config_export
-
     run = run_repo.get(run_id)
     if not run:
         console.print(f"[red]Run not found: {run_id}[/red]")
@@ -1177,8 +1043,6 @@ def export_config(
         console.print(f"Saved: {out}")
     else:
         console.print_json(text)
-
-
 @app.command("save-default")
 def save_default(
     run_id: str = typer.Argument(..., help="Run ID with a validated winner"),
@@ -1205,7 +1069,6 @@ def save_default(
     ),
 ):
     """Persist the validated winner as LM Studio's per-model load default.
-
     Writes `~/.lmstudio/.internal/user-concrete-model-default-config/...json`,
     which LM Studio applies on the next load (no restart). Unknown keys in
     the file are preserved and the previous version is backed up.
@@ -1215,14 +1078,12 @@ def save_default(
         DefaultsError,
         save_run_defaults,
     )
-
     run = run_repo.get(run_id)
     if not run:
         console.print(f"[red]Run not found: {run_id}[/red]")
         raise typer.Exit(1)
     if gpu_ratio is not None or context is not None:
         from dataclasses import replace
-
         best = run.get_best_config()
         if best is not None:
             overrides = {}
@@ -1238,7 +1099,6 @@ def save_default(
     except DefaultsError as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(1) from None
-
     if dry_run:
         console.print(f"[yellow]Dry run[/yellow] — {result.path} not written")
     else:
@@ -1251,12 +1111,9 @@ def save_default(
     for key, value in result.fields.items():
         table.add_row(key, json.dumps(value))
     console.print(table)
-
-
 def _winner_config(run, run_id: str):
     """A run's validated winner config, with the context_length fallback."""
     from dataclasses import replace
-
     best = run.get_best_config() if hasattr(run, "get_best_config") else None
     config = getattr(best, "config", None)
     if config is None:
@@ -1265,8 +1122,6 @@ def _winner_config(run, run_id: str):
     if config.context_length is None and getattr(best, "context_length", None):
         config = replace(config, context_length=best.context_length)
     return config
-
-
 @app.command("diff-default")
 def diff_default(
     run_id: str = typer.Argument(..., help="Run ID with a validated winner"),
@@ -1277,12 +1132,10 @@ def diff_default(
     ),
 ):
     """Show how a model's LM Studio defaults differ from the run's winner.
-
     Read-only: the defaults file is never written by this command.
     """
     from lm_optimizer.database.repositories import run_repo
     from lm_optimizer.services.lmstudio_defaults import DefaultsError, diff_defaults
-
     run = run_repo.get(run_id)
     if not run:
         console.print(f"[red]Run not found: {run_id}[/red]")
@@ -1294,7 +1147,6 @@ def diff_default(
     except DefaultsError as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(1) from None
-
     console.print(f"Model: {diff.model_id}")
     console.print(f"File:  {diff.path}")
     if not diff.changes:
@@ -1320,8 +1172,6 @@ def diff_default(
         f"{len(diff.changes)} change(s), {len(diff.unchanged)} unchanged, "
         f"{len(diff.preserved)} preserved key(s)"
     )
-
-
 @app.command("restore-default")
 def restore_default(
     model: str = typer.Argument(..., help="Model ID whose defaults to restore"),
@@ -1339,12 +1189,10 @@ def restore_default(
     ),
 ):
     """Restore a model's LM Studio defaults from a backup.
-
     The current file is backed up before it is overwritten. An unknown
     backup fails before anything is written or any question is asked.
     """
     from lm_optimizer.services.lmstudio_defaults import DefaultsError, restore_defaults
-
     try:
         preview = restore_defaults(
             model, backup=backup, dry_run=True, home=lmstudio_home
@@ -1352,11 +1200,9 @@ def restore_default(
     except DefaultsError as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(1) from None
-
     if not yes and not dry_run:
         console.print(f"Restore {model} from backup: {preview.restored_from}")
         typer.confirm("Overwrite the current LM Studio defaults?", abort=True)
-
     try:
         result = (
             preview
@@ -1368,7 +1214,6 @@ def restore_default(
     except DefaultsError as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(1) from None
-
     console.print(f"Model: {result.model_id}")
     console.print(f"restored_from: {result.restored_from}")
     console.print(f"noop: {result.noop}")
@@ -1380,8 +1225,6 @@ def restore_default(
         console.print(f"[green]No change[/green]: {result.path} already matches")
     else:
         console.print(f"[green]Restored[/green]: {result.path}")
-
-
 def _print_verify_result(result: dict) -> None:
     """Render a ``verify_defaults`` payload; exit 1 when it is not verified."""
     if not result.get("verified"):
@@ -1409,31 +1252,25 @@ def _print_verify_result(result: dict) -> None:
         console.print(f"[yellow]not echoed by LM Studio: {', '.join(unverified)}[/yellow]")
     if not result.get("unloaded"):
         console.print("[yellow]model was not unloaded[/yellow]")
-
-
 @app.command("verify-default")
 def verify_default(
     run_id: str = typer.Argument(..., help="Run ID with a validated winner"),
 ):
     """Verify the saved defaults with an echo load (never writes).
-
     LM Studio resolves the saved default when loading with an empty config
     and echoes the resolved values back. Only echoed fields are verified;
     the model is unloaded again in every case.
     """
     import asyncio
-
     from lm_optimizer.api import routes
     from lm_optimizer.database.repositories import run_repo
     from lm_optimizer.services.lmstudio_default_verify import verify_defaults
-
     run = run_repo.get(run_id)
     if not run:
         console.print(f"[red]Run not found: {run_id}[/red]")
         raise typer.Exit(1)
     config = _winner_config(run, run_id)
     model_id = getattr(getattr(run, "model", None), "id", "") or ""
-
     async def _run():
         client_result = routes.get_lm_client(echo_probe=False)
         if hasattr(client_result, "__await__"):
@@ -1451,8 +1288,6 @@ def verify_default(
                 log_best_effort("best-effort operation failed", exc)
     result = asyncio.run(_run())
     _print_verify_result(result)
-
-
 @app.command("test-manager")
 def test_manager(
     interactive: bool = typer.Option(
@@ -1501,8 +1336,6 @@ def test_manager(
         for key, level in per_model.items():
             console.print(f"  {key}: {level}")
     console.print(f"[dim]Cycle result: {cycle_result}[/dim]")
-
-
 @app.command("ollama-save-default")
 def ollama_save_default(
     run_id: str = typer.Argument(..., help="Run ID with a validated winner"),
@@ -1523,8 +1356,6 @@ def ollama_save_default(
     console.print(f"Saved to {result['path']}")
     if dry_run:
         console.print("[yellow]Dry run[/yellow] - no changes written")
-
-
 @app.command("ollama-diff-default")
 def ollama_diff_default(
     run_id: str = typer.Argument(..., help="Run ID with a validated winner"),
@@ -1548,8 +1379,6 @@ def ollama_diff_default(
     else:
         for c in diff["changes"]:
             console.print(f"{c['key']}: {c['kind']} (current={c.get('current')}, winner={c.get('winner')})")
-
-
 @app.command("ollama-restore-default")
 def ollama_restore_default(
     model: str = typer.Argument(..., help="Model ID whose defaults to restore"),
@@ -1567,16 +1396,12 @@ def ollama_restore_default(
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(1) from None
     console.print(f"Restored from {result['restored_from']} (noop={result['noop']}, dry_run={result['dry_run']})")
-
-
 @app.command("recommend")
 def recommend_model(
     model_id: str = typer.Argument(..., help="Model to recommend configs for"),
 ):
     """Recommend best configuration for a model based on benchmarks."""
     console.print(f"[green]Recommend mode activated for {model_id}[/green]")
-
-
 @app.command("clean")
 @app.command("clean-tests")
 def clean_tests(
@@ -1587,18 +1412,14 @@ def clean_tests(
     """Clean failed artifacts and DB entries. Never deletes outside this folder."""
     if confirm:
         dry_run = False
-
     from lm_optimizer.database.repositories import run_repo
     from lm_optimizer.domain.models import ConfigurationStatus
-
     runs = run_repo.list_all(limit=10000)
-
     # Group runs by model_id
     from collections import defaultdict
     model_runs: dict[str, list] = defaultdict(list)
     for run in runs:
         model_runs[run.model.id].append(run)
-
     # Count consecutive failures per model (from most recent)
     to_delete = []
     for model_id, model_run_list in model_runs.items():
@@ -1612,10 +1433,8 @@ def clean_tests(
                 failed_run_ids.append(str(run.id))
             else:
                 break  # stop at first non-failed
-
         if consecutive_failures >= failed_count:
             to_delete.extend(failed_run_ids)
-
     if dry_run:
         if not to_delete:
             console.print("[green]No failed runs found[/green]")
@@ -1632,4 +1451,3 @@ def clean_tests(
                 if run_repo.delete(run_id):
                     deleted += 1
             console.print(f"[green]Removed {deleted} failed run(s)[/green]")
-

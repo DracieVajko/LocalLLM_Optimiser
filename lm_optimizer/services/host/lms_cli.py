@@ -93,7 +93,7 @@ def run_lms(*args: str, timeout: int = LMS_TIMEOUT_S) -> tuple[int, str]:
     """
     try:
         proc = subprocess.run(
-            ["lms", *args],
+            [shutil.which("lms"), *args],
             capture_output=True,
             text=True,
             encoding="utf-8",

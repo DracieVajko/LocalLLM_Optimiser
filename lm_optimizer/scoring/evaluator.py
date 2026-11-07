@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from lm_optimizer.benchmark.suite import BENCHMARK_SUITE
 from lm_optimizer.config import config
 from lm_optimizer.logging_config import get_logger
+from lm_optimizer.services.best_effort import log_best_effort
 
 logger = get_logger(__name__)
 
@@ -262,8 +263,8 @@ class QualityEvaluator:
                             result = func(list(nums))
                             if sorted(result) == sorted(expected):
                                 passed_tests += 1
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            log_best_effort("coding test execution", exc)
                     correctness = passed_tests / len(test_cases) if test_cases else 0.0
                     scores["coding_correctness"] = correctness
                     details["tests_passed"] = f"{passed_tests}/{len(test_cases)}"

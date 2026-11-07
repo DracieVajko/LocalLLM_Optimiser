@@ -1,6 +1,7 @@
 """Hardware detection service."""
 
 import platform
+import shutil
 import subprocess
 
 import psutil
@@ -100,7 +101,7 @@ class HardwareDetector:
             try:
                 result = subprocess.run(
                     [
-                        "nvidia-smi",
+                        shutil.which("nvidia-smi"),
                         "--query-gpu=index,name,memory.total,driver_version,compute_cap",
                         "--format=csv,noheader,nounits",
                     ],
@@ -138,7 +139,7 @@ class HardwareDetector:
         if platform.system() == "Linux":
             try:
                 result = subprocess.run(
-                    ["rocm-smi", "--showproductname", "--showmeminfo", "vram", "--json"],
+                    [shutil.which("rocm-smi"), "--showproductname", "--showmeminfo", "vram", "--json"],
                     capture_output=True,
                     text=True,
                     encoding="utf-8",
@@ -166,7 +167,7 @@ class HardwareDetector:
         """Get CUDA version."""
         try:
             result = subprocess.run(
-                ["nvcc", "--version"],
+                [shutil.which("nvcc"), "--version"],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -185,7 +186,7 @@ class HardwareDetector:
         """Check Vulkan availability."""
         try:
             result = subprocess.run(
-                ["vulkaninfo", "--summary"],
+                [shutil.which("vulkaninfo"), "--summary"],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",

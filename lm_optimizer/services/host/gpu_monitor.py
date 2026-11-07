@@ -6,6 +6,7 @@ load. CPU load is still checked but can be overridden by user.
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 
 import psutil
@@ -15,7 +16,7 @@ def _discrete_gpu_load() -> float:
     """Return load of the discrete (RTX) GPU, or 0.0 if unavailable."""
     try:
         result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
+            [shutil.which("nvidia-smi"), "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
             capture_output=True, text=True, timeout=5,
         )
         if result.returncode == 0:

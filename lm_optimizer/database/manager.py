@@ -290,8 +290,8 @@ class DatabaseManager:
         ]:
             try:
                 conn.execute(f"ALTER TABLE runs ADD COLUMN {col} {ddl}")
-            except Exception:
-                pass  # column already exists
+            except Exception as exc:
+                log_best_effort(f"Column {col} migration", exc)
 
         # Add columns to configurations
         for col, ddl in [

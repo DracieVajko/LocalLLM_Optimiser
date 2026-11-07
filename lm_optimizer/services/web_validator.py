@@ -21,6 +21,7 @@ need a real browser engine and are listed as missing in docs/README.md.
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
@@ -168,7 +169,7 @@ def js_syntax_errors(scripts: list[str]) -> list[str]:
                 handle.write(code)
                 path = handle.name
             proc = subprocess.run(
-                ["node", "--check", path],
+                [shutil.which("node"), "--check", path],
                 capture_output=True,
                 text=True,
                 timeout=20,

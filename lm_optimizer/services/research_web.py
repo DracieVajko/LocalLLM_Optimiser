@@ -18,6 +18,7 @@ Pure helpers are offline-testable; only `fetch_sources` touches the network.
 from __future__ import annotations
 
 import re
+from lm_optimizer.services.best_effort import log_best_effort
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from typing import Any
@@ -84,8 +85,8 @@ def html_to_text(html: str) -> tuple[str, str]:
     try:
         parser.feed(html or "")
         parser.close()
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:  # noqa: BLE001
+        log_best_effort("HTML title parsing", exc)
     return parser.title.strip(), re.sub(r"\s+", " ", parser.text).strip()
 
 

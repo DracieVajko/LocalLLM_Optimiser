@@ -1,6 +1,7 @@
 """Hardware detection - authoritative implementation for GPU, CPU, memory."""
 
 import platform
+import shutil
 import subprocess
 from dataclasses import dataclass
 
@@ -61,7 +62,7 @@ def get_gpu_info() -> GPUInfo | None:
     try:
         result = subprocess.run(
             [
-                "nvidia-smi",
+                shutil.which("nvidia-smi"),
                 "--query-gpu=index,name,memory.total,driver_version,compute_cap",
                 "--format=csv,noheader,nounits",
             ],

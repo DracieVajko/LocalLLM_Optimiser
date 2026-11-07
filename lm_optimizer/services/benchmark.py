@@ -726,8 +726,8 @@ class BenchmarkService:
                 if active_cases:
                     await self._run_single_case(model_id, active_cases[0], active_reasoning)
                 burn_in_ms = (time.perf_counter() - burn_start) * 1000
-            except Exception:
-                pass
+            except Exception as exc:
+                log_best_effort("burn-in benchmark", exc)
             generation["burn_in_ms"] = burn_in_ms
 
             # Measured runs. Always measure fresh - cache is only for

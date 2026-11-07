@@ -1,238 +1,465 @@
 """FastAPI application for LM Studio Auto Optimizer."""
 
+
+
 import os
+
+from typing import Any
+
 from contextlib import asynccontextmanager
 
+
+
 from fastapi import FastAPI, Request
+
 from fastapi.middleware.cors import CORSMiddleware
+
 from fastapi.responses import HTMLResponse, JSONResponse
+
 from fastapi.staticfiles import StaticFiles
+
 from fastapi.templating import Jinja2Templates
 
+
+
 from lm_optimizer.api.routes import router as api_router
+
 from lm_optimizer.api.state import registry
+
 from lm_optimizer.api.websocket import ws_router
+
 from lm_optimizer.config import config
+
 from lm_optimizer.logging_config import get_logger, setup_logging
+
 from lm_optimizer.services.best_effort import log_best_effort
+
+
 
 logger = get_logger(__name__)
 
+
+
 # Setup logging
+
 setup_logging()
+
+
 
 templates = Jinja2Templates(directory="lm_optimizer/ui/templates")
 
 
+
+
+
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+
+async def lifespan(app: FastAPI) -> dict[str, Any]:
     """Application lifespan handler (shutdown writes checkpoint first)."""
+
     logger.info("Starting LM Studio Auto Optimizer")
+
     registry.clear()
+
     try:
+
         from lm_optimizer.api import routes as _routes
+
+
 
         await _routes.warm_capability_cache()
+
     except Exception as e:
+
         logger.info("Startup warmup failed", error=str(e))
+
     yield
+
     try:
+
         from lm_optimizer.api import routes as _routes
 
+
+
         opt = registry.optimizer
+
         if opt is not None and opt.state is not None:
+
             opt.checkpoint_now(reason="shutdown")
+
             logger.info("Shutdown checkpoint saved", run_id=str(opt.state.run.id))
+
     except Exception as e:
+
         logger.info("Shutdown checkpoint failed", error=str(e))
+
     registry.clear()
+
     logger.info("Shutting down LM Studio Auto Optimizer")
 
 
+
+
+
 app = FastAPI(
+
     title="LM Studio Auto Optimizer",
+
     description="Finds empirically validated configurations optimized for your hardware, model and selected goal",
+
     version="1.5.0b1",
+
     lifespan=lifespan,
+
 )
+
+
 
 # CORS for local development
+
 app.add_middleware(
+
     CORSMiddleware,
+
     allow_origins=["http://127.0.0.1:8080", "http://localhost:8080"],
+
     allow_credentials=True,
+
     allow_methods=["*"],
+
     allow_headers=["*"],
+
 )
 
+
+
 _MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
 _LOOPBACK_CLIENTS = {"127.0.0.1", "::1", "localhost"}
 
 
+
+
+
 @app.middleware("http")
+
 async def _require_token_for_remote_clients(request: Request, call_next):
+
     """Require ``X-API-Token`` on mutations from non-loopback clients.
 
+
+
     Local UI/CLI traffic is unchanged. Remote mode is refused at startup
+
     without ``LM_OPTIMIZER_API_TOKEN``; this middleware is the matching
+
     request-time check.
+
     """
+
     token = os.environ.get("LM_OPTIMIZER_API_TOKEN")
+
     client_host = request.client.host if request.client else ""
+
     if (
+
         token
+
         and client_host not in _LOOPBACK_CLIENTS
+
         and request.method.upper() in _MUTATING_METHODS
+
         and request.headers.get("x-api-token") != token
+
     ):
+
         return JSONResponse({"detail": "invalid API token"}, status_code=401)
+
     return await call_next(request)
 
 
+
+
+
 @app.exception_handler(Exception)
+
 async def _unhandled_exception(request: Request, exc: Exception):
+
     """One generic 500 boundary; details stay in the log, not the response."""
+
     logger.exception("Unhandled API error", path=request.url.path)
+
     return JSONResponse({"detail": "Internal server error"}, status_code=500)
 
+
+
 app.include_router(api_router, prefix="/api")
+
 app.include_router(ws_router)
 
+
+
 # Static files
+
 app.mount("/static", StaticFiles(directory="lm_optimizer/ui/static"), name="static")
 
 
+
+
+
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
+
+async def dashboard(request: Request) -> dict[str, Any]:
     """Main dashboard."""
+
     from lm_optimizer.services.host.hardware import hardware_detector
 
+
+
     hardware = hardware_detector.detect()
+
     return templates.TemplateResponse(
+
         request,
+
         "dashboard.html",
+
         {
+
             "hardware": hardware,
+
             "lm_studio_url": config.lm_studio.base_url,
+
         },
+
     )
+
+
+
 
 
 @app.get("/history", response_class=HTMLResponse)
-async def history_page(request: Request):
+
+async def history_page(request: Request) -> dict[str, Any]:
     """History page."""
+
     return templates.TemplateResponse(request, "history.html")
 
 
+
+
+
 @app.get("/results/{run_id}", response_class=HTMLResponse)
-async def results_page(request: Request, run_id: str):
+
+async def results_page(request: Request, run_id: str) -> dict[str, Any]:
     """Results page for a specific run."""
+
     return templates.TemplateResponse(
+
         request,
+
         "results.html",
+
         {
+
             "run_id": run_id,
+
         },
+
     )
+
+
+
 
 
 @app.get("/settings", response_class=HTMLResponse)
-async def settings_page(request: Request):
+
+async def settings_page(request: Request) -> dict[str, Any]:
     """Settings page."""
+
     return templates.TemplateResponse(request, "settings.html")
 
 
+
+
+
 @app.get("/lab", response_class=HTMLResponse)
-async def lab_page(request: Request):
+
+async def lab_page(request: Request) -> dict[str, Any]:
     """Lab page: Context Explorer, Quality Lab, Recommender, Duel."""
+
     return templates.TemplateResponse(request, "lab.html")
+
+
+
 
 
 @app.get("/models/{model_id}", response_class=HTMLResponse)
-async def model_detail_page(request: Request, model_id: str):
+
+async def model_detail_page(request: Request, model_id: str) -> dict[str, Any]:
     """Model detail page: identity, capabilities, presets, history."""
+
     return templates.TemplateResponse(request, "model_detail.html")
 
 
+
+
+
 @app.get("/brewery", response_class=HTMLResponse)
-async def brewery_page(request: Request):
+
+async def brewery_page(request: Request) -> dict[str, Any]:
     """Brewery: Lab + experiment builder under one nav entry."""
+
     return templates.TemplateResponse(request, "lab.html")
 
 
+
+
+
 @app.get("/experiments", response_class=HTMLResponse)
-async def experiments_page(request: Request):
+
+async def experiments_page(request: Request) -> dict[str, Any]:
     """Experiment Builder: mode -> model -> budget -> review -> run."""
+
     return templates.TemplateResponse(request, "experiments.html")
 
 
+
+
+
 @app.get("/results/{run_id}/configs/{config_id}", response_class=HTMLResponse)
-async def config_json_page(request: Request, run_id: str, config_id: str):
+
+async def config_json_page(request: Request, run_id: str, config_id: str) -> dict[str, Any]:
     """Clean pretty-printed JSON of one tested configuration."""
+
     import json as _json
+
+
 
     from fastapi import HTTPException as _HE
 
+
+
     from lm_optimizer.api.routes import (
+
         _present_config_detail,
+
         config_repo,
+
         run_repo,
+
     )
 
+
+
     config = config_repo.get(config_id)
+
     if not config or str(config.run_id) != str(run_id):
+
         raise _HE(status_code=404, detail="Configuration not found")
+
     model_id = ""
+
     try:
+
         run = run_repo.get(str(run_id))
+
         if run is not None and getattr(run, "model", None) is not None:
+
             model_id = run.model.id or ""
+
     except Exception as exc:
+
         log_best_effort("best-effort operation failed", exc)
+
     enriched = _present_config_detail(config, model_id)
+
     payload = _json.dumps(enriched, indent=1, ensure_ascii=False, default=str)
+
     return templates.TemplateResponse(
+
         request,
+
         "json.html",
+
         {"payload": payload, "run_id": str(run_id), "config_id": str(config_id)},
+
     )
+
+
+
 
 
 @app.get("/sandbox", response_class=HTMLResponse)
-async def sandbox_page(request: Request):
+
+async def sandbox_page(request: Request) -> dict[str, Any]:
     """Model-vs-model sandbox page (text / html / scene)."""
+
     return templates.TemplateResponse(request, "sandbox.html")
 
 
+
+
+
 @app.get("/sandbox/files/{job_id}/{side}/index.html")
-async def sandbox_file(job_id: str, side: str):
+
+async def sandbox_file(job_id: str, side: str) -> dict[str, Any]:
     """Serve a duel-generated index.html. Fixed name + A/B only: no traversal."""
+
     import re
+
+
 
     from fastapi.responses import Response
 
+
+
     if side not in ("A", "B"):
+
         from fastapi import HTTPException as _HE
+
+
 
         raise _HE(status_code=400, detail="side must be A or B")
+
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", job_id):
+
         from fastapi import HTTPException as _HE
+
+
 
         raise _HE(status_code=400, detail="invalid job id")
+
     from lm_optimizer.services import sandbox as _sb
 
+
+
     root = _sb.DEFAULT_SANDBOX_ROOT
+
     target = root / job_id / side / "index.html"
+
     try:
+
         resolved = target.resolve()
+
         if resolved.parent != (root / job_id / side).resolve():
+
             raise ValueError("traversal")
+
         html = resolved.read_text(encoding="utf-8")
+
     except (FileNotFoundError, NotADirectoryError, ValueError):
+
         from fastapi import HTTPException as _HE
 
+
+
         raise _HE(status_code=404, detail="file not found")
+
     return Response(content=html, media_type="text/html")
+
+
+
 
 
 # Import at end

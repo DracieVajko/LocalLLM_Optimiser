@@ -19,6 +19,7 @@ from typing import Any
 from lm_optimizer.benchmark.suite_version import BENCHMARK_SUITE_VERSION
 from lm_optimizer.domain.models import BenchmarkMetrics
 from lm_optimizer.logging_config import get_logger
+from lm_optimizer.services.best_effort import log_best_effort
 
 logger = get_logger(__name__)
 
@@ -55,16 +56,16 @@ def _host_fingerprint() -> str:
         parts.append(platform.system())
         parts.append(platform.machine())
         parts.append(platform.python_version())
-    except Exception:
-        pass
+    except Exception as exc:
+        log_best_effort("host fingerprint detection failed", exc)
     try:
         from lm_optimizer.services.host.hardware import hardware_detector
         hw = hardware_detector.detect()
         for g in getattr(hw, "gpus", []) or []:
             parts.append(getattr(g, "name", ""))
             parts.append(str(getattr(g, "vram_gb", 0)))
-    except Exception:
-        pass
+    except Exception as exc:
+        log_best_effort("hardware detection failed", exc)
     return "|".join(str(p) for p in parts)
 
 

@@ -9,6 +9,7 @@ import asyncio
 import inspect
 import json
 import platform
+import shutil
 import subprocess
 import time
 from typing import Any
@@ -41,7 +42,7 @@ def gpu_free_mb() -> list[dict[str, Any]]:
     try:
         out = subprocess.run(
             [
-                "nvidia-smi",
+                shutil.which("nvidia-smi"),
                 "--query-gpu=index,name,memory.used,memory.total",
                 "--format=csv,noheader,nounits",
             ],
@@ -109,7 +110,7 @@ def storage_info() -> dict[str, Any]:
     try:
         out = subprocess.run(
             [
-                "powershell",
+                shutil.which("powershell"),
                 "-NoProfile",
                 "-Command",
                 "Get-PhysicalDisk | Select-Object DeviceId, FriendlyName, MediaType, Size | ConvertTo-Json",
@@ -157,7 +158,7 @@ def _query_pagefile(_query: str) -> str:
     """One pagefile query; empty string when unavailable (caller tries next)."""
     try:
         out = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", _query],
+            [shutil.which("powershell"), "-NoProfile", "-Command", _query],
             capture_output=True,
             text=True,
             encoding="utf-8",
