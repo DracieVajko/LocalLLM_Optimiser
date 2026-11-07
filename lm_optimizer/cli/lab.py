@@ -755,9 +755,12 @@ def sandbox(
         workdir=workdir,
         command=build_command_for(definition),
     )
+    MIN_CTX_FOR_SANDBOX = 4096
+
     async def _generate(feedback: str) -> str:
         if not model:
             return ""
+        from dataclasses import replace
         from lm_optimizer.cli.sandbox_duel import _load_best_config
         from lm_optimizer.domain.models import LoadConfiguration
         client = _client()
@@ -767,9 +770,19 @@ def sandbox(
             # experiment makes the new load fail or crash the server.
             await client.unload_all()
             try:
-                cfg, _ctx = _load_best_config(model)
+                cfg, ctx = _load_best_config(model)
+                # Ensure context length is sufficient for sandbox tasks.
+                # Best configs from early runs may have ctx=2048 which is too
+                # small for meaningful sandbox evaluation; bump it up.
+                if ctx is not None and ctx < MIN_CTX_FOR_SANDBOX:
+                    cfg = replace(cfg, context_length=MIN_CTX_FOR_SANDBOX)
+                    ctx = MIN_CTX_FOR_SANDBOX
+                    console.print(
+                        f"[yellow]context_length raised from {ctx} to "
+                        f"{MIN_CTX_FOR_SANDBOX} for sandbox run[/yellow]"
+                    )
             except ValueError:
-                cfg = LoadConfiguration()
+                cfg = LoadConfiguration(context_length=MIN_CTX_FOR_SANDBOX)
             loaded = await client.load_model(model, cfg)
             if not getattr(loaded, "success", False):
                 return ""
