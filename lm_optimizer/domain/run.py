@@ -79,6 +79,7 @@ class OptimizationRun:
         )
     )
     hardware_id: str | None = None
+    backend_id: str | None = None  # "lmstudio", "ollama", "llamacpp"
     profile: OptimizationProfile = OptimizationProfile.BALANCED
     profile_weights: dict[str, float] = field(default_factory=dict)
     quality_threshold: float = 0.97
