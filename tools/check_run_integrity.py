@@ -220,7 +220,36 @@ def check_run(cur: sqlite3.Cursor, run: sqlite3.Row) -> Report:
                 "tested (benchmark/suite.py scales only when ctx > 8192)",
             )
 
-    # --- 6. missing durations ---------------------------------------------
+    # --- 6. recall probe present for long contexts --------------------------
+    # Any configuration probed at ctx >= 4096 must have a recall probe record
+    # in generation["recall"] with prompt_tokens >= 0.6 * target_tokens.
+    # Without this, we cannot claim the model was actually tested at that context.
+    recalled_ctxs: dict[int, bool] = {}
+    for c in configs:
+        gen = _json(c["generation"], {}) or {}
+        recall = gen.get("recall")
+        if recall and isinstance(recall, dict) and recall.get("target_tokens"):
+            if recall["prompt_tokens"] >= 0.6 * recall["target_tokens"]:
+                recall_ctx = recall["target_tokens"]
+                recall_ok = recall["status"] == "pass" or recall["status"] == "passed"
+                recalled_ctxs[recall_ctx] = recall_ok
+    tested_contexts = {c["context_length"] for c in configs if c.get("context_length")}
+    for ctx in sorted(tested_contexts):
+        if ctx >= 4096:
+            if ctx not in recalled_ctxs:
+                rep.add(
+                    "FAIL",
+                    f"ctx={ctx} probed but no recall probe record in generation['recall'] "
+                    f"-- context usage is unverified",
+                )
+            elif not recalled_ctxs[ctx]:
+                rep.add(
+                    "WARN",
+                    f"ctx={ctx} recall probe failed (status not 'pass') "
+                    f"-- context usage questionable",
+                )
+
+    # --- 7. missing durations ---------------------------------------------
     zero = sum(1 for c in configs if not c["duration_ms"])
     if zero:
         rep.add(
