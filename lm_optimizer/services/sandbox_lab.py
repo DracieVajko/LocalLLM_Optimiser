@@ -362,7 +362,17 @@ WEB_SEARCH_TASK = SandboxTask(
         "sandbox - this is a code-quality task, not a live crawl."
     ),
     checks=[
-        SandboxCheck("is_python_code", "regex", r"```python", weight=2.0, critical=True),
+        # Real Python code, not a markdown fence: the runner strips fences from
+        # the artifact before writing it, so requiring "```python" could never
+        # pass a genuine solution. Anchored per line so a cleaned artifact and a
+        # fenced one both score correctly.
+        SandboxCheck(
+            "is_python_code",
+            "regex",
+            r"(?m)^\s*(import\s|from\s+\w+\s+import|def\s+\w+|class\s+\w+|#!)",
+            weight=2.0,
+            critical=True,
+        ),
         SandboxCheck("has_queries", "regex", r"(queries|search|q\s*=)", weight=1.5),
         SandboxCheck("has_user_agent", "regex", r"(User-Agent|user.agent)", weight=1.5),
         SandboxCheck("has_timeout", "regex", r"(timeout|Timeout)", weight=1.0),
@@ -756,6 +766,28 @@ def score_attempt(
                     rest = rest[:-3].rstrip()
                 return rest
         return text
+
+    # A Python artifact is valid when it actually parses. This is stronger than
+    # any regex and fence-independent (real solutions are stored without fences,
+    # but scoring must accept a fenced paste too).
+    if any(c.name == "is_python_code" for c in task.checks):
+        py_text = "\n".join(
+            _strip_md_fences(text)
+            for name, text in files.items()
+            if name.endswith(".py")
+        )
+        if py_text:
+            try:
+                compile(py_text, "<sandbox>", "exec")
+                custom_results = {
+                    **(custom_results or {}),
+                    "is_python_code": (True, "compiles"),
+                }
+            except SyntaxError as exc:
+                custom_results = {
+                    **(custom_results or {}),
+                    "is_python_code": (False, f"syntax error: {exc.msg}"),
+                }
 
     for check in task.checks:
         ok = False

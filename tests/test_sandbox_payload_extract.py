@@ -50,3 +50,39 @@ def test_text_artifact_unchanged():
 def test_code_already_clean_is_unchanged():
     text = "export function createScene({ THREE }) {\n  return new THREE.Group();\n}\n"
     assert extract_payload(text, "scene.js") == text
+
+
+def test_web_search_accepts_real_python_without_fence():
+    """The artifact has no markdown fence (the runner strips them), so the
+    is_python_code check must accept real code rather than '```python'."""
+    from lm_optimizer.services.sandbox_lab import SANDBOX_TASKS, score_attempt
+
+    task = SANDBOX_TASKS["web_search"]
+    code = (
+        "import requests\n"
+        "from bs4 import BeautifulSoup\n"
+        "QUERIES = ['a']\n"
+        "def search():\n"
+        "    try:\n"
+        "        r = requests.get('https://example.com', timeout=10,\n"
+        "                         headers={'User-Agent': 'bp'})\n"
+        "        soup = BeautifulSoup(r.text, 'html.parser')\n"
+        "        print(soup.get_text())\n"
+        "    except Exception:\n"
+        "        print('findings: none')\n"
+    )
+    score, failing, critical = score_attempt(task, {"web_search.py": code})
+    assert "is_python_code" not in " ".join(failing)
+    assert "is_python_code" not in " ".join(critical)
+    assert score > 0.9
+
+
+def test_web_search_rejects_prose_without_fence():
+    from lm_optimizer.services.sandbox_lab import SANDBOX_TASKS, score_attempt
+
+    task = SANDBOX_TASKS["web_search"]
+    score, failing, critical = score_attempt(
+        task, {"web_search.py": "Here is the plan: search, fetch, parse."}
+    )
+    assert "is_python_code" in " ".join(critical)
+    assert score < 0.9
