@@ -168,8 +168,11 @@ def js_syntax_errors(scripts: list[str]) -> list[str]:
             ) as handle:
                 handle.write(code)
                 path = handle.name
+            node_path = shutil.which("node")
+            if not node_path:
+                return False, "node not found"
             proc = subprocess.run(
-                [shutil.which("node"), "--check", path],
+                [node_path, "--check", path],
                 capture_output=True,
                 text=True,
                 timeout=20,

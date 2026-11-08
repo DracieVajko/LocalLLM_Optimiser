@@ -92,8 +92,11 @@ def run_lms(*args: str, timeout: int = LMS_TIMEOUT_S) -> tuple[int, str]:
     cp1252, which used to kill the reader thread with UnicodeDecodeError.
     """
     try:
+        lms_path = shutil.which("lms")
+        if not lms_path:
+            return 127, "lms not found"
         proc = subprocess.run(
-            [shutil.which("lms"), *args],
+            [lms_path, *args],
             capture_output=True,
             text=True,
             encoding="utf-8",

@@ -60,9 +60,12 @@ class HardwareInfo:
 def get_gpu_info() -> GPUInfo | None:
     """Detect the first NVIDIA GPU using nvidia-smi."""
     try:
+        nvidia_smi = shutil.which("nvidia-smi")
+        if not nvidia_smi:
+            return None
         result = subprocess.run(
             [
-                shutil.which("nvidia-smi"),
+                nvidia_smi,
                 "--query-gpu=index,name,memory.total,driver_version,compute_cap",
                 "--format=csv,noheader,nounits",
             ],

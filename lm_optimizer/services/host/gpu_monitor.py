@@ -14,9 +14,12 @@ import psutil
 
 def _discrete_gpu_load() -> float:
     """Return load of the discrete (RTX) GPU, or 0.0 if unavailable."""
+    nvidia_smi = shutil.which("nvidia-smi")
+    if not nvidia_smi:
+        return 0.0
     try:
         result = subprocess.run(
-            [shutil.which("nvidia-smi"), "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
+            [nvidia_smi, "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
             capture_output=True, text=True, timeout=5,
         )
         if result.returncode == 0:
