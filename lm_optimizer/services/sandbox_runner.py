@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import inspect
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -31,6 +32,69 @@ from lm_optimizer.logging_config import get_logger
 from lm_optimizer.services.best_effort import log_best_effort
 
 logger = get_logger(__name__)
+
+_FENCE_LINE = re.compile(r"^\s*```[a-zA-Z0-9_+.-]*\s*$")
+_CODE_START = re.compile(
+    r"^\s*(export\b|import\b|const\b|let\b|var\b|function\b|class\b|async\b)"
+)
+_PY_START = re.compile(r"^\s*(import\b|from\b|def\b|class\b|#!)")
+_HTML_START = re.compile(r"^\s*(<!doctype\s+html|<html\b)", re.IGNORECASE)
+
+
+def extract_payload(text: str, filename: str) -> str:
+    """Trim reasoning preamble and markdown fences from a model artifact.
+
+    Reasoning models often emit a thinking trace ("We need to…") before the
+    actual code. Writing that into ``scene.js`` / ``index.html`` makes the
+    artifact unparseable and the sandbox score meaningless. The extraction is
+    deliberate and conservative: it only moves the start of the file to the
+    first line that looks like real content for that file type.
+    """
+    if not text:
+        return text
+    # Remove fence lines anywhere (``` or ```js on their own line). Keep the
+    # original bytes when nothing needs removing.
+    raw_lines = text.splitlines()
+    kept_lines = [ln for ln in raw_lines if not _FENCE_LINE.match(ln)]
+    if len(kept_lines) != len(raw_lines):
+        cleaned = "\n".join(kept_lines)
+        if text.endswith("\n"):
+            cleaned += "\n"
+    else:
+        cleaned = text
+
+    suffix = Path(filename).suffix.lower()
+    if suffix in (".js", ".mjs", ".cjs", ".ts"):
+        start = _first_matching_line(cleaned, _CODE_START)
+        if start > 0:
+            cleaned = cleaned[start:]
+    elif suffix in (".html", ".htm"):
+        start = _first_matching_line(cleaned, _HTML_START)
+        if start > 0:
+            cleaned = cleaned[start:]
+    elif suffix == ".py":
+        start = _first_matching_line(cleaned, _PY_START)
+        if start > 0:
+            cleaned = cleaned[start:]
+    elif suffix == ".json":
+        begin = cleaned.find("{")
+        end = cleaned.rfind("}")
+        if begin != -1 and end > begin:
+            cleaned = cleaned[begin : end + 1]
+    return cleaned
+
+
+def _first_matching_line(text: str, pattern: re.Pattern) -> int:
+    """Return the character offset of the first line matching ``pattern``.
+
+    Returns 0 when nothing matches or the match is already the first line.
+    """
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        if pattern.match(line):
+            return offset
+        offset += len(line)
+    return 0
 
 from lm_optimizer.services.sandbox_lab import (
     RepairAttempt,
@@ -340,10 +404,12 @@ class SandboxRunner:
         produced by running commands, not by writing the model's raw text.
         """
         self.workdir.mkdir(parents=True, exist_ok=True)
-        text = produced or ""
         primary = self.task.artifacts[0] if self.task.artifacts else "output.txt"
         if primary.endswith("/"):
             primary = primary.rstrip("/") + "/output.txt"
+        # Drop the reasoning preamble / markdown fences before writing the
+        # artifact: a code file must start with code, not with "We need to…".
+        text = extract_payload(produced or "", primary)
         root = self.workdir.resolve()
         try:
             target = (self.workdir / primary).resolve()

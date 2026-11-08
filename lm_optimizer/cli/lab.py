@@ -300,11 +300,14 @@ def quality_lab(
     import asyncio
     asyncio.run(_run())
 async def _chat(client, model: str, prompt: str, max_tokens: int) -> str:
+    # reasoning="off" keeps the thinking trace out of the artifact; the client
+    # retries without the key for models that reject it.
     response = await client.chat_completion(
         model=model,
         input_text=prompt,
         temperature=0.0,
         max_output_tokens=max_tokens,
+        reasoning="off",
     )
     choices = response.get("choices") or []
     if not choices:
