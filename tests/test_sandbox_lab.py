@@ -23,6 +23,8 @@ def test_all_sandbox_tasks_exist():
         "web_dashboard",
         "research_synthesis",
         "blender_skyblock",
+        "blender_city_bridge",
+        "creative_3d_voxel_island",
         "email_write",
         "calendar_event",
         "email_and_calendar",

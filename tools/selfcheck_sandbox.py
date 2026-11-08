@@ -43,9 +43,7 @@ if str(ROOT) not in sys.path:
 from lm_optimizer.services.sandbox_lab import (  # noqa: E402
     RESEARCH_PACKAGE,
     SANDBOX_TASKS,
-    SandboxCheck,
     SandboxTask,
-    SandboxTaskKind,
     score_attempt,
 )
 from lm_optimizer.services.web_validator import validate_web_files  # noqa: E402

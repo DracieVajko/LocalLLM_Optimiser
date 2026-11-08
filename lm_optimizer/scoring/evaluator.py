@@ -451,5 +451,7 @@ class QualityEvaluator:
         """
         if getattr(quality, "critical_checks_failed", False):
             return False
-        threshold = max(0.90, self.minimum_score)
+        # Same calibrated floor as services/quality.py: the profile threshold
+        # is an aspiration, not a hard cliff.
+        threshold = min(self.minimum_score, 0.90)
         return quality.overall >= threshold

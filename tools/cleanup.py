@@ -29,7 +29,6 @@ from __future__ import annotations
 import argparse
 import shutil
 import sqlite3
-import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -179,7 +178,7 @@ def main(argv: list[str] | None = None) -> int:
         print("\n[DRY RUN] Would:")
         if not args.logs_only:
             print(f"  1. create archive {archive_dir}")
-            print(f"     copy optimizer.db, move reports/, checkpoints/")
+            print("     copy optimizer.db, move reports/, checkpoints/")
             print(f"  2. DELETE rows from: {', '.join(RUN_TABLES)}")
         print(f"  3. delete {logs_dir}/*")
         print(f"  4. delete {len(caches)} cache dir(s)")

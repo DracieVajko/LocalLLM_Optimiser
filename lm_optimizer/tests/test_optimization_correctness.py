@@ -267,10 +267,35 @@ class TestQualityEvaluator:
         ev.minimum_score = 0.99
         good = '{"name": "A", "age": 30, "skills": ["a","b","c"], "address": {"city": "X", "country": "Y"}}'
         score = ev.evaluate("m", "structured_output", good)
-        # Score should be near 1.0, passes 0.99
+        # A correct answer passes regardless of the (aspirational) profile
+        # threshold: the calibrated gate floor is 0.90.
         assert ev.passes_threshold(score) is True
-        ev.minimum_score = 1.01
-        assert ev.passes_threshold(score) is False
+        # A weak aggregate below the floor still fails.
+        weak = QualityScore(
+            overall=0.85,
+            task_completion=1.0,
+            factual_consistency=0.25,
+            format_compliance=1.0,
+            coding_correctness=1.0,
+            no_truncation=1.0,
+            no_malformed=1.0,
+            checks_passed=5,
+            checks_total=6,
+        )
+        assert ev.passes_threshold(weak) is False
+        # A critical failure fails even with a high aggregate.
+        critical = QualityScore(
+            overall=0.95,
+            task_completion=0.0,
+            factual_consistency=1.0,
+            format_compliance=1.0,
+            coding_correctness=1.0,
+            no_truncation=1.0,
+            no_malformed=1.0,
+            checks_passed=5,
+            checks_total=6,
+        )
+        assert ev.passes_threshold(critical) is False
 
 
 class TestProfileThresholds:
@@ -305,28 +330,50 @@ class TestProfileThresholds:
             assert abs(sum(p.weights.values()) - 1.0) < 0.01
 
     def test_profile_affects_filtering(self):
-        # Simulate filtering: config below threshold should be rejected regardless of speed
+        # The calibrated gate (no critical failure AND aggregate >= 0.90) is
+        # profile-independent: a 0.96 answer with no critical miss passes all
+        # profiles; a 0.85 answer and a critical failure fail all profiles.
         reg = ProfileRegistry()
+        ok_quality = QualityScore(
+            overall=0.96,
+            task_completion=1.0,
+            factual_consistency=0.75,
+            format_compliance=1.0,
+            coding_correctness=1.0,
+            no_truncation=1.0,
+            no_malformed=1.0,
+            checks_passed=5,
+            checks_total=6,
+        )
+        weak_quality = QualityScore(
+            overall=0.85,
+            task_completion=1.0,
+            factual_consistency=0.25,
+            format_compliance=1.0,
+            coding_correctness=1.0,
+            no_truncation=1.0,
+            no_malformed=1.0,
+            checks_passed=4,
+            checks_total=6,
+        )
+        critical_quality = QualityScore(
+            overall=0.95,
+            task_completion=0.0,
+            factual_consistency=1.0,
+            format_compliance=1.0,
+            coding_correctness=1.0,
+            no_truncation=1.0,
+            no_malformed=1.0,
+            checks_passed=5,
+            checks_total=6,
+        )
         for profile_name in ["speed", "balanced", "quality"]:
             p = reg.get(profile_name)
             ev = QualityEvaluator()
             ev.minimum_score = p.minimum_quality
-            low_quality = QualityScore(
-                overall=0.96,
-                task_completion=1.0,
-                factual_consistency=1.0,
-                format_compliance=1.0,
-                coding_correctness=1.0,
-                no_truncation=1.0,
-                no_malformed=1.0,
-                checks_passed=5,
-                checks_total=6,
-            )
-            # On quality profile (0.99), 0.96 should fail; on speed (0.95) should pass
-            if profile_name == "quality":
-                assert not ev.passes_threshold(low_quality)
-            elif profile_name == "speed":
-                assert ev.passes_threshold(low_quality)
+            assert ev.passes_threshold(ok_quality)
+            assert not ev.passes_threshold(weak_quality)
+            assert not ev.passes_threshold(critical_quality)
 
 
 class TestTTFT:

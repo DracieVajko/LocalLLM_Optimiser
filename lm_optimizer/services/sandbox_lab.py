@@ -408,18 +408,86 @@ DEEP_RESEARCH_TASK = SandboxTask(
 )
 
 
+CREATIVE_3D_TASK = SandboxTask(
+    id="creative_3d_voxel_island",
+    kind=SandboxTaskKind.TEXT,
+    title="Procedural voxel floating island (Creative 3D)",
+    prompt=(
+        "Build a fully procedural 3D voxel floating island inspired by Minecraft Skyblock. "
+        "Output ONLY a single JavaScript module file named scene.js that exports exactly one "
+        "function: createScene({ THREE, random }) which returns a THREE.Group containing the "
+        "entire scene. Do NOT generate HTML, CSS, camera, lights, renderer, or OrbitControls - "
+        "the benchmark runtime provides those. Build geometry procedurally with BoxGeometry etc. "
+        "No external assets, textures, or network requests. Use the provided random() for any "
+        "randomness. Required: irregular floating island (grass surface, dirt/stone underside "
+        "narrowing downward), at least 3 trees (cubic trunks + green canopies), red apples on "
+        "trees, at least 1 blue waterfall, smaller vegetation. Organize into named groups: "
+        "VoxelIsland (root), Terrain, Trees, Waterfall, Vegetation. Output valid JavaScript only, "
+        "no markdown fences."
+    ),
+    checks=[
+        SandboxCheck("exports_create_scene", "regex", r"export\s+function\s+createScene", weight=2.0, critical=True),
+        SandboxCheck("returns_group", "regex", r"new\s+THREE\.Group", weight=2.0),
+        SandboxCheck("has_terrain_group", "regex", r"\.name\s*=\s*[\"']Terrain[\"']", weight=1.5),
+        SandboxCheck("has_trees_group", "regex", r"\.name\s*=\s*[\"']Trees[\"']", weight=1.5),
+        SandboxCheck("has_waterfall_group", "regex", r"\.name\s*=\s*[\"']Waterfall[\"']", weight=1.5),
+        SandboxCheck("has_vegetation_group", "regex", r"\.name\s*=\s*[\"']Vegetation[\"']", weight=1.0),
+        SandboxCheck("uses_random", "regex", r"random\s*\(", weight=1.0),
+        SandboxCheck("no_html", "regex", r"<[a-z]", weight=1.0, negate=True),
+        SandboxCheck("no_markdown_fence", "regex", r"```", weight=1.0, negate=True),
+    ],
+    max_repair_attempts=1,
+    timeout_s=240.0,
+    max_output_tokens=4096,
+    network_allowed=False,
+    allowed_executables=(),
+    artifacts=("scene.js",),
+)
+
+BLENDER_CITY_TASK = SandboxTask(
+    id="blender_city_bridge",
+    kind=SandboxTaskKind.BLENDER,
+    title="Small city with bridge",
+    prompt=(
+        "Write a Blender Python script that builds a small city of 4-6 cubic buildings of "
+        "varying heights connected by a bridge across a gap, with a sun light and a camera that "
+        "orbits the city. Set frame range 1-120, render the frames, and save scene.blend. "
+        "Use primitive cubes for buildings and the bridge. Place buildings at varied locations "
+        "and heights. The bridge should connect two building clusters."
+    ),
+    checks=[
+        SandboxCheck("script_defines_scene", "regex", r"(bpy\.ops\.mesh|def\s+\w+)", weight=2.0, critical=True),
+        SandboxCheck("has_buildings", "regex", r"(cube|building|block)", weight=1.5),
+        SandboxCheck("has_bridge", "regex", r"(bridge|span|connect)", weight=1.5),
+        SandboxCheck("has_camera", "regex", r"(Camera|camera)", weight=1.0),
+        SandboxCheck("has_light", "regex", r"(Light|SUN|sun)", weight=1.0),
+        SandboxCheck("has_keyframes", "regex", r"keyframe_insert", weight=1.5),
+        SandboxCheck("has_frame_range", "regex", r"frame_(start|end)", weight=1.0),
+        SandboxCheck("saves_blend", "regex", r"save_as_mainfile", weight=1.0, critical=True),
+        SandboxCheck("renders", "regex", r"bpy\.ops\.render", weight=1.0),
+    ],
+    max_repair_attempts=2,
+    timeout_s=600.0,
+    max_output_tokens=6144,
+    network_allowed=False,
+    allowed_executables=("blender",),
+    artifacts=("scene.blend", "frames/"),
+)
+
 SANDBOX_TASKS: dict[str, SandboxTask] = {
     t.id: t
     for t in (
         WEB_TASK,
         RESEARCH_TASK,
         BLENDER_TASK,
+        BLENDER_CITY_TASK,
         EMAIL_TASK,
         CALENDAR_TASK,
         EMAIL_CALENDAR_TASK,
         WEB_FETCH_TASK,
         WEB_SEARCH_TASK,
         DEEP_RESEARCH_TASK,
+        CREATIVE_3D_TASK,
     )
 }
 

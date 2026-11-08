@@ -1,0 +1,103 @@
+# Creative 3D Benchmark — Procedural Voxel Floating Island (v1)
+
+You are a 3D generative artist. Your job is to write ONE JavaScript module that builds a
+visually impressive, fully procedural 3D voxel floating island inspired by Minecraft Skyblock.
+
+## Deliverable
+
+Create exactly ONE file: `scene.js`
+It must export exactly one function:
+
+```js
+export function createScene({ THREE, random }) {
+  // ... build geometry ...
+  const root = new THREE.Group();
+  root.name = "VoxelIsland";
+  return root;
+}
+```
+
+- Return a `THREE.Group` containing the entire generated scene.
+- Name your groups meaningfully (see "Scene structure" below).
+- Do NOT generate HTML, CSS, camera, lights, renderer, or OrbitControls. The benchmark
+  runtime handles those. The runtime provides `THREE` and `random()` (a deterministic
+  seeded function returning 0..1).
+- Use actual 3D geometry (`THREE.BoxGeometry`, etc.), not flat images or 2D
+  representations. No external models, textures, images, or assets. No network requests.
+
+## World design (required)
+
+1. Irregular floating island with a voxel-based grass surface — not a flat rectangle.
+   Use multiple height levels so it looks like natural terrain.
+2. Underside physically believable: layers of dirt and stone blocks, progressively
+   narrowing towards the bottom (like a real island root).
+3. At least THREE trees: cubic trunks + detailed green voxel canopies.
+4. Red apples distributed across the trees (small red cubes).
+5. At least ONE visible blue waterfall flowing from the island edge down into the void.
+6. Smaller vegetation / environmental details (flowers, grass tufts, etc.).
+7. Coherent palette, lighting, shadows and visual composition.
+
+## Quality requirements
+
+- Recognizable from multiple viewing angles (the runtime rotates the camera).
+- Geometry has depth and interesting variation — no simplistic rectangular platform.
+- No unnatural intersections or floating objects that don't belong.
+- Visually polished result.
+
+## Scene structure (named groups)
+
+Organize objects into named THREE.Group objects:
+
+- `VoxelIsland` — root group (return this)
+- `Terrain` — island blocks
+- `Trees` — tree trunks + canopies
+- `Waterfall` — blue blocks
+- `Vegetation` — apples / flowers / grass tufts
+
+Example:
+
+```js
+export function createScene({ THREE, random }) {
+  const root = new THREE.Group();
+  root.name = "VoxelIsland";
+
+  const terrain = new THREE.Group();
+  terrain.name = "Terrain";
+  // ... add voxels ...
+  root.add(terrain);
+
+  // ... trees, waterfall, vegetation ...
+
+  return root;
+}
+```
+
+## Technical constraints
+
+- Export exactly one function: `createScene`.
+- Return exactly one `THREE.Group`.
+- Use `random()` for any randomness (deterministic seed provided by runtime).
+- No `Math.random()` — use the provided `random()`.
+- No `document`, `window`, `fetch`, `XMLHttpRequest`, `localStorage`, or DOM access.
+- No external CDNs, imports, or assets.
+- Output valid JavaScript only. No Markdown fences, no explanations.
+
+## How you are scored
+
+| Test | Weight |
+| --- | --- |
+| Visual quality (polish, composition, palette) | 40 % |
+| Geometry completeness (all required objects present) | 25 % |
+| Technical correctness (valid JS, valid group, no errors) | 20 % |
+| Stability / rendering (scene loads, camera rotates, zoom works) | 15 % |
+
+Automatic tests check:
+- JavaScript parses without syntax errors
+- `createScene` export exists and returns a `THREE.Group`
+- Named groups `Terrain`, `Trees`, `Waterfall`, `Vegetation` exist
+- At least 3 tree-like structures
+- At least 1 waterfall (blue vertical blocks)
+- Scene renders in WebGL without console errors
+- Camera rotation changes the view (second screenshot differs from first)
+
+Generation speed (tok/s) is reported separately and is NOT mixed into the quality score.

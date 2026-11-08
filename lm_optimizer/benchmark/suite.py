@@ -185,10 +185,17 @@ def create_benchmark_cases(
                 body = doc_text[doc_start:doc_end]
                 repeats = max(1, target_chars // len(body) if body else 1)
                 repeated = body * repeats
+                # Insert the needle in the middle (harmless for the summary
+                # question, useful for recall checks).
                 needle = "NOTE: the harbour access code is 7-TANGO."
                 mid = len(repeated) // 2
                 repeated = repeated[:mid] + "\n" + needle + "\n" + repeated[mid:]
-                prompt = doc_text[:doc_start] + repeated + "\n\nQUESTION: What is the harbour access code mentioned in the document? Answer with just the code."
+                # Keep the original QUESTION text: the scorer grades the
+                # renewable-energy keywords, so replacing the question made
+                # every model score 0.584 regardless of output. The document
+                # is still scaled to ~80% of the window; the question tail is
+                # taken verbatim from doc_text[doc_end:].
+                prompt = doc_text[:doc_start] + repeated + doc_text[doc_end:]
             else:
                 prompt = bp.prompt
 

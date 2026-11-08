@@ -12,7 +12,6 @@ Usage:
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -33,8 +32,7 @@ def run_mtp_variant(
     """Run one MTP variant and return the result."""
     import httpx
 
-    label = f"mtp_off" if not mtp else f"mtp_n{draft_max}"
-    log = LOG_DIR / f"{model.replace('/', '_').replace(':', '_')}_{label}.log"
+    label = "mtp_off" if not mtp else f"mtp_n{draft_max}"
 
     # Load model with MTP settings
     load_body = {

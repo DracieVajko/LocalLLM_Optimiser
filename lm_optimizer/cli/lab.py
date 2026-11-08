@@ -1872,6 +1872,10 @@ def clean_tests(
     """Clean failed artifacts and DB entries. Never deletes outside this folder."""
     if confirm:
         dry_run = False
+    console.print(
+        f"[yellow]Clean (dry_run={dry_run}, threshold={failed_count}) — "
+        f"only within project folder.[/yellow]"
+    )
     from lm_optimizer.database.repositories import run_repo
     from lm_optimizer.domain.models import ConfigurationStatus
     runs = run_repo.list_all(limit=10000)

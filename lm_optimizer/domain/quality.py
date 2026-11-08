@@ -24,6 +24,18 @@ class QualityScore:
     details: dict = field(default_factory=dict)
     checks_passed: int | None = None
     checks_total: int | None = None
+    # Hard failures (empty output, invalid schema, broken code) zero the gate
+    # regardless of the aggregate. Populated from the dimension scores unless
+    # the caller decides explicitly.
+    critical_checks_failed: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.critical_checks_failed:
+            self.critical_checks_failed = (
+                self.task_completion <= 0.0
+                or self.coding_correctness <= 0.0
+                or self.format_compliance <= 0.0
+            )
 
     def as_checks_str(self) -> str:
         """Human-readable checks summary."""

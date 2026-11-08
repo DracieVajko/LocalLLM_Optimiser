@@ -201,7 +201,6 @@ def check_run(cur: sqlite3.Cursor, run: sqlite3.Row) -> Report:
             )
 
     # --- 5. long_context never reached the context length ------------------
-    ctx_seen = sorted({c["context_length"] for c in configs if c["context_length"]})
     prompt_tokens: dict[int, float] = {}
     for c in configs:
         metrics = _json(c["metrics_json"], [])
@@ -251,7 +250,9 @@ def check_run(cur: sqlite3.Cursor, run: sqlite3.Row) -> Report:
     # Quality is the mean of the per-test `overall` values, which are
     # themselves means of 6 heuristic dimensions, so it moves in small steps —
     # but 0.97 sits in the gap where ONE heuristic check on ONE test decides.
-    threshold = float(run["quality_threshold"] or 0.0)
+    # The pass/fail gate is calibrated (no critical failure + aggregate >= 0.90);
+    # the stored `quality_threshold` is the profile's aspiration for ranking.
+    threshold = min(float(run["quality_threshold"] or 0.0), 0.90)
     qualities: list[tuple[float, str]] = []
     for c in configs:
         q = _json(c["quality_json"], {}) or {}

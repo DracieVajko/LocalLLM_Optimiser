@@ -50,7 +50,7 @@ def run_one(label: str, model: str, timeout_min: int = 180) -> tuple[int, float]
             except OSError:
                 quiet = 0
             if quiet > 1800:
-                print(f"  STALL (no log output 30 min), killing")
+                print("  STALL (no log output 30 min), killing")
                 p.kill()
                 p.wait()
                 rc = -2
@@ -86,7 +86,7 @@ def run_resume(run_id: str, label: str, timeout_min: int = 180) -> tuple[int, fl
             except OSError:
                 quiet = 0
             if quiet > 1800:
-                print(f"  STALL (no log output 30 min), killing")
+                print("  STALL (no log output 30 min), killing")
                 p.kill()
                 p.wait()
                 rc = -2

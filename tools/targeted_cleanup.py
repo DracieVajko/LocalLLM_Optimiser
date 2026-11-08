@@ -4,7 +4,6 @@ Keeps results only for models that are currently downloaded.
 Archives the removed runs' data to data/archive/cleanup_targeted_<ts>/ first.
 """
 
-import json
 import sqlite3
 import shutil
 from datetime import datetime
