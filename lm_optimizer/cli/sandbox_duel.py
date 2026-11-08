@@ -94,10 +94,19 @@ def _require_style(style: str) -> str:
     return style
 def _load_best_config(model_id: str) -> tuple[LoadConfiguration, int]:
     """Load the validated winner config for a model from its latest run.
+
     Only PASSED winners qualify: a run that never reached a validated winner
     cannot be dueled (refuses to guess a config).
+
+    LM Studio exposes one base key while historical runs may be stored under a
+    variant id (``key@quant``). When the exact id has no runs, fall back to the
+    variants of that key so a sandbox run still uses the measured best config.
     """
     runs = run_repo.get_by_model(model_id, limit=20)
+    if not runs:
+        all_runs = run_repo.list_all(limit=2000)
+        prefix = f"{model_id}@"
+        runs = [r for r in all_runs if r.model.id.startswith(prefix)]
     if not runs:
         raise ValueError(f"No runs for model {model_id!r}; run auto/optimize first.")
     for run in runs:

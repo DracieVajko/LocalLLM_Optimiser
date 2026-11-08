@@ -68,6 +68,15 @@ class TestLoadBestConfig:
         with pytest.raises(ValueError, match="No runs for model"):
             _load_best_config("never-optimized-model")
 
+    def test_variant_run_matches_base_key(self, monkeypatch):
+        """LM Studio exposes `key`; history may live under `key@quant`."""
+        from lm_optimizer.cli.sandbox_duel import _load_best_config
+
+        _winner_run(monkeypatch, "swift-qwen3.8-27b@q2_k", ctx=4096)
+        cfg, ctx = _load_best_config("swift-qwen3.8-27b")
+        assert ctx == 4096
+        assert cfg.eval_batch_size == 2048
+
     def test_run_without_winner_refuses(self, monkeypatch):
         """A run with no validated winner must not be dueled on a guess."""
         from lm_optimizer.cli.sandbox_duel import _load_best_config
