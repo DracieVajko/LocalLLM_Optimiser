@@ -362,6 +362,9 @@ class TestStorageDetection:
 
         monkeypatch.setattr(_hg.subprocess, "run", fake_run)
         monkeypatch.setattr(_hg.platform, "system", lambda: "Windows")
+        # Control executable discovery so the test is deterministic on hosts
+        # (e.g. Ubuntu/macOS CI) where a real `powershell` is not installed.
+        monkeypatch.setattr(_hg.shutil, "which", lambda exe: "powershell")
         info = _hg.storage_info()
         assert info["pagefile"] == "D:\\pagefile.sys"
         assert any("PageFileUsage" in c for c in calls)

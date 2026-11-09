@@ -49,6 +49,11 @@ class TestQuickConnect:
         from lm_optimizer.services.host import lms_cli
 
         seen = {}
+        which_called = []
+
+        def fake_which(exe):
+            which_called.append(exe)
+            return "lms-test"
 
         def fake_run(*args, **kwargs):
             seen.update(kwargs)
@@ -58,11 +63,41 @@ class TestQuickConnect:
             out.stderr = ""
             return out
 
+        # Patch executable discovery so the fake subprocess.run actually runs
+        # even on CI hosts that have no real lms CLI installed.
+        monkeypatch.setattr(lms_cli.shutil, "which", fake_which)
         monkeypatch.setattr(_sp, "run", fake_run)
         code, _ = lms_cli.run_lms("load", "--help")
         assert code == 0
         assert seen.get("encoding") == "utf-8"
         assert seen.get("errors") == "replace"
+        assert which_called == ["lms"]
+
+    def test_run_lms_missing_cli_returns_127_without_subprocess(self, monkeypatch):
+        import subprocess as _sp
+
+        from lm_optimizer.services.host import lms_cli
+
+        run_called = []
+
+        def fake_which(exe):
+            return None
+
+        def fake_run(*args, **kwargs):
+            run_called.append(True)
+            out = MagicMock()
+            out.returncode = 0
+            out.stdout = "ok"
+            out.stderr = ""
+            return out
+
+        # Missing lms CLI must short-circuit before subprocess.run is invoked.
+        monkeypatch.setattr(lms_cli.shutil, "which", fake_which)
+        monkeypatch.setattr(_sp, "run", fake_run)
+        code, text = lms_cli.run_lms("load", "--help")
+        assert code == 127
+        assert text == "lms not found"
+        assert run_called == []
 
     def test_rejected_reasoning_value_remembered(self):
         import httpx
