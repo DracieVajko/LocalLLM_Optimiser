@@ -1,14 +1,17 @@
 """Sandbox runner unit tests (P4 execution half)."""
+import gzip
 import sys
 
 
 from lm_optimizer.services.sandbox_lab import (
+    SandboxCheck,
     SandboxPolicy,
     SandboxTask,
     SandboxTaskKind,
 )
 from lm_optimizer.services.sandbox_runner import (
     SandboxRunner,
+    looks_like_blend,
     read_workdir_files,
     run_command,
 )
@@ -133,3 +136,67 @@ def test_runner_materialises_into_workdir(tmp_path):
     runner = SandboxRunner(task=task, policy=policy, workdir=workdir)
     runner.run(lambda feedback: "<html>done</html>")
     assert (workdir / "index.html").read_text(encoding="utf-8") == "<html>done</html>"
+
+
+def test_looks_like_blend_accepts_uncompressed_zstd_and_gzip():
+    payload = b"BLENDER-v300" + b"\x00" * 16
+    assert looks_like_blend(payload)
+    assert looks_like_blend(gzip.compress(payload))
+    # Blender 3.0+ default: zstd frame magic (decoder may be absent).
+    assert looks_like_blend(b"\x28\xb5\x2f\xfd" + b"\x00" * 64)
+    assert not looks_like_blend(b"not a blend file")
+
+
+def test_blender_command_runs_once_per_attempt(tmp_path):
+    script = (
+        "from pathlib import Path\n"
+        "Path('runs.txt').open('a', encoding='utf-8').write('x')\n"
+        "Path('scene.blend').write_bytes(b'BLENDER' + b'0' * 200000)\n"
+        "Path('frames').mkdir(exist_ok=True)\n"
+        "Path('frames/frame_0001.png').write_bytes(b'png')\n"
+    )
+    task = _task(
+        kind=SandboxTaskKind.BLENDER,
+        artifacts=("build_scene.py",),
+        max_repair_attempts=0,
+        checks=[SandboxCheck("always", "custom", None, weight=1.0)],
+    )
+    workdir = tmp_path / "wd"
+    runner = SandboxRunner(
+        task=task,
+        policy=SandboxPolicy(workdir=workdir, allowed_executables=("python",)),
+        workdir=workdir,
+        command=f'"{sys.executable}" build_scene.py',
+        custom_checks={"always": (True, "ok")},
+    )
+    result = runner.run(lambda feedback: script)
+    assert result.final_success is True
+    assert (workdir / "runs.txt").read_text(encoding="utf-8") == "x"
+    assert (workdir / "frames" / "frame_0001.png").exists()
+
+
+def test_blender_repair_does_not_reuse_stale_artifacts(tmp_path):
+    first = (
+        "from pathlib import Path\n"
+        "Path('scene.blend').write_bytes(b'BLENDER' + b'0' * 200000)\n"
+        "Path('frames').mkdir(exist_ok=True)\n"
+        "Path('frames/frame_0001.png').write_bytes(b'png')\n"
+    )
+    second = "print('no artifacts this time')\n"
+    task = _task(
+        kind=SandboxTaskKind.BLENDER,
+        artifacts=("build_scene.py",),
+        max_repair_attempts=1,
+        checks=[SandboxCheck("impossible", "regex", r"NEVER_MATCHES_XYZ", weight=1.0)],
+    )
+    workdir = tmp_path / "wd"
+    runner = SandboxRunner(
+        task=task,
+        policy=SandboxPolicy(workdir=workdir, allowed_executables=("python",)),
+        workdir=workdir,
+        command=f'"{sys.executable}" build_scene.py',
+    )
+    result = runner.run(lambda feedback: first if not feedback else second)
+    assert result.final_success is False
+    assert not (workdir / "scene.blend").exists()
+    assert not (workdir / "frames").exists()

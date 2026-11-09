@@ -189,8 +189,10 @@ BLENDER_TASK = SandboxTask(
         "Write a Blender Python script named build_scene.py that builds a "
         "floating block island scene: a grass/dirt/stone block island, a "
         "tree, a chest, a block avatar, a sun light, and a camera that "
-        "orbits the island. Set an exact frame range, render the frames, "
-        "and save the .blend file as scene.blend. Output ONLY the complete "
+        "orbits the island. Save the .blend file as scene.blend first, then "
+        "render frames 1-120 into the frames/ directory with a path relative "
+        "to the saved file (scene.render.filepath = '//frames/frame_') and "
+        "call bpy.ops.render.render(animation=True). Output ONLY the complete "
         "Python script in a markdown code fence, starting with ```python "
         "and ending with ```. Do not include any other text."
     ),
@@ -461,7 +463,10 @@ BLENDER_CITY_TASK = SandboxTask(
     prompt=(
         "Write a Blender Python script that builds a small city of 4-6 cubic buildings of "
         "varying heights connected by a bridge across a gap, with a sun light and a camera that "
-        "orbits the city. Set frame range 1-120, render the frames, and save scene.blend. "
+        "orbits the city. Set frame range 1-120, save scene.blend first, render the frames "
+        "into frames/ using a path relative to the saved file "
+        "(scene.render.filepath = '//frames/frame_'), and call "
+        "bpy.ops.render.render(animation=True). "
         "Use primitive cubes for buildings and the bridge. Place buildings at varied locations "
         "and heights. The bridge should connect two building clusters."
     ),

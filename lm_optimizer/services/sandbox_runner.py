@@ -19,7 +19,9 @@ tool can honestly promise.
 
 from __future__ import annotations
 
+import gzip
 import inspect
+import io
 import os
 import re
 import shutil
@@ -238,6 +240,43 @@ def read_workdir_files(workdir: Path, limit: int = 50) -> dict[str, str]:
     return out
 
 
+_BLEND_MAGIC = b"BLENDER"
+_ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
+_GZIP_MAGIC = b"\x1f\x8b"
+
+
+def looks_like_blend(data: bytes) -> bool:
+    """Return True when *data* is a Blender file, compressed or not.
+
+    Blender 3.0+ writes zstd-compressed ``.blend`` files by default, so the
+    literal ``BLENDER`` magic is only present in uncompressed files. Older
+    Blender releases used gzip. Refusing the compressed forms rejected every
+    valid file produced by a current Blender install.
+    """
+    if data[:7] == _BLEND_MAGIC:
+        return True
+    if data[:4] == _ZSTD_MAGIC:
+        try:
+            import zstandard
+        except ImportError:
+            # No decoder installed: the zstd frame magic plus the size gate
+            # and a successful Blender exit are the available evidence.
+            return True
+        try:
+            header = zstandard.ZstdDecompressor().decompress(
+                data, max_output_size=7
+            )
+        except Exception:  # noqa: BLE001 - corrupt/unsupported frame
+            return False
+        return header[:7] == _BLEND_MAGIC
+    if data[:2] == _GZIP_MAGIC:
+        try:
+            return gzip.GzipFile(fileobj=io.BytesIO(data)).read(7) == _BLEND_MAGIC
+        except Exception:  # noqa: BLE001 - corrupt gzip stream
+            return False
+    return False
+
+
 @dataclass
 class SandboxRunner:
     """Executes a sandbox task with the repair loop."""
@@ -279,6 +318,10 @@ class SandboxRunner:
             # The model returns the file contents; write them into the
             # isolated workdir.
             self._materialise(produced)
+            if self.task.kind.value == "blender":
+                # A repair attempt must be judged on its own output, not on
+                # artifacts left behind by an earlier attempt.
+                self._clear_generated_outputs()
 
             execution = ExecutionResult(
                 ok=True, exit_code=0, stdout="", stderr="", duration_s=0.0
@@ -308,17 +351,26 @@ class SandboxRunner:
             if self.task.kind.value == "blender" and self.command:
                 blend_path = self.workdir / "scene.blend"
                 frame_dir = self.workdir / "frames"
-                exec_result = run_command(
-                    self.command, self.workdir, self.policy, self.task.timeout_s
-                )
+                # ``execution`` above already ran the command exactly once.
+                exec_result = execution
                 custom["blend_runs"] = (
                     exec_result.ok,
                     f"exit={exec_result.exit_code} stderr={exec_result.stderr[:200]}",
                 )
+                try:
+                    (self.workdir / "blender.log").write_text(
+                        f"exit={exec_result.exit_code}\n"
+                        f"--- stdout ---\n{exec_result.stdout}\n"
+                        f"--- stderr ---\n{exec_result.stderr}",
+                        encoding="utf-8",
+                        errors="replace",
+                    )
+                except OSError as exc:
+                    log_best_effort("best-effort operation failed", exc)
                 if blend_path.exists() and blend_path.is_file():
                     data = blend_path.read_bytes()
                     custom["blend_is_binary"] = (
-                        data[:7] == b"BLENDER",
+                        looks_like_blend(data),
                         f"size={len(data)} magic={data[:7]!r}",
                     )
                     custom["blend_min_size"] = (
@@ -418,6 +470,22 @@ class SandboxRunner:
             target = root / "output.txt"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding="utf-8")
+
+    def _clear_generated_outputs(self) -> None:
+        """Remove artifacts produced by a previous repair attempt."""
+        for name in ("scene.blend", "scene.blend1", "blender.log"):
+            path = self.workdir / name
+            try:
+                if path.exists() and path.is_file():
+                    path.unlink()
+            except OSError as exc:
+                log_best_effort("best-effort operation failed", exc)
+        frames = self.workdir / "frames"
+        try:
+            if frames.exists() and frames.is_dir():
+                shutil.rmtree(frames)
+        except OSError as exc:
+            log_best_effort("best-effort operation failed", exc)
 
 
 def build_command_for(task: SandboxTask) -> str:
