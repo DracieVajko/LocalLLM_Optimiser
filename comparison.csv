@@ -1,0 +1,12 @@
+model,task,score,pass,repair,load_s,gen_s,total_s,tokens,tok_s,thinking_chars,context,error
+nvidia-nemotron-3.5-bolt-e4b,email_write,0.0,False,0,10.9,0.0,10.9,0,0.0,0,8192,
+nvidia-nemotron-3.5-bolt-e4b,email_write,0.0,False,0,11.1,0.0,11.1,0,0.0,0,8192,AttributeError: 'dict' object has no attribute 'usage'
+nvidia-nemotron-3.5-bolt-e4b,email_write,1.0,True,1,10.9,23.3,34.2,1134,48.67,4011,8192,
+qwen3.8-9b-distill,email_write,0.3333,False,1,30.0,246.5,276.5,2048,8.31,0,8192,
+qwen3.8-9b-distill,web_dashboard,0.0,False,0,30.0,0.0,30.0,0,0.0,0,8192,"HTTPStatusError: Server error '500 Internal Server Error' for url 'http://127.0.0.1:1234/api/v1/chat'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500"
+qwen3.8-9b-distill,blender_skyblock,0.0,False,0,30.0,0.0,30.0,0,0.0,0,8192,"HTTPStatusError: Server error '500 Internal Server Error' for url 'http://127.0.0.1:1234/api/v1/chat'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500"
+nvidia-nemotron-3.5-bolt-e4b,email_write,1.0,True,1,12.5,30.6,43.1,1134,37.01,4011,8192,
+nvidia-nemotron-3.5-bolt-e4b,web_dashboard,1.0,True,0,12.5,167.5,179.9,2479,14.8,590,8192,
+nvidia-nemotron-3.5-bolt-e4b,blender_skyblock,0.8485,False,2,12.5,110.5,122.9,4644,42.05,4521,8192,
