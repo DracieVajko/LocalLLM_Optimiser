@@ -3,12 +3,13 @@
 Hardware-aware automatic benchmarking and runtime configuration optimization for LM Studio.
 Finds empirically validated inference configurations for your hardware, model and goal —
 not theoretical optima. Includes a model-vs-model sandbox (text / HTML / 3D-scene duels),
-transparent results with per-test outputs, and a dark-mode web UI.
+an offline model bake-off harness that separates load time from generation time
+(including the thinking phase), transparent results with per-test outputs, and a dark-mode web UI.
 
 **Status: v1.9.0 (Unreleased).** Pause/resume for partial successes (Web UI + CLI), AI-assisted model selection,
 speed-first search, sandbox duels with history, Prompt/Thinking/Output transparency, OS-following dark mode, resilient Web UI.
 Persistence loop: timestamped backups (keep newest 10), diff/restore/verify for LM Studio per-model defaults; test-manager with intelligent ordering (MoE before dense, VRAM-aware, speed floor), partial results, cleanup, recommendations. All within this repo; no leaks.
-719+ automated tests green (mock-only; live-server E2E validated on earlier suites).
+1,616 automated tests green (mock-only; live-server E2E validated on earlier suites).
 
 | Platform | Status |
 |-|-|
@@ -376,6 +377,87 @@ that are NOT the runtime optimizer:
 - `web_fetch_brief` - JSON with tool=web_fetch, url, title, facts or error; never invents facts.
 
 All agentic tasks run offline (`network_allowed=false`) with an evidence-only repair loop: on failure the model gets the failing checks, not the solution.
+
+## Blender / 3D sandbox requirements
+
+The `blender_skyblock` and `blender_city_bridge` sandbox tasks (and duel type `blender`) need **Blender installed on the host** — they run the model-generated Python script through `blender --background --python build_scene.py`, then validate that a real `scene.blend` binary was produced and frames were rendered.
+
+- The sandbox runner and duel execute `blender` from `PATH`. Add the Blender install directory to `PATH` for the process that runs the CLI.
+- `BLENDER_PATH` is honoured by `tools/preview_blender.py` (preview/launch helper), **not** by the sandbox runner.
+- On Windows the default install is typically `C:\Program Files\Blender Foundation\Blender <version>\blender.exe` — if you installed via the Windows Store or elsewhere, add that directory to `PATH`.
+- Without Blender the task still runs but fails on `blend_is_binary` / `frames_rendered` — that is **expected behavior, not a code bug**. The text-generation tasks (`web_dashboard`, `email_write`, etc.) work without Blender.
+
+Per-call (Windows PowerShell):
+
+```powershell
+$env:PATH += ";C:\Program Files\Blender Foundation\Blender 4.2"
+python -m lm_optimizer.cli.main lab sandbox --task blender_skyblock --model <model-id>
+```
+
+Permanent (Windows): add the Blender install directory to the user `Path` environment variable, then open a new terminal. `tools/preview_blender.py` additionally accepts `BLENDER_PATH` or `--blender`.
+
+Model scripts must save `scene.blend` **before** rendering and use a path
+relative to the saved file (`scene.render.filepath = '//frames/frame_'`).
+In Blender a bare `frames/` path resolves against the drive root (`C:\frames`),
+not against the process working directory.
+
+### Verified 3D output (2026-11-09)
+
+![Minecraft-style skyblock frame rendered by nvidia-nemotron-3.5-bolt-e4b](docs/benchmarks/blender_skyblock_e4b_frame_0001.png)
+
+`nvidia-nemotron-3.5-bolt-e4b` generated `build_scene.py` for `blender_skyblock`;
+the harness ran it with Blender 5.2 and validated the real artifacts:
+
+- 120 PNG frames in `frames/` at 1920x1080 (source frame shown above, downscaled to 1280x720)
+- `scene.blend` (123,586 bytes), zstd-compressed by Blender 3.0+
+- final score 0.9091; the only miss was `keyframe_insert` (the camera used a `TRACK_TO` constraint instead of keyframes)
+- run directory: `results/sandbox/blender_skyblock/20261109_134002/` (gitignored)
+
+This is an actual render, not a mock. The harness accepts uncompressed,
+zstd-compressed and gzip-compressed `.blend` files, runs Blender once per
+repair attempt, clears stale artifacts between attempts, and writes
+`blender.log` next to the scene for diagnosis.
+
+## Model bake-off and cache A/B
+
+`tools/model_bakeoff.py` runs one model at a time through the sandbox tasks
+while keeping the model loaded, so load cost is paid once and reported
+separately:
+
+```powershell
+python tools/model_bakeoff.py --models e4b --tasks email_write,web_dashboard,blender_skyblock --context 8192
+```
+
+Each row records `load_s`, `gen_s` (measured around the chat call, so it
+includes the model's thinking/reasoning phase), `total_s = load_s + gen_s`,
+`tokens`, `tok_s`, `thinking_chars` and the sandbox score. Thinking is enabled
+with `reasoning="on"` where the model supports it; the client retries without
+the field when a model rejects it. Results are appended to
+`results/bakeoff/runs.jsonl` and summarised in `results/bakeoff/summary_*.md`.
+
+`tools/quick_cache_ab.py` measures the same model twice with identical weights
+and context, changing only where the KV cache lives:
+
+```powershell
+python tools/quick_cache_ab.py --model qwen3.8-9b-distill --context 8192
+```
+
+It reports load time and generation time for `KV_GPU` (default) and `KV_RAM`
+(`offload_kv_cache_to_gpu=false`), which is the practical "weights in VRAM,
+context in RAM" split. LM Studio decides the weight split itself; `gpu_ratio`
+is not accepted over REST.
+
+Measured 2026-11-09 (RTX 3060 6 GB, context 8192, thinking on, same three tasks):
+
+|model|email_write|web_dashboard|blender_skyblock|mean|load|generation|tok/s|
+|-|-|-|-|-|-|-|-|
+|qwen3.8-9b-distill|0.3333|0.0 (HTTP 500)|0.0 (HTTP 500)|0.111|30.0 s|246.5 s|8.31|
+|nvidia-nemotron-3.5-bolt-e4b|1.0|1.0|0.8485|0.950|12.5 s|308.6 s|26.76|
+
+`qwen3.8-9b-distill` crashed the LM Studio server (HTTP 500) on the two
+longer tasks with the KV cache on the GPU; the `KV_RAM` variant exists to test
+that split without changing the weights. The E4B row is the current
+small-model baseline: it passes both text tasks and produces a real 3D scene.
 
 **Verified LM Studio capability boundaries (probed 2026-10-21).** This
 build accepts the whole `speculative_draft_*` family over REST

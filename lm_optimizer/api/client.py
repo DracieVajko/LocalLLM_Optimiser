@@ -228,6 +228,7 @@ class ChatCompletionResponse(BaseModel):
     usage: ChatCompletionUsage
     system_fingerprint: str | None = None
     stats: dict | None = None  # raw native stats (real TTFT, tok/s, load time)
+    thinking_text: str | None = None  # reasoning channel, when the model emits one
 
 
 class EmbeddingRequest(BaseModel):
@@ -845,6 +846,11 @@ class LMStudioClient:
         if not texts:
             texts = [p.get("content", "") for p in parts if p.get("content")]
         text = "\n".join(texts)
+        thinking = "\n".join(
+            p.get("content", "")
+            for p in parts
+            if p.get("type") in ("reasoning", "thinking")
+        )
 
         stats = data.get("stats") or {}
         prompt_tokens = int(stats.get("input_tokens", 0))
@@ -867,6 +873,7 @@ class LMStudioClient:
                 total_tokens=prompt_tokens + completion_tokens,
             ),
             stats=stats,
+            thinking_text=thinking or None,
         )
 
     async def get_embeddings(self, model: str, input_text: str | list[str]) -> EmbeddingResponse:

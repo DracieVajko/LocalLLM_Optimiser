@@ -1,7 +1,7 @@
 [project]
 name = "lm-optimizer"
 version = "1.8.0"
-description = "Hardware-aware automatic benchmark and optimization tool for LM Studio. Finds empirically optimized runtime configurations for speed, context, memory, and quality across different hardware."
+description = "Hardware-aware automatic benchmark and optimization tool for LM Studio. Finds empirically optimized runtime configurations for speed, context, memory, and quality across different hardware, with an offline model sandbox and a load-vs-generation bake-off harness."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
