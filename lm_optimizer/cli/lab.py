@@ -993,8 +993,9 @@ def _run_sandbox_one(
     from datetime import datetime
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    model_slug = (model or "none").replace("/", "_").replace(":", "_").replace(" ", "_")
     base_dir = Path("results") / "sandbox" / task_id
-    workdir = base_dir / stamp
+    workdir = base_dir / f"{stamp}_{model_slug}"
     policy = SandboxPolicy(
         workdir=workdir,
         network_enabled=False,
