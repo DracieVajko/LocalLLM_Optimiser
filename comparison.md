@@ -8,6 +8,8 @@ Generated from `results/bakeoff/runs.jsonl`. Generation time includes the model'
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | nvidia-nemotron-3.5-bolt-e4b | 0.641 | 3/6 | 10.9 | 331.9 | 342.8 | 9391 | 28.29 | 13133 |
 | qwen3.8-9b-distill | 0.111 | 0/3 | 30.0 | 246.5 | 276.5 | 2048 | 8.31 | 0 |
+| swift-qwen3.8-27b | 0.774 | 1/3 | 30.0 | 8474.7 | 8504.7 | 23322 | 2.75 | 14494 |
+| qwen3.8-27b-twin-turbo-fable-cold-fusion-709-ultra-heretic-uncensored-nm-dau-neo-mtp | 0.0 | 0/3 | 30.0 | 0.0 | 30.0 | 0 | 0.0 | 0 |
 
 ## Per-task detail
 
@@ -22,6 +24,12 @@ Generated from `results/bakeoff/runs.jsonl`. Generation time includes the model'
 | qwen3.8-9b-distill | blender_skyblock | 0 | False | 0 | 30 | 0 | 30 | 0 | 0 | 0 | 8192 | HTTPStatusError: Server error '500 Internal Server Error' for url 'http://127.0. |
 | qwen3.8-9b-distill | email_write | 0.3333 | False | 1 | 30 | 246.5 | 276.5 | 2048 | 8.31 | 0 | 8192 | - |
 | qwen3.8-9b-distill | web_dashboard | 0 | False | 0 | 30 | 0 | 30 | 0 | 0 | 0 | 8192 | HTTPStatusError: Server error '500 Internal Server Error' for url 'http://127.0. |
+| swift-qwen3.8-27b | blender_skyblock | 0.697 | False | 2 | 30 | 3747.1 | 3777.1 | 11117 | 2.97 | 0 | 8192 | - |
+| swift-qwen3.8-27b | email_write | 1 | True | 0 | 30 | 200.5 | 230.5 | 380 | 1.9 | 1318 | 8192 | - |
+| swift-qwen3.8-27b | web_dashboard | 0.625 | False | 2 | 30 | 4527.1 | 4557.1 | 11825 | 2.61 | 13176 | 8192 | - |
+| qwen3.8-27b-twin-turbo-fable-cold-fusion-709-ultra-heretic-uncensored-nm-dau-neo-mtp | blender_skyblock | 0 | False | 0 | 30 | 0 | 30 | 0 | 0 | 0 | 8192 | HTTPStatusError: Client error '400 Bad Request' for url 'http://127.0.0.1:1234/a |
+| qwen3.8-27b-twin-turbo-fable-cold-fusion-709-ultra-heretic-uncensored-nm-dau-neo-mtp | email_write | 0 | False | 0 | 30 | 0 | 30 | 0 | 0 | 0 | 8192 | HTTPStatusError: Client error '400 Bad Request' for url 'http://127.0.0.1:1234/a |
+| qwen3.8-27b-twin-turbo-fable-cold-fusion-709-ultra-heretic-uncensored-nm-dau-neo-mtp | web_dashboard | 0 | False | 0 | 30 | 0 | 30 | 0 | 0 | 0 | 8192 | HTTPStatusError: Client error '400 Bad Request' for url 'http://127.0.0.1:1234/a |
 
 ## KV cache placement (same weights, context 8192)
 
