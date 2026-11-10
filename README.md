@@ -495,6 +495,9 @@ Same task, same prompt, same artifact name - then compared, mostly visually.
 DeepSeek, Nemotron or any other model.
 
 ```powershell
+# write the prompts, plus a Desktop bundle with references (Desktop/frontier_bench)
+python tools/export_prompts.py --desktop
+
 # import an answer straight from the clipboard (markdown fences are stripped)
 python tools/compare_models.py --provider chatgpt --task minecraft_world --clipboard
 
@@ -507,6 +510,20 @@ Outputs land in `results/compare/`: `comparison.md`, `comparison.csv`,
 `gallery.html` (open it in a browser) and `visuals/`. HTML pages are captured
 with headless Chrome using SwiftShader, so Three.js scenes render without a GPU,
 and Blender tasks contribute their real `preview.png` / first frame.
+
+Only the frontier artifacts under `benchmarks/compare/` are committed. Every
+local run, score and screenshot stays in `results/` (gitignored) and can be
+deleted at any time without losing anything reproducible
+(`python tools/explain_failures.py` rebuilds the failure report).
+
+To see why a stored artifact failed, re-score it with the current checks:
+
+```powershell
+python tools/explain_failures.py
+```
+
+`docs/benchmarks/model_failures.md` records the same analysis in prose: per
+model, per task, and whether the cause was the model, the scorer or the host.
 
 `tools/quick_cache_ab.py` measures the same model twice with identical weights
 and context, changing only where the KV cache lives:
