@@ -6,9 +6,8 @@ crashed engine from blocking the whole queue.
 
 Usage:
     python tools/retry_failed.py --list
-    python tools/retry_failed.py                # run everything
-    python tools/retry_failed.py --only bonsai  # substring match on model id
-    python tools/retry_failed.py --timeout-min 45
+    python tools/retry_failed.py --wait-idle       # start only when LM Studio is quiet
+    python tools/retry_failed.py --only bonsai     # substring match on model id
 """
 
 from __future__ import annotations
@@ -25,55 +24,66 @@ ROOT = Path(__file__).resolve().parents[1]
 LOGS = ROOT / "results" / "retry"
 
 #: (model id, tasks, extra CLI flags, why)
+#: Ordered small/fast first; the 74B is last because it runs at ~0.4 tok/s.
 PLAN: list[tuple[str, str, list[str], str]] = [
     (
-        "prism-ml/bonsai-27b",
-        "minecraft_world,company_website,email_write",
+        "nvidia-nemotron-3.5-bolt-e4b",
+        "company_website,blender_city",
         ["--safe", "--no-thinking"],
-        "kwargs-in-JS and reasoning dump; retry with no-thinking",
+        "new company-site task and the dense city blend task",
+    ),
+    (
+        "prism-ml/bonsai-27b",
+        "company_website,blender_city,minecraft_world",
+        ["--safe", "--no-thinking"],
+        "reasoning dump; retry with no-thinking",
     ),
     (
         "qwen3.8-9b-distill",
-        "company_website,email_write",
+        "company_website,blender_city",
         ["--safe", "--no-thinking"],
-        "prose instead of HTML; retry with no-thinking",
+        "prose instead of HTML on the old web task",
+    ),
+    (
+        "swift-qwen3.8-27b",
+        "company_website,blender_city",
+        ["--safe", "--no-thinking"],
+        "bracket errors in long Python; new city task",
+    ),
+    (
+        "openai-gpt-oss-20b-claude-4.5-opus-heretic-uncensored-i1",
+        "company_website,blender_city",
+        ["--safe", "--no-thinking"],
+        "syntax errors and reasoning dump",
     ),
     (
         "google/gemma-4-26b-a4b-qat",
-        "email_write,company_website",
+        "company_website,blender_city",
         ["--safe", "--no-thinking"],
-        "engine 500 on chat; one more attempt",
+        "engine 500 on the old run; no-thinking fixed email",
     ),
     (
         "qwen/qwen3.6-35b-a3b",
-        "email_write",
+        "company_website,email_write",
         ["--safe", "--no-thinking"],
         "engine 500 on chat; one more attempt",
     ),
     (
         "qwen3.8-27b-twin-turbo-fable-cold-fusion-709-ultra-heretic-uncensored-nm-dau-neo-mtp",
-        "email_write,company_website",
+        "email_write",
         ["--safe", "--no-thinking"],
         "engine 500 on chat; one more attempt",
     ),
     (
-        "openai-gpt-oss-20b-claude-4.5-opus-heretic-uncensored-i1",
-        "email_write,company_website,blender_city",
-        ["--safe", "--no-thinking"],
-        "syntax errors and reasoning dump",
-    ),
-    (
-        "nvidia-nemotron-3.5-bolt-e4b",
-        ["--safe", "--no-thinking"],
-        "bpy.ops.scene.clear does not exist",
-    ),
-    (
         "nvidia-nemotron-3.5-bolt-74b-a9b",
-        "minecraft_world",
+        "company_website",
         ["--safe", "--no-thinking"],
-        "duplicate generateWorld; slow (about 20 min)",
+        "0.4 tok/s; one page only, needs the long timeout",
     ),
 ]
+
+#: A model is only started when the backend has been quiet this long.
+IDLE_SETTLE_S = 180.0
 
 
 def _blender_path() -> str:
@@ -86,12 +96,53 @@ def _blender_path() -> str:
     return ""
 
 
+def _loaded_models(url: str) -> list[str]:
+    import httpx
+
+    try:
+        response = httpx.get(f"{url.rstrip('/')}/api/v0/models", timeout=10)
+        response.raise_for_status()
+    except Exception:  # noqa: BLE001 - a dead server is "not busy" for our purpose
+        return []
+    return [
+        str(model.get("id"))
+        for model in response.json().get("data", [])
+        if model.get("state") == "loaded"
+    ]
+
+
+def wait_until_idle(url: str, settle_s: float, poll_s: float = 60.0, max_hours: float = 12.0) -> None:
+    """Block until no model has been loaded for *settle_s* seconds."""
+    quiet_since: float | None = None
+    deadline = time.monotonic() + max_hours * 3600
+    while time.monotonic() < deadline:
+        loaded = _loaded_models(url)
+        if loaded:
+            quiet_since = None
+            print(f"[wait] busy: {', '.join(loaded)}", flush=True)
+        else:
+            quiet_since = quiet_since or time.monotonic()
+            waited = time.monotonic() - quiet_since
+            print(f"[wait] idle {waited:.0f}/{settle_s:.0f}s", flush=True)
+            if waited >= settle_s:
+                print("[wait] LM Studio is idle, starting", flush=True)
+                return
+        time.sleep(poll_s)
+    raise SystemExit("LM Studio did not become idle in time")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--list", action="store_true", help="print the plan and exit")
     parser.add_argument("--only", default="", help="substring match on the model id")
     parser.add_argument("--timeout-min", type=float, default=45.0)
     parser.add_argument("--context", default="8192")
+    parser.add_argument(
+        "--wait-idle",
+        action="store_true",
+        help="wait until LM Studio has no loaded model for 3 minutes first",
+    )
+    parser.add_argument("--url", default="http://127.0.0.1:1234")
     args = parser.parse_args()
 
     plan = [row for row in PLAN if args.only.lower() in row[0].lower()] if args.only else PLAN
@@ -99,6 +150,9 @@ def main() -> int:
         for model, tasks, flags, why in plan:
             print(f"{model}\n  tasks: {tasks}\n  flags: {' '.join(flags)}\n  why: {why}\n")
         return 0
+
+    if args.wait_idle:
+        wait_until_idle(args.url, IDLE_SETTLE_S)
 
     blender = _blender_path()
     if blender:
