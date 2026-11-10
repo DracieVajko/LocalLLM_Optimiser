@@ -47,8 +47,8 @@ A ready-made 16x16 pixel-art atlas lives in
 [`deepseek_agent/minecraft_world/texture_atlas.js`](deepseek_agent/minecraft_world/texture_atlas.js).
 Paste it inside the same `<script>` block and call `createVoxelAtlas(THREE)`;
 it provides grass top/side, dirt, stone, wood side/top, leaves, water, chest,
-planks, roof and path tiles, generated at runtime with no image files. The
-committed artifact uses this atlas.
+planks, roof, path, furnace, crafting table, bed and glass tiles, generated at
+runtime with no image files. The committed artifact uses this atlas.
 
 ## Acceptance criteria (same harness for every model)
 

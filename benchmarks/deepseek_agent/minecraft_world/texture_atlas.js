@@ -82,6 +82,33 @@ function createVoxelAtlas(THREE) {
   fill(2, 2, ["#a33a2f", "#8f2f26", "#bb4a3d", "#7c241c"], 10);
   fill(3, 2, ["#b9a98f", "#a8977d", "#c7b79c", "#94846c"], 11);
 
+  // Row 3: furnace, crafting table, bed, glass.
+  for (let y = 0; y < TILE; y += 1) {
+    for (let x = 0; x < TILE; x += 1) {
+      const mouth = x >= 4 && x <= 11 && y >= 6 && y <= 12;
+      px(0, 3, x, y, mouth
+        ? (y < 9 ? "#ffb23e" : "#ff7a1a")
+        : (noise(x, y, 12) > 0.5 ? "#5d646c" : "#4a5057"));
+    }
+  }
+  for (let y = 0; y < TILE; y += 1) {
+    for (let x = 0; x < TILE; x += 1) {
+      px(1, 3, x, y, (x % 5 === 0 || y % 5 === 0) ? "#7a4a2a" : "#b98a52");
+    }
+  }
+  for (let y = 0; y < TILE; y += 1) {
+    for (let x = 0; x < TILE; x += 1) {
+      const pillow = x < 5 && y >= 4 && y <= 11;
+      px(2, 3, x, y, pillow ? "#f2f2f2" : (y % 4 === 0 ? "#b32a2a" : "#d63a3a"));
+    }
+  }
+  for (let y = 0; y < TILE; y += 1) {
+    for (let x = 0; x < TILE; x += 1) {
+      const border = x === 0 || y === 0 || x === 15 || y === 15;
+      px(3, 3, x, y, border ? "#d7f0ff" : "#bfe6ff");
+    }
+  }
+
   const atlas = new THREE.CanvasTexture(canvas);
   atlas.magFilter = THREE.NearestFilter;
   atlas.minFilter = THREE.NearestFilter;
@@ -91,7 +118,8 @@ function createVoxelAtlas(THREE) {
   const tile = {
     grassTop: [0, 0], grassSide: [1, 0], dirt: [2, 0], stone: [3, 0],
     woodSide: [0, 1], woodTop: [1, 1], leaves: [2, 1], water: [3, 1],
-    chest: [0, 2], planks: [1, 2], roof: [2, 2], path: [3, 2]
+    chest: [0, 2], planks: [1, 2], roof: [2, 2], path: [3, 2],
+    furnace: [0, 3], crafting: [1, 3], bed: [2, 3], glass: [3, 3]
   };
 
   // Remap the six box faces into the selected atlas tiles.

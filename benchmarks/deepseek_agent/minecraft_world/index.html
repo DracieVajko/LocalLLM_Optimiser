@@ -70,8 +70,9 @@
   <div class="hero">
     <span class="tag">Tiny world, block by block</span>
     <h1>Voxelcraft</h1>
-    <p>A floating skyblock island in the void: textured grass, dirt, stone,
-       a pond with a waterfall, trees, a cabin and a slowly orbiting camera.</p>
+    <p>A floating skyblock island in the void: textured grass, dirt and stone,
+       a pond with a waterfall, trees, a cabin, a campfire and a slowly
+       orbiting camera.</p>
   </div>
 
   <div class="hud"><b>Camera</b> orbits the island automatically</div>
@@ -144,18 +145,16 @@
       ctx.fillRect(col * TILE + x, row * TILE + y, 1, 1);
     }
 
-    function fillTile(col, row, colors, seed) {
+    function fill(col, row, colors, seed) {
       for (let y = 0; y < TILE; y += 1) {
         for (let x = 0; x < TILE; x += 1) {
-          const index = Math.floor(noise(x, y, seed) * colors.length);
-          px(col, row, x, y, colors[index]);
+          px(col, row, x, y, colors[Math.floor(noise(x, y, seed) * colors.length)]);
         }
       }
     }
 
-    // grass top
-    fillTile(0, 0, ["#4caf50", "#57b85a", "#3f8f43", "#66c26a"], 1);
-    // grass side (green top band, dirt below)
+    // Row 0: grass top, grass side, dirt, stone.
+    fill(0, 0, ["#4caf50", "#57b85a", "#3f8f43", "#66c26a"], 1);
     for (let y = 0; y < TILE; y += 1) {
       for (let x = 0; x < TILE; x += 1) {
         const edge = 4 + Math.floor(noise(x, y, 2) * 2);
@@ -165,43 +164,63 @@
         px(1, 0, x, y, color);
       }
     }
-    // dirt
-    fillTile(2, 0, ["#8d5a3b", "#7a4a2f", "#9b6644", "#6b3f28"], 5);
-    // stone
-    fillTile(3, 0, ["#8b939b", "#7d858d", "#9aa2aa", "#6f777f"], 6);
+    fill(2, 0, ["#8d5a3b", "#7a4a2f", "#9b6644", "#6b3f28"], 5);
+    fill(3, 0, ["#8b939b", "#7d858d", "#9aa2aa", "#6f777f"], 6);
 
-    // wood side (vertical bark stripes)
+    // Row 1: wood side, wood top, leaves, water.
     for (let y = 0; y < TILE; y += 1) {
       for (let x = 0; x < TILE; x += 1) {
         const stripe = x % 4 === 0 || (x % 7 === 0 && y % 3 === 0);
         px(0, 1, x, y, stripe ? "#5a341c" : "#7a4a2a");
       }
     }
-    // wood top (rings)
     for (let y = 0; y < TILE; y += 1) {
       for (let x = 0; x < TILE; x += 1) {
         const d = Math.abs(x - 8) + Math.abs(y - 8);
         px(1, 1, x, y, d % 5 === 0 ? "#5a341c" : "#8a5731");
       }
     }
-    // leaves
-    fillTile(2, 1, ["#2f8f3a", "#257a30", "#3aa347", "#1f6b28"], 7);
-    // water
-    fillTile(3, 1, ["#2f7fd4", "#3a8fe0", "#266bb8", "#55a6ef"], 8);
+    fill(2, 1, ["#2f8f3a", "#257a30", "#3aa347", "#1f6b28"], 7);
+    fill(3, 1, ["#2f7fd4", "#3a8fe0", "#266bb8", "#55a6ef"], 8);
 
-    // chest
-    fillTile(0, 2, ["#b5722f", "#9d5f24", "#c98443"], 9);
-    // planks
+    // Row 2: chest, planks, roof, path.
+    fill(0, 2, ["#b5722f", "#9d5f24", "#c98443"], 9);
     for (let y = 0; y < TILE; y += 1) {
       for (let x = 0; x < TILE; x += 1) {
-        const seam = y % 5 === 0;
-        px(1, 2, x, y, seam ? "#8a5731" : "#b98a52");
+        px(1, 2, x, y, y % 5 === 0 ? "#8a5731" : "#b98a52");
       }
     }
-    // roof tiles
-    fillTile(2, 2, ["#a33a2f", "#8f2f26", "#bb4a3d", "#7c241c"], 10);
-    // path / gravel
-    fillTile(3, 2, ["#b9a98f", "#a8977d", "#c7b79c", "#94846c"], 11);
+    fill(2, 2, ["#a33a2f", "#8f2f26", "#bb4a3d", "#7c241c"], 10);
+    fill(3, 2, ["#b9a98f", "#a8977d", "#c7b79c", "#94846c"], 11);
+
+    // Row 3: furnace, crafting table, bed, glass.
+    for (let y = 0; y < TILE; y += 1) {
+      for (let x = 0; x < TILE; x += 1) {
+        const mouth = x >= 4 && x <= 11 && y >= 6 && y <= 12;
+        const color = mouth
+          ? (y < 9 ? "#ffb23e" : "#ff7a1a")
+          : (noise(x, y, 12) > 0.5 ? "#5d646c" : "#4a5057");
+        px(0, 3, x, y, color);
+      }
+    }
+    for (let y = 0; y < TILE; y += 1) {
+      for (let x = 0; x < TILE; x += 1) {
+        const grid = x % 5 === 0 || y % 5 === 0;
+        px(1, 3, x, y, grid ? "#7a4a2a" : "#b98a52");
+      }
+    }
+    for (let y = 0; y < TILE; y += 1) {
+      for (let x = 0; x < TILE; x += 1) {
+        const pillow = x < 5 && y >= 4 && y <= 11;
+        px(2, 3, x, y, pillow ? "#f2f2f2" : (y % 4 === 0 ? "#b32a2a" : "#d63a3a"));
+      }
+    }
+    for (let y = 0; y < TILE; y += 1) {
+      for (let x = 0; x < TILE; x += 1) {
+        const border = x === 0 || y === 0 || x === 15 || y === 15;
+        px(3, 3, x, y, border ? "#d7f0ff" : "#bfe6ff");
+      }
+    }
 
     const atlas = new THREE.CanvasTexture(atlasCanvas);
     atlas.magFilter = THREE.NearestFilter;
@@ -212,10 +231,11 @@
     const tile = {
       grassTop: [0, 0], grassSide: [1, 0], dirt: [2, 0], stone: [3, 0],
       woodSide: [0, 1], woodTop: [1, 1], leaves: [2, 1], water: [3, 1],
-      chest: [0, 2], planks: [1, 2], roof: [2, 2], path: [3, 2]
+      chest: [0, 2], planks: [1, 2], roof: [2, 2], path: [3, 2],
+      furnace: [0, 3], crafting: [1, 3], bed: [2, 3], glass: [3, 3]
     };
 
-    // Remap the six box faces into the chosen atlas tiles.
+    // Remap the six box faces into the selected atlas tiles.
     function blockGeometry(top, side, bottom) {
       const geo = new THREE.BoxGeometry(1, 1, 1);
       const uv = geo.attributes.uv;
@@ -228,11 +248,7 @@
         const v0 = 1 - (t[1] + 1) * dv;
         for (let i = 0; i < 4; i += 1) {
           const index = f * 4 + i;
-          uv.setXY(
-            index,
-            u0 + uv.getX(index) * du,
-            v0 + uv.getY(index) * dv
-          );
+          uv.setXY(index, u0 + uv.getX(index) * du, v0 + uv.getY(index) * dv);
         }
       }
       uv.needsUpdate = true;
@@ -245,18 +261,35 @@
       transparent: true,
       opacity: 0.82
     });
+    const glassMat = new THREE.MeshLambertMaterial({
+      map: atlas,
+      transparent: true,
+      opacity: 0.55
+    });
+    const fireMat = new THREE.MeshBasicMaterial({ color: 0xff8a2a });
+    const lampMat = new THREE.MeshBasicMaterial({ color: 0xffe08a });
+
+    function same(t) {
+      return blockGeometry(t, t, t);
+    }
 
     const geoms = {
       grass: blockGeometry(tile.grassTop, tile.grassSide, tile.dirt),
-      dirt: blockGeometry(tile.dirt, tile.dirt, tile.dirt),
-      stone: blockGeometry(tile.stone, tile.stone, tile.stone),
+      dirt: same(tile.dirt),
+      stone: same(tile.stone),
       wood: blockGeometry(tile.woodTop, tile.woodSide, tile.woodTop),
-      leaves: blockGeometry(tile.leaves, tile.leaves, tile.leaves),
-      chest: blockGeometry(tile.chest, tile.chest, tile.chest),
-      planks: blockGeometry(tile.planks, tile.planks, tile.planks),
-      roof: blockGeometry(tile.roof, tile.roof, tile.roof),
-      path: blockGeometry(tile.path, tile.path, tile.path),
-      water: blockGeometry(tile.water, tile.water, tile.water)
+      leaves: same(tile.leaves),
+      chest: same(tile.chest),
+      planks: same(tile.planks),
+      roof: same(tile.roof),
+      path: same(tile.path),
+      furnace: same(tile.furnace),
+      crafting: same(tile.crafting),
+      bed: same(tile.bed),
+      glass: same(tile.glass),
+      water: same(tile.water),
+      fire: new THREE.BoxGeometry(1, 1, 1),
+      lamp: new THREE.BoxGeometry(1, 1, 1)
     };
 
     // ---------------------------------------------------------------------
@@ -264,19 +297,38 @@
     // ---------------------------------------------------------------------
     const groups = {
       grass: [], dirt: [], stone: [], wood: [], leaves: [],
-      chest: [], planks: [], roof: [], path: [], water: []
+      chest: [], planks: [], roof: [], path: [], water: [],
+      furnace: [], crafting: [], bed: [], glass: [], fire: [], lamp: []
     };
     const add = (group, x, y, z) => groups[group].push([x, y, z]);
 
     const SIZE = 10;
-    const pond = { x: -4, z: 4, r: 3 };
+    const CABIN = { x: 4, z: -1, h: 5 };
+    const POND = { x: -4, z: 4, r: 3 };
 
+    // Smooth rolling terrain with a flat plateau for the cabin.
     function heightAt(x, z) {
+      if (Math.abs(x - CABIN.x) <= 5 && Math.abs(z - CABIN.z) <= 4) {
+        return CABIN.h;
+      }
       const wave =
-        Math.sin(x * 0.33) * 1.3 +
-        Math.cos(z * 0.29) * 1.1 +
-        Math.sin((x + z) * 0.21) * 0.8;
-      return Math.max(2, Math.round(4 + wave + noise(x, z, 12) * 2));
+        Math.sin(x * 0.25) * 1.3 +
+        Math.cos(z * 0.22) * 1.1 +
+        Math.sin((x + z) * 0.16) * 0.8;
+      return Math.max(2, Math.round(4 + wave));
+    }
+
+    // Cells that should not get a grass top (path / cabin floor).
+    const pathCells = new Set();
+    for (let z = -9; z <= 3; z += 1) pathCells.add("0," + z);
+    const floorCells = new Set();
+    for (let dx = -3; dx <= 3; dx += 1) {
+      for (let dz = -2; dz <= 2; dz += 1) {
+        floorCells.add((CABIN.x + dx) + "," + (CABIN.z + dz));
+      }
+    }
+    for (let dx = -1; dx <= 1; dx += 1) {
+      floorCells.add((CABIN.x + dx) + "," + (CABIN.z + 3));
     }
 
     const occupied = new Set();
@@ -285,35 +337,45 @@
     for (let x = -SIZE; x <= SIZE; x += 1) {
       for (let z = -SIZE; z <= SIZE; z += 1) {
         if (x * x + z * z > SIZE * SIZE + 18) continue;
-        const dx = x - pond.x;
-        const dz = z - pond.z;
-        const isPond = dx * dx + dz * dz <= pond.r * pond.r;
-        const h = heightAt(x, z);
-        if (isPond) {
-          // Carve a shallow pond and fill it with water.
+
+        // A notch for the waterfall on the western edge.
+        if (x === -8 && z >= 2 && z <= 4) {
+          add("water", x, 3, z);
+          add("water", x, 2, z);
+          add("stone", x, 1, z);
+          add("stone", x, 0, z);
+          continue;
+        }
+
+        const dx = x - POND.x;
+        const dz = z - POND.z;
+        if (dx * dx + dz * dz <= POND.r * POND.r) {
+          const h = heightAt(x, z);
           add("water", x, h, z);
           add("water", x, h - 1, z);
           add("stone", x, h - 2, z);
           continue;
         }
+
+        const h = heightAt(x, z);
+        const cell = x + "," + z;
         for (let y = -2; y <= h; y += 1) {
           if (occupied.has(key(x, y, z))) continue;
-          if (y === h) add("grass", x, y, z);
-          else if (y >= h - 2) add("dirt", x, y, z);
-          else add("stone", x, y, z);
+          if (y === h) {
+            if (floorCells.has(cell)) continue;
+            add(pathCells.has(cell) ? "path" : "grass", x, y, z);
+          } else if (y >= h - 2) {
+            add("dirt", x, y, z);
+          } else {
+            add("stone", x, y, z);
+          }
           occupied.add(key(x, y, z));
         }
       }
     }
 
-    // A path from the southern edge to the cabin.
-    for (let z = -9; z <= -3; z += 1) {
-      const h = heightAt(0, z);
-      add("path", 0, h, z);
-    }
-
     // Trees: trunk plus a layered leaf canopy.
-    const treeSpots = [[-7, -3], [6, -6], [7, 4], [-3, 7], [2, -1]];
+    const treeSpots = [[-7, -3], [6, -6], [8, 4], [-3, 7], [-2, -2]];
     for (const [tx, tz] of treeSpots) {
       const base = heightAt(tx, tz) + 1;
       const trunk = 3 + (Math.abs(tx + tz) % 2);
@@ -335,73 +397,135 @@
       add("leaves", tx, top + 2, tz);
     }
 
-    // A small cabin with plank walls, a roof and a door gap.
+    // Cabin: plank floor, log corners, windows, a door, a pitched roof and a chimney.
     (function buildCabin() {
-      const cx = 5;
-      const cz = -1;
-      const base = heightAt(cx, cz) + 1;
-      for (let dx = -2; dx <= 2; dx += 1) {
+      const cx = CABIN.x;
+      const cz = CABIN.z;
+      const base = CABIN.h + 1;
+
+      for (let dx = -3; dx <= 3; dx += 1) {
         for (let dz = -2; dz <= 2; dz += 1) {
-          const edge = Math.abs(dx) === 2 || Math.abs(dz) === 2;
-          if (edge) {
-            for (let y = 0; y < 3; y += 1) {
-              if (dx === 2 && dz === 0 && y < 2) continue; // door
-              add("planks", cx + dx, base + y, cz + dz);
-            }
+          add("planks", cx + dx, base - 1, cz + dz);
+        }
+      }
+
+      for (let dx = -3; dx <= 3; dx += 1) {
+        for (let dz = -2; dz <= 2; dz += 1) {
+          const edge = Math.abs(dx) === 3 || Math.abs(dz) === 2;
+          if (!edge) continue;
+          const corner = Math.abs(dx) === 3 && Math.abs(dz) === 2;
+          for (let y = 0; y < 3; y += 1) {
+            if (dz === 2 && dx === 0 && y < 2) continue; // door
+            const isWindow =
+              Math.abs(dx) === 3 && Math.abs(dz) === 1 && y === 1;
+            add(
+              isWindow ? "glass" : (corner ? "wood" : "planks"),
+              cx + dx, base + y, cz + dz
+            );
           }
         }
       }
-      for (let dx = -3; dx <= 3; dx += 1) {
-        for (let dz = -3; dz <= 3; dz += 1) {
-          if (Math.abs(dx) === 3 && Math.abs(dz) === 3) continue;
-          add("roof", cx + dx, base + 3, cz + dz);
+
+      // Pitched roof: three shrinking layers.
+      for (let layer = 0; layer < 3; layer += 1) {
+        const rx = 4 - layer;
+        const rz = 3 - layer;
+        for (let dx = -rx; dx <= rx; dx += 1) {
+          for (let dz = -rz; dz <= rz; dz += 1) {
+            add("roof", cx + dx, base + 3 + layer, cz + dz);
+          }
         }
       }
-      add("roof", cx, base + 4, cz);
+
+      // Chimney.
+      for (let y = 0; y < 3; y += 1) {
+        add("stone", cx + 2, base + 3 + y, cz - 1);
+      }
+
+      // Porch with a post and a lantern.
+      for (let dx = -1; dx <= 1; dx += 1) {
+        add("planks", cx + dx, base - 1, cz + 3);
+      }
+      add("wood", cx + 2, base, cz + 3);
+      add("lamp", cx + 2, base + 1, cz + 3);
     })();
+
+    // Furniture inside the cabin.
+    add("bed", CABIN.x - 1, CABIN.h + 1, CABIN.z - 1);
+    add("bed", CABIN.x, CABIN.h + 1, CABIN.z - 1);
+    add("furnace", CABIN.x - 2, CABIN.h + 1, CABIN.z + 1);
+    add("crafting", CABIN.x + 3, heightAt(CABIN.x + 3, CABIN.z + 3) + 1, CABIN.z + 3);
+
+    // Campfire: stone ring, crossed logs, flames and a warm light.
+    const fireX = -2;
+    const fireZ = 2;
+    const fireY = heightAt(fireX, fireZ) + 1;
+    [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(([dx, dz]) => {
+      add("stone", fireX + dx, fireY, fireZ + dz);
+    });
+    add("wood", fireX, fireY + 1, fireZ);
+    add("wood", fireX, fireY + 1, fireZ + 1);
+    add("fire", fireX, fireY + 2, fireZ);
+    add("fire", fireX, fireY + 2, fireZ + 1);
+    add("fire", fireX, fireY + 3, fireZ);
+    const fireLight = new THREE.PointLight(0xff8a3a, 1.5, 10);
+    fireLight.position.set(fireX + 0.5, fireY + 2.6, fireZ + 0.5);
+    scene.add(fireLight);
+
+    const lampLight = new THREE.PointLight(0xffd77a, 0.7, 8);
+    lampLight.position.set(CABIN.x + 2.5, CABIN.h + 2.5, CABIN.z + 3.5);
+    scene.add(lampLight);
 
     // Flowers, rocks and a chest.
     const flowers = [[-2, -5], [1, 5], [-6, 1], [4, 6], [-8, -1], [3, 8]];
     flowers.forEach(([fx, fz], index) => {
-      const base = heightAt(fx, fz) + 1;
-      add(index % 2 === 0 ? "roof" : "chest", fx, base, fz);
+      add(index % 2 === 0 ? "roof" : "chest", fx, heightAt(fx, fz) + 1, fz);
     });
     [[-9, 5], [8, 7], [-5, -8]].forEach(([rx, rz]) => {
       add("stone", rx, heightAt(rx, rz) + 1, rz);
     });
     add("chest", -1, heightAt(-1, 2) + 1, 2);
 
-    // A waterfall from the pond over the island edge.
-    for (let y = 3; y >= -4; y -= 1) {
-      add("water", pond.x - 3, y, pond.z);
+    // Waterfall: a wide stream from the pond over the western edge.
+    for (let x = -8; x <= -5; x += 1) {
+      for (let z = 2; z <= 4; z += 1) {
+        add("water", x, 3, z);
+      }
+    }
+    for (let z = 2; z <= 4; z += 1) {
+      for (let y = 2; y >= -5; y -= 1) {
+        add("water", -8, y, z);
+      }
     }
 
-    // Distant floating mini-islands.
-    [[19, 7, -14], [-18, 5, 15]].forEach(([ix, iy, iz]) => {
-      for (let dx = -2; dx <= 2; dx += 1) {
-        for (let dz = -2; dz <= 2; dz += 1) {
-          if (Math.abs(dx) + Math.abs(dz) > 3) continue;
-          add("grass", ix + dx, iy, iz + dz);
-          add("dirt", ix + dx, iy - 1, iz + dz);
-          add("stone", ix + dx, iy - 2, iz + dz);
-        }
-      }
-    });
-
     // Build one InstancedMesh per block group.
+    const materials = {
+      water: waterMat,
+      glass: glassMat,
+      fire: fireMat,
+      lamp: lampMat
+    };
     const dummy = new THREE.Object3D();
     Object.keys(groups).forEach((name) => {
       const cells = groups[name];
       if (!cells.length) return;
-      const material = name === "water" ? waterMat : opaqueMat;
-      const mesh = new THREE.InstancedMesh(geoms[name], material, cells.length);
+      const mesh = new THREE.InstancedMesh(
+        geoms[name],
+        materials[name] || opaqueMat,
+        cells.length
+      );
       cells.forEach((cell, index) => {
         dummy.position.set(cell[0] + 0.5, cell[1] + 0.5, cell[2] + 0.5);
+        if (name === "fire" || name === "lamp") {
+          dummy.scale.set(0.45, 0.45, 0.45);
+        } else {
+          dummy.scale.set(1, 1, 1);
+        }
         dummy.updateMatrix();
         mesh.setMatrixAt(index, dummy.matrix);
       });
       mesh.instanceMatrix.needsUpdate = true;
-      mesh.castShadow = name !== "water";
+      mesh.castShadow = name !== "water" && name !== "fire" && name !== "lamp";
       mesh.receiveShadow = true;
       scene.add(mesh);
     });

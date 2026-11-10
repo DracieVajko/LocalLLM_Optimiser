@@ -42,7 +42,8 @@ const geo = textures.blockGeometry(
 ```
 
 It provides grass top/side, dirt, stone, wood side/top, leaves, water, chest,
-planks, roof and path tiles, all generated at runtime (no image files).
+planks, roof, path, furnace, crafting table, bed and glass tiles, all generated
+at runtime (no image files).
 
 ## Acceptance checks
 
