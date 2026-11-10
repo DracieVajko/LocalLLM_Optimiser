@@ -1,0 +1,1 @@
+Write a concise professional follow-up email to a client after a project kickoff. Include a Subject line, a greeting, a 2-3 sentence body with the next step and a concrete deadline, and a closing. Output only the email, with no placeholders such as [name].

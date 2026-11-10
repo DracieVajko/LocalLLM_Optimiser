@@ -348,3 +348,50 @@ def test_js_parses_ignores_import_map_json():
     score, failing, critical = score_attempt(_task(), {"index.html": html})
     assert not any("js_parses" in name for name in failing)
     assert not critical
+
+def test_html_document_rejects_prose_in_index_html():
+    prose = (
+        "The user wants a dashboard. I will add a <meta name=\"viewport\"> tag, "
+        "a @media query and a display: grid layout."
+    )
+    score, failing, critical = score_attempt(
+        SANDBOX_TASKS["web_dashboard"], {"index.html": prose}
+    )
+    assert score == 0.0
+    assert any("html_document" in name for name in critical)
+
+
+def test_html_document_accepts_comment_before_doctype():
+    html = (
+        "<!-- generated -->\n<!DOCTYPE html><html><head>"
+        "<meta name=\"viewport\"><style>@media (max-width:600px){body{}}</style>"
+        "</head><body><div style=\"display:grid\"></div></body></html>"
+    )
+    score, failing, critical = score_attempt(
+        SANDBOX_TASKS["web_dashboard"], {"index.html": html}
+    )
+    assert not critical
+    assert score > 0.5
+
+
+def test_email_subject_accepts_subject_line_wording():
+    email = (
+        "**Subject line:** Kickoff follow-up\n\nHi Sarah,\n\n"
+        "Next step is the roadmap, due by Friday 14 November.\n\nBest regards,\nAlex\n"
+    )
+    score, failing, critical = score_attempt(SANDBOX_TASKS["email_write"], {"email.txt": email})
+    assert not any("has_subject" in name for name in failing)
+
+
+def test_email_subject_rejects_reasoning_dump():
+    text = (
+        "Thinking Process:\n\n1. Analyse the request.\n\nSubject: Kickoff follow-up\n"
+        "Hi Sarah, next step is the roadmap by Friday.\nBest regards,\nAlex\n"
+    )
+    score, failing, critical = score_attempt(SANDBOX_TASKS["email_write"], {"email.txt": text})
+    assert any("has_subject" in name for name in critical)
+
+
+def test_blender_task_checks_python_syntax_before_running():
+    names = {check.name for check in SANDBOX_TASKS["blender_skyblock"].checks}
+    assert "is_python_code" in names

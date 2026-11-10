@@ -1,0 +1,11 @@
+Create one single HTML file named index.html — a Minecraft-style voxel world rendered with Three.js loaded from a CDN. No build step, no bundler, no server, no external assets (no images, sounds or zip files); everything except Three.js must be inside this one file.
+
+The page must contain:
+- A hero section that feels like a tiny Minecraft world.
+- Procedural terrain made of colored cubes (grass green, dirt brown,   stone gray, water blue).
+- Smooth 60fps rendering with requestAnimationFrame.
+- A camera that automatically orbits the floating island (no player   controls are required).
+- Animated sky / day-night feel (moving sun or color gradient).
+- Clean, modern, commented code.
+
+Output ONLY the complete HTML in a markdown code fence starting with ```html and ending with ```. Do not include any other text.

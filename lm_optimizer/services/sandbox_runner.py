@@ -456,6 +456,7 @@ class SandboxRunner:
                 score=score,
                 error=execution.error or ("; ".join(failing)[:300] if failing else ""),
                 duration_s=time.perf_counter() - started,
+                failing_checks=list(failing),
             )
             result.attempts.append(record)
             debug_attempts.append(

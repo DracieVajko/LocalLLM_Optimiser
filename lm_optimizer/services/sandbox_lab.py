@@ -92,13 +92,14 @@ WEB_TASK = SandboxTask(
     ),
     checks=[
         SandboxCheck("index_html_exists", "files", ["index.html"], weight=1.0, critical=True),
+        SandboxCheck("html_document", "custom", None, weight=2.0, critical=True),
         SandboxCheck("html_not_empty", "regex", r"<html[\s\S]{50,}", weight=1.0, critical=True),
         SandboxCheck("has_viewport", "regex", r'name=["\']viewport["\']', weight=1.0),
         SandboxCheck("has_media_query", "regex", r"@media", weight=1.0),
         SandboxCheck("has_theme_toggle", "regex", r"(dark|theme)", weight=1.0),
         SandboxCheck("no_external_scripts", "regex", r"<script[^>]+src=[\"']https?://", weight=1.5, negate=True),
         SandboxCheck("no_external_styles", "regex", r"<link[^>]+href=[\"']https?://", weight=1.5, negate=True),
-        SandboxCheck("has_table_or_grid", "regex", r"(<table|role=[\"']grid|class=[\"'][^\"']*grid)", weight=1.0),
+        SandboxCheck("has_table_or_grid", "regex", r"(<table|role=[\"']grid|class=[\"'][^\"']*grid|display\s*:\s*grid|grid-template)", weight=1.0),
         SandboxCheck("js_parses", "custom", None, weight=1.5, critical=True),
     ],
     max_repair_attempts=2,
@@ -156,6 +157,7 @@ MINECRAFT_WORLD_TASK = SandboxTask(
     prompt=MINECRAFT_BASE_PROMPT,
     checks=[
         SandboxCheck("index_html_exists", "files", ["index.html"], weight=1.0, critical=True),
+        SandboxCheck("html_document", "custom", None, weight=2.0, critical=True),
         SandboxCheck("html_not_empty", "regex", r"<html[\s\S]{50,}", weight=1.0, critical=True),
         SandboxCheck("single_file_html", "regex", r"<!DOCTYPE\s+html|<html\b", weight=1.0, critical=True),
         SandboxCheck("has_threejs", "regex", r"<script[^>]+src=[\"'][^\"']*three[^\"']*\.js", weight=1.0),
@@ -271,6 +273,7 @@ BLENDER_TASK = SandboxTask(
         SandboxCheck("has_light", "regex", r"(Light|SUN|sun)", weight=1.0),
         SandboxCheck("has_keyframes", "regex", r"keyframe_insert", weight=1.5),
         SandboxCheck("has_frame_range", "regex", r"frame_(start|end)", weight=1.0),
+        SandboxCheck("is_python_code", "custom", None, weight=2.0, critical=True),
         SandboxCheck("saves_blend", "regex", r"save_as_mainfile", weight=1.0, critical=True),
         SandboxCheck("renders", "regex", r"bpy\.ops\.render", weight=1.0),
         SandboxCheck("blend_runs", "custom", None, weight=1.0, critical=True),
@@ -300,7 +303,7 @@ EMAIL_TASK = SandboxTask(
         "Output only the email, with no placeholders such as [name]."
     ),
     checks=[
-        SandboxCheck("has_subject", "regex", r"^Subject:\s*\S+", weight=2.0, critical=True),
+        SandboxCheck("has_subject", "regex", r"^\W*Subject(?:\s+line)?\s*[:\-]\s*\S+", weight=2.0, critical=True),
         SandboxCheck("has_greeting", "regex", r"\b(Dear|Hello|Hi)\b", weight=1.0),
         SandboxCheck(
             "has_closing",
@@ -545,6 +548,7 @@ BLENDER_CITY_TASK = SandboxTask(
         SandboxCheck("has_light", "regex", r"(Light|SUN|sun)", weight=1.0),
         SandboxCheck("has_keyframes", "regex", r"keyframe_insert", weight=1.5),
         SandboxCheck("has_frame_range", "regex", r"frame_(start|end)", weight=1.0),
+        SandboxCheck("is_python_code", "custom", None, weight=2.0, critical=True),
         SandboxCheck("saves_blend", "regex", r"save_as_mainfile", weight=1.0, critical=True),
         SandboxCheck("renders", "regex", r"bpy\.ops\.render", weight=1.0),
         SandboxCheck("blend_runs", "custom", None, weight=1.0, critical=True),
@@ -581,6 +585,7 @@ BLENDER_CITY_PREVIEW_TASK = SandboxTask(
         SandboxCheck("has_ground", "regex", r"(ground|road|plane|floor)", weight=1.0),
         SandboxCheck("has_camera", "regex", r"(Camera|camera)", weight=1.0),
         SandboxCheck("has_light", "regex", r"(Light|SUN|sun)", weight=1.0),
+        SandboxCheck("is_python_code", "custom", None, weight=2.0, critical=True),
         SandboxCheck("saves_blend", "regex", r"save_as_mainfile", weight=1.0, critical=True),
         SandboxCheck("renders_still", "regex", r"write_still\s*=\s*True", weight=1.5),
         SandboxCheck("no_animation", "regex", r"(animation\s*=\s*True|frame_end\s*=\s*[2-9])", weight=1.0, negate=True),
@@ -624,6 +629,7 @@ DEEP_RESEARCH_REPORT_TASK = SandboxTask(
     ),
     checks=[
         SandboxCheck("index_html_exists", "files", ["index.html"], weight=1.0, critical=True),
+        SandboxCheck("html_document", "custom", None, weight=2.0, critical=True),
         SandboxCheck("html_not_empty", "regex", r"<html[\s\S]{1000,}", weight=1.0, critical=True),
         SandboxCheck("single_file_html", "regex", r"<!DOCTYPE\s+html|<html\b", weight=1.0, critical=True),
         SandboxCheck("has_title", "regex", r"<title>\s*\S+", weight=1.0),
@@ -861,6 +867,8 @@ class RepairAttempt:
     score: float = 0.0
     error: str = ""
     duration_s: float = 0.0
+    #: Names of the checks that failed on this attempt (with detail).
+    failing_checks: list[str] = field(default_factory=list)
     #: What the model is told for the NEXT attempt.
     feedback: str = ""
 
@@ -955,6 +963,26 @@ def score_attempt(
                     **(custom_results or {}),
                     "is_python_code": (False, f"syntax error: {exc.msg}"),
                 }
+
+    if any(c.name == "html_document" for c in task.checks):
+        html_bodies = [
+            _strip_md_fences(text)
+            for name, text in files.items()
+            if name.endswith((".html", ".htm"))
+        ]
+        if not html_bodies:
+            verdict = (False, "no .html artifact")
+        else:
+            body = html_bodies[0].lstrip()
+            while body.startswith("<!--"):
+                end = body.find("-->")
+                if end == -1:
+                    break
+                body = body[end + 3 :].lstrip()
+            head = body[:200].lower()
+            ok = head.startswith("<!doctype html") or head.startswith("<html")
+            verdict = (ok, "html document" if ok else f"starts with {body[:60]!r}")
+        custom_results = {**(custom_results or {}), "html_document": verdict}
 
     if any(c.name == "js_parses" for c in task.checks):
         html_text = "\n".join(

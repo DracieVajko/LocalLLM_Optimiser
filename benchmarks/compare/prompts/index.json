@@ -1,0 +1,32 @@
+{
+  "email_write": {
+    "artifact": "email.txt",
+    "prompt_file": "email_write.txt",
+    "title": "Professional follow-up email"
+  },
+  "minecraft_world": {
+    "artifact": "index.html",
+    "prompt_file": "minecraft_world.txt",
+    "title": "Minecraft-style voxel world (single HTML)"
+  },
+  "web_dashboard": {
+    "artifact": "index.html",
+    "prompt_file": "web_dashboard.txt",
+    "title": "Responsive metrics dashboard"
+  },
+  "deep_research_report": {
+    "artifact": "index.html",
+    "prompt_file": "deep_research_report.txt",
+    "title": "Deep research HTML report (RACE/FACT simplified)"
+  },
+  "blender_city": {
+    "artifact": "build_scene.py",
+    "prompt_file": "blender_city.txt",
+    "title": "Low-poly city with one preview"
+  },
+  "blender_skyblock": {
+    "artifact": "build_scene.py",
+    "prompt_file": "blender_skyblock.txt",
+    "title": "Minecraft-inspired Skyblock scene"
+  }
+}

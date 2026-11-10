@@ -61,6 +61,23 @@ python -m pytest tests/test_scoring_reference.py -v
    minecraft), an unbalanced parenthesis (gpt-oss web dashboard), a Python-style
    keyword argument `getTerrainHeight(x, y: 0, z)` (Bonsai minecraft) and a
    stray `...` spread (Swift web dashboard).
+8. **Prose in `index.html` passed the HTML checks.** The qwen 9B dashboard
+   artifact was ten lines of reasoning that *described* a viewport tag and a
+   media query, and still scored 0.81 because the regexes matched the
+   description. `html_document` (critical) now requires the file itself to
+   start with `<!DOCTYPE html>` or `<html>` after optional comments.
+9. **`has_table_or_grid` was too literal.** A dashboard using
+   `display: grid` or `grid-template` in CSS failed. Both forms now count.
+10. **`has_subject` rejected legitimate wording.** The prompt says "Subject
+    line"; the check demanded the exact string `Subject:` at byte 0, so
+    `Subject line: ...` and a leading `**` failed. The pattern now accepts
+    `Subject`/`Subject line` with `:` or `-` after optional leading
+    non-word characters. A reasoning dump before the email still fails, which
+    is intended.
+11. **Blender syntax errors were only found by running Blender.** A model
+    script with an `IndentationError` cost a full headless render before
+    failing. `is_python_code` is now a critical check on all Blender tasks, so
+    the syntax error is reported instead.
 
 ## What the reference does not prove
 

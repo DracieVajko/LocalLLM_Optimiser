@@ -4,6 +4,12 @@ Send **exactly** this prompt to DeepSeek, Nemotron (local), ChatGPT and any othe
 model, then save the answer with the command further down. Same prompt, same
 file name, comparable result.
 
+The canonical copies live in [`prompts/`](prompts/) — one `.txt` per task,
+generated from the sandbox definitions by `python tools/export_prompts.py`.
+`python tools/export_prompts.py --desktop` also builds
+`Desktop/frontier_bench/` with the prompts, the DeepSeek references and a short
+instruction sheet.
+
 | Task | File the model must produce |
 |---|---|
 | `email_write` | `email.txt` |
