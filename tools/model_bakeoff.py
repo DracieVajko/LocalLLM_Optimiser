@@ -151,6 +151,7 @@ async def _run_task(
         policy=policy,
         workdir=workdir,
         command=build_command_for(definition),
+        model=model,
     )
     result = await runner.run_async(generate)
     payload = result.as_dict()

@@ -22,6 +22,7 @@ from __future__ import annotations
 import gzip
 import inspect
 import io
+import json
 import os
 import re
 import shutil
@@ -288,6 +289,10 @@ class SandboxRunner:
     command: str = ""
     #: Extra checks provided by the host (browser tests, blender validation).
     custom_checks: dict[str, tuple[bool, str]] = field(default_factory=dict)
+    #: Model name used for debug output (optional).
+    model: str = ""
+    #: Write debug.json with per-attempt timings and raw command output.
+    debug: bool = True
 
     def run(self, generate) -> SandboxResult:
         """Synchronous wrapper around `run_async` (used by the tests)."""
@@ -305,15 +310,40 @@ class SandboxRunner:
         """
         result = SandboxResult(task_id=self.task.id)
         feedback = ""
+        debug_attempts: list[dict] = []
         for attempt in range(self.task.max_repair_attempts + 1):
             started = time.perf_counter()
+            gen_started = time.perf_counter()
             try:
                 produced = generate(feedback)
                 if inspect.isawaitable(produced):
                     produced = await produced
             except Exception as e:  # noqa: BLE001
                 result.error = f"{type(e).__name__}: {e}"[:200]
+                debug_attempts.append(
+                    {
+                        "attempt": attempt,
+                        "generate_s": round(time.perf_counter() - gen_started, 1),
+                        "error": result.error,
+                    }
+                )
+                logger.warning(
+                    "sandbox generate failed",
+                    task=self.task.id,
+                    model=self.model,
+                    attempt=attempt,
+                    error=result.error,
+                )
                 break
+            gen_s = time.perf_counter() - gen_started
+            logger.info(
+                "sandbox attempt generated",
+                task=self.task.id,
+                model=self.model,
+                attempt=attempt,
+                generate_s=round(gen_s, 1),
+                output_chars=len(produced or ""),
+            )
 
             # The model returns the file contents; write them into the
             # isolated workdir.
@@ -419,6 +449,35 @@ class SandboxRunner:
                 duration_s=time.perf_counter() - started,
             )
             result.attempts.append(record)
+            debug_attempts.append(
+                {
+                    "attempt": attempt,
+                    "generate_s": round(gen_s, 1),
+                    "total_s": round(time.perf_counter() - started, 1),
+                    "output_chars": len(produced or ""),
+                    "exit_code": execution.exit_code,
+                    "exec_ok": execution.ok,
+                    "exec_error": execution.error,
+                    "stdout_tail": (execution.stdout or "")[-1500:],
+                    "stderr_tail": (execution.stderr or "")[-1500:],
+                    "failing": failing,
+                    "critical": critical,
+                    "score": score,
+                    "passed": passed,
+                    "artifacts": sorted(files.keys()),
+                }
+            )
+            logger.info(
+                "sandbox attempt scored",
+                task=self.task.id,
+                model=self.model,
+                attempt=attempt,
+                score=score,
+                passed=passed,
+                failing=failing,
+                critical=critical,
+                exit_code=execution.exit_code,
+            )
             if attempt == 0:
                 result.first_pass_success = passed
             if critical:
@@ -442,6 +501,25 @@ class SandboxRunner:
                 failing_checks=failing,
             )
         result.artifacts = sorted(read_workdir_files(self.workdir).keys())
+        if self.debug:
+            try:
+                self.workdir.mkdir(parents=True, exist_ok=True)
+                (self.workdir / "debug.json").write_text(
+                    json.dumps(
+                        {
+                            "task": self.task.id,
+                            "model": self.model,
+                            "command": self.command,
+                            "attempts": debug_attempts,
+                            "final": result.as_dict(),
+                        },
+                        indent=2,
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+            except OSError as exc:
+                log_best_effort("best-effort operation failed", exc)
         return result
 
     def _materialise(self, produced: str) -> None:

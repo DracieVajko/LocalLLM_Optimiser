@@ -37,6 +37,7 @@ from lm_optimizer.services.quality_lab import (
     run_task_with_seeds,
 )
 from lm_optimizer.services.best_effort import log_best_effort
+from lm_optimizer.services.sandbox_lab import SandboxTask
 logger = get_logger(__name__)
 console = Console()
 app = typer.Typer(
@@ -1053,6 +1054,7 @@ def _run_sandbox_one(
         policy=policy,
         workdir=workdir,
         command=build_command_for(definition),
+        model=model,
     )
     from dataclasses import replace as _replace_cfg
 
@@ -1184,6 +1186,136 @@ def sandbox(
     clean = {k: v for k, v in payload.items() if k != "workdir"}
     path = _write_json(f"sandbox-{task}.json", clean)
     console.print(f"\nReport saved: {path}")
+
+
+@app.command("debug")
+def debug_sandbox(
+    run: str | None = typer.Option(
+        None, "--run", help="Sandbox workdir (or debug.json path); latest when omitted"
+    ),
+    task: str = typer.Option(
+        "minecraft_world", "--task", help="Task id used to find the latest run"
+    ),
+):
+    """Explain why a sandbox run failed: per-attempt errors and raw command output."""
+    import json as _json
+    from pathlib import Path as _Path
+
+    if run:
+        path = _Path(run)
+    else:
+        task_dir = _Path("results") / "sandbox" / task
+        candidates = sorted(
+            task_dir.glob("*/debug.json"),
+            key=lambda p: p.stat().st_mtime,
+        )
+        if not candidates:
+            console.print(f"[red]No debug.json under {task_dir}[/red]")
+            sys.exit(2)
+        path = candidates[-1]
+    if path.is_dir():
+        path = path / "debug.json"
+    if not path.exists():
+        console.print(f"[red]Not found: {path}[/red]")
+        sys.exit(2)
+
+    data = _json.loads(path.read_text(encoding="utf-8"))
+    console.print(
+        f"[bold]task[/bold]: {data.get('task')}  "
+        f"[bold]model[/bold]: {data.get('model')}"
+    )
+    console.print(f"[bold]command[/bold]: {data.get('command')}")
+    for attempt in data.get("attempts", []):
+        console.print(
+            f"\n[bold]attempt {attempt.get('attempt')}[/bold] "
+            f"score={attempt.get('score')} passed={attempt.get('passed')} "
+            f"gen={attempt.get('generate_s')}s exit={attempt.get('exit_code')}"
+        )
+        if attempt.get("error"):
+            console.print(f"  [red]error: {attempt['error']}[/red]")
+        if attempt.get("failing"):
+            console.print(f"  failing: {'; '.join(attempt['failing'])}")
+        if attempt.get("critical"):
+            console.print(
+                f"  [red]critical: {'; '.join(attempt['critical'])}[/red]"
+            )
+        if attempt.get("exec_error"):
+            console.print(f"  exec_error: {attempt['exec_error'][:400]}")
+        if attempt.get("stderr_tail"):
+            console.print(f"  stderr: {attempt['stderr_tail'][-600:]}")
+    final = data.get("final", {})
+    console.print(
+        f"\n[bold]final[/bold] score={final.get('final_score')} "
+        f"success={final.get('final_success')} error={final.get('error')}"
+    )
+
+
+@app.command("run-debug")
+def run_debug(
+    run_id: str | None = typer.Argument(
+        None, help="Optimization run id; omit to list recent failed runs"
+    ),
+    limit: int = typer.Option(10, "--limit", help="How many recent runs to scan"),
+):
+    """Explain why optimizer run(s) failed: config and per-test errors."""
+    from lm_optimizer.database.repositories import run_repo
+
+    if not run_id:
+        runs = run_repo.list_all(limit=max(1, limit))
+        failed = [
+            run
+            for run in runs
+            if getattr(run.status, "value", str(run.status)).lower()
+            in ("failed", "partial_success")
+        ]
+        if not failed:
+            console.print("[green]No failed optimizer runs found[/green]")
+            return
+        console.print("[bold]Recent failed optimizer runs[/bold]")
+        for run in failed:
+            console.print(
+                f"  {run.id}  {getattr(run.model, 'id', '?')}  "
+                f"{getattr(run.status, 'value', run.status)}  "
+                f"error={run.error or '-'}"
+            )
+        console.print(
+            "\nRun `lab run-debug <run_id>` for per-config and per-test details."
+        )
+        return
+
+    run = run_repo.get(run_id)
+    if run is None:
+        console.print(f"[red]Run not found: {run_id}[/red]")
+        sys.exit(2)
+    console.print(
+        f"[bold]run[/bold]: {run.id}  [bold]model[/bold]: "
+        f"{getattr(run.model, 'id', '?')}  [bold]status[/bold]: "
+        f"{getattr(run.status, 'value', run.status)}"
+    )
+    console.print(
+        f"[bold]profile[/bold]: {getattr(run.profile, 'value', run.profile)}  "
+        f"[bold]stage[/bold]: {getattr(run.stage, 'value', run.stage)}  "
+        f"[bold]error[/bold]: {run.error or '-'}"
+    )
+    if not run.configurations:
+        console.print("[yellow]No configurations recorded[/yellow]")
+        return
+    for config in run.configurations:
+        metrics = getattr(config, "metrics", None) or []
+        failed_tests = [
+            m for m in metrics if not getattr(m, "success", False)
+        ]
+        console.print(
+            f"\n[bold]config[/bold] ctx={config.context_length} "
+            f"status={getattr(config.status, 'value', config.status)} "
+            f"score={config.score} tok/s={config.get_avg_generation_tok_s():.2f} "
+            f"error={config.error or '-'}"
+        )
+        for metric in failed_tests:
+            console.print(
+                f"  [red]test {getattr(metric, 'test_name', '?')} failed: "
+                f"{getattr(metric, 'error', '') or '-'}[/red]"
+            )
 
 
 @app.command("sandbox-all")

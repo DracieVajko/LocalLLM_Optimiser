@@ -70,6 +70,7 @@ def main() -> int:
             policy=policy,
             workdir=workdir,
             command=build_command_for(definition),
+            model="deepseek-v4.1-flash (agent)",
         )
         started = time.perf_counter()
         result = runner.run(lambda feedback: content)
