@@ -1,1 +1,0 @@
-Build a self-contained HTML dashboard (single file, no external network calls) that shows four metrics, a filter, a model detail view, a light/dark theme toggle, and works on both mobile and desktop widths. Output ONLY the complete HTML starting with <!DOCTYPE html>, no markdown fences, no explanations.

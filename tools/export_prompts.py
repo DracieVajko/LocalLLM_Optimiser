@@ -44,6 +44,10 @@ def export_prompts() -> list[str]:
         path = PROMPTS / f"{task_id}.txt"
         path.write_text(task.prompt.rstrip() + "\n", encoding="utf-8")
         written.append(task_id)
+    # A renamed task must not leave its old prompt behind for someone to paste.
+    for stale in PROMPTS.glob("*.txt"):
+        if stale.stem not in TASKS:
+            stale.unlink()
     (PROMPTS / "index.json").write_text(
         json.dumps(
             {
