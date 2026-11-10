@@ -92,6 +92,7 @@ WEB_TASK = SandboxTask(
     ),
     checks=[
         SandboxCheck("index_html_exists", "files", ["index.html"], weight=1.0, critical=True),
+        SandboxCheck("html_not_empty", "regex", r"<html[\s\S]{50,}", weight=1.0, critical=True),
         SandboxCheck("has_viewport", "regex", r'name=["\']viewport["\']', weight=1.0),
         SandboxCheck("has_media_query", "regex", r"@media", weight=1.0),
         SandboxCheck("has_theme_toggle", "regex", r"(dark|theme)", weight=1.0),
@@ -120,10 +121,8 @@ MINECRAFT_BASE_PROMPT = (
     "- Procedural terrain made of colored cubes (grass green, dirt brown, "
     "  stone gray, water blue).\n"
     "- Smooth 60fps rendering with requestAnimationFrame.\n"
-    "- First-person look controls (pointer lock or mouse move) and a "
-    "  crosshair in the center.\n"
-    "- A simple block-break / block-place interaction (click to remove or "
-    "  add a cube).\n"
+    "- A camera that automatically orbits the floating island (no player "
+    "  controls are required).\n"
     "- Animated sky / day-night feel (moving sun or color gradient).\n"
     "- Clean, modern, commented code.\n\n"
     "Output ONLY the complete HTML in a markdown code fence starting with "
@@ -156,14 +155,15 @@ MINECRAFT_WORLD_TASK = SandboxTask(
     prompt=MINECRAFT_BASE_PROMPT,
     checks=[
         SandboxCheck("index_html_exists", "files", ["index.html"], weight=1.0, critical=True),
+        SandboxCheck("html_not_empty", "regex", r"<html[\s\S]{50,}", weight=1.0, critical=True),
         SandboxCheck("single_file_html", "regex", r"<!DOCTYPE\s+html|<html\b", weight=1.0, critical=True),
-        SandboxCheck("has_threejs", "regex", r"threejs|three\.js", weight=1.0),
-        SandboxCheck("has_voxel_cubes", "regex", r"(cube|voxel|BoxGeometry|Mesh)", weight=1.5),
-        SandboxCheck("has_grass", "regex", r"(grass|0,1,0|#0[a-f]0|green)", weight=1.0),
-        SandboxCheck("has_stone", "regex", r"(stone|gray|grey|128|#808080)", weight=1.0),
-        SandboxCheck("has_water", "regex", r"(water|0,0,1|#00[a-f]|blue)", weight=1.0),
-        SandboxCheck("has_controls", "regex", r"(pointerlock|mousemove|keydown|addEventListener)", weight=1.5),
-        SandboxCheck("has_render_loop", "regex", r"(requestAnimationFrame|animate|render\s*\()", weight=1.5),
+        SandboxCheck("has_threejs", "regex", r"<script[^>]+src=[\"'][^\"']*three[^\"']*\.js", weight=1.0),
+        SandboxCheck("has_voxel_cubes", "regex", r"(BoxGeometry\s*\(|InstancedMesh\s*\()", weight=1.5),
+        SandboxCheck("has_grass", "regex", r"(grassTop|grassSide|grass\s*[:=]|0x4caf50|#4caf50)", weight=1.0),
+        SandboxCheck("has_stone", "regex", r"(stone\s*[:=]|stoneTop|0x8b939b|#8b939b|#808080)", weight=1.0),
+        SandboxCheck("has_water", "regex", r"(water\s*[:=]|waterMat|0x2f7fd4|#2f7fd4|#3a8fe0)", weight=1.0),
+        SandboxCheck("has_camera", "regex", r"(PerspectiveCamera|\.lookAt\s*\()", weight=1.5),
+        SandboxCheck("has_render_loop", "regex", r"(requestAnimationFrame\s*\(|function\s+animate\s*\()", weight=1.5),
         SandboxCheck("no_external_assets", "regex", r"\.(png|jpg|jpeg|gif|zip)\b", weight=1.0, negate=True),
     ],
     max_repair_attempts=2,
@@ -261,7 +261,7 @@ BLENDER_TASK = SandboxTask(
         "and ending with ```. Do not include any other text."
     ),
     checks=[
-        SandboxCheck("script_defines_scene", "regex", r"(bpy\.ops\.mesh|def\s+\w+)", weight=2.0, critical=True),
+        SandboxCheck("script_defines_scene", "regex", r"(bpy\.ops\.mesh|primitive_cube|primitive_plane)", weight=2.0, critical=True),
         SandboxCheck("has_grass_material", "regex", r"(grass|meadow|green)", weight=1.5),
         SandboxCheck("has_tree", "regex", r"(tree|trunk|leaves|foliage)", weight=1.5),
         SandboxCheck("has_chest", "regex", r"chest", weight=1.0),
@@ -271,6 +271,7 @@ BLENDER_TASK = SandboxTask(
         SandboxCheck("has_frame_range", "regex", r"frame_(start|end)", weight=1.0),
         SandboxCheck("saves_blend", "regex", r"save_as_mainfile", weight=1.0, critical=True),
         SandboxCheck("renders", "regex", r"bpy\.ops\.render", weight=1.0),
+        SandboxCheck("blend_runs", "custom", None, weight=1.0, critical=True),
         SandboxCheck("blend_is_binary", "custom", None, weight=2.0, critical=True),
         SandboxCheck("blend_min_size", "custom", None, weight=1.0, critical=True),
         SandboxCheck("frames_rendered", "custom", None, weight=1.0),
@@ -535,7 +536,7 @@ BLENDER_CITY_TASK = SandboxTask(
         "and heights. The bridge should connect two building clusters."
     ),
     checks=[
-        SandboxCheck("script_defines_scene", "regex", r"(bpy\.ops\.mesh|def\s+\w+)", weight=2.0, critical=True),
+        SandboxCheck("script_defines_scene", "regex", r"(bpy\.ops\.mesh|primitive_cube|primitive_plane)", weight=2.0, critical=True),
         SandboxCheck("has_buildings", "regex", r"(cube|building|block)", weight=1.5),
         SandboxCheck("has_bridge", "regex", r"(bridge|span|connect)", weight=1.5),
         SandboxCheck("has_camera", "regex", r"(Camera|camera)", weight=1.0),
@@ -544,13 +545,17 @@ BLENDER_CITY_TASK = SandboxTask(
         SandboxCheck("has_frame_range", "regex", r"frame_(start|end)", weight=1.0),
         SandboxCheck("saves_blend", "regex", r"save_as_mainfile", weight=1.0, critical=True),
         SandboxCheck("renders", "regex", r"bpy\.ops\.render", weight=1.0),
+        SandboxCheck("blend_runs", "custom", None, weight=1.0, critical=True),
+        SandboxCheck("blend_is_binary", "custom", None, weight=2.0, critical=True),
+        SandboxCheck("blend_min_size", "custom", None, weight=1.0, critical=True),
+        SandboxCheck("frames_rendered", "custom", None, weight=1.0),
     ],
     max_repair_attempts=2,
     timeout_s=600.0,
     max_output_tokens=6144,
     network_allowed=False,
     allowed_executables=("blender",),
-    artifacts=("scene.blend", "frames/"),
+    artifacts=("build_scene.py", "scene.blend", "frames/"),
 )
 
 SANDBOX_TASKS: dict[str, SandboxTask] = {
@@ -817,7 +822,9 @@ def score_attempt(
 ) -> tuple[float, list[str], list[str]]:
     """Evaluate one attempt against the task's checks.
 
-    Returns (score, failing_check_names, critical_failures).
+    Returns (score, failing_check_names, critical_failures). A critical
+    failure zeroes the score: it vetoes the attempt instead of merely
+    lowering the aggregate.
     """
     total = 0.0
     weight_sum = 0.0
@@ -900,6 +907,10 @@ def score_attempt(
             if check.critical:
                 critical.append(f"{check.name} ({detail})")
     score = (total / weight_sum) if weight_sum else 0.0
+    if critical:
+        # A critical check is a veto, not a partial deduction: an artifact
+        # that cannot be used must not keep a high aggregate score.
+        score = 0.0
     return score, failing, critical
 
 

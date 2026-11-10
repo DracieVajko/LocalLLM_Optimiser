@@ -15,10 +15,8 @@ The page must contain:
 - Procedural terrain made of colored cubes (grass green, dirt brown,
   stone gray, water blue).
 - Smooth 60fps rendering with requestAnimationFrame.
-- First-person look controls (pointer lock or mouse move) and a crosshair
-  in the center of the screen.
-- A simple block-break / block-place interaction (click to remove or add
-  a cube).
+- A camera that automatically orbits the floating island (no player
+  controls are required).
 - Animated sky / day-night feel (moving sun or color gradient).
 - Clean, modern, commented code.
 
@@ -65,15 +63,20 @@ deliberately removes one of them will score lower on the corresponding check.
 | Check | Weight | Critical |
 |---|---:|---|
 | `index_html_exists` | 1.0 | yes |
+| `html_not_empty` (>=50 chars) | 1.0 | yes |
 | `single_file_html` | 1.0 | yes |
-| `has_threejs` | 1.0 | — |
-| `has_voxel_cubes` | 1.5 | — |
-| `has_grass` | 1.0 | — |
-| `has_stone` | 1.0 | — |
-| `has_water` | 1.0 | — |
-| `has_controls` | 1.5 | — |
-| `has_render_loop` | 1.5 | — |
+| `has_threejs` (real script src) | 1.0 | — |
+| `has_voxel_cubes` (`BoxGeometry(` / `InstancedMesh(`) | 1.5 | — |
+| `has_grass` (`grassTop` / `grass:` / `#4caf50`) | 1.0 | — |
+| `has_stone` (`stone:` / `#8b939b` / `#808080`) | 1.0 | — |
+| `has_water` (`water:` / `waterMat` / `#2f7fd4`) | 1.0 | — |
+| `has_camera` (`PerspectiveCamera` / `.lookAt(`) | 1.5 | — |
+| `has_render_loop` (`requestAnimationFrame(`) | 1.5 | — |
 | `no_external_assets` (negated) | 1.0 | — |
+
+Critical checks are a veto: if any of them fails, the attempt scores `0.0`
+even when the remaining checks pass. The regex checks target code constructs,
+not prose mentions.
 
 The static web validator additionally checks HTML parsing, title, lang,
 viewport, a single `h1`, inline JS syntax, labelled inputs and no external

@@ -216,6 +216,14 @@ def validate_web_files(files: dict[str, str]) -> list[WebCheck]:
     facts = parse_html(files[html_name])
     checks.append(
         WebCheck(
+            "html_not_empty",
+            len(files[html_name].strip()) >= 50,
+            f"{len(files[html_name].strip())} chars",
+            critical=True,
+        )
+    )
+    checks.append(
+        WebCheck(
             "html_parses",
             not facts.parse_error,
             facts.parse_error or "ok",

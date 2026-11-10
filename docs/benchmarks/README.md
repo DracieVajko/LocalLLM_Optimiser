@@ -24,10 +24,8 @@ The page must contain:
 - Procedural terrain made of colored cubes (grass green, dirt brown,
   stone gray, water blue).
 - Smooth 60fps rendering with requestAnimationFrame.
-- First-person look controls (pointer lock or mouse move) and a crosshair
-  in the center of the screen.
-- A simple block-break / block-place interaction (click to remove or add
-  a cube).
+- A camera that automatically orbits the floating island (no player
+  controls are required).
 - Animated sky / day-night feel (moving sun or color gradient).
 - Clean, modern, commented code.
 
@@ -36,10 +34,10 @@ Output ONLY the complete HTML in a markdown code fence starting with
 ```
 
 The committed frontier artifact uses the **visual** interpretation requested
-for the example: a floating skyblock island in the void with grass, dirt,
-stone, water and a waterfall, a tree, a chest, a couple of flowers and a block
-avatar, with the camera orbiting automatically. It is intentionally not a
-playable game.
+for the example: a floating skyblock island in the void with textured grass,
+dirt and stone, a pond and a waterfall, five trees, a cabin with a furnace,
+crafting table, bed and porch lantern, a campfire, flowers and rocks, with the
+camera orbiting automatically. It is intentionally not a playable game.
 
 ## Optional predefined texture atlas
 
@@ -55,19 +53,22 @@ runtime with no image files. The committed artifact uses this atlas.
 | Check | What it verifies | Weight | Critical |
 |---|---|---:|---|
 | `index_html_exists` | `index.html` exists | 1.0 | yes |
+| `html_not_empty` | at least 50 characters of HTML | 1.0 | yes |
 | `single_file_html` | starts with `<!DOCTYPE html>` or `<html` | 1.0 | yes |
-| `has_threejs` | references Three.js | 1.0 | — |
-| `has_voxel_cubes` | uses cubes / voxels / meshes | 1.5 | — |
-| `has_grass` | grass / green block colour | 1.0 | — |
-| `has_stone` | stone / grey block colour | 1.0 | — |
-| `has_water` | water / blue block colour | 1.0 | — |
-| `has_controls` | input listeners (pointer lock, key/mouse) | 1.5 | — |
-| `has_render_loop` | `requestAnimationFrame` / render loop | 1.5 | — |
+| `has_threejs` | a real `<script src=...three...js>` | 1.0 | — |
+| `has_voxel_cubes` | `BoxGeometry(` or `InstancedMesh(` | 1.5 | — |
+| `has_grass` | `grassTop` / `grass:` / `#4caf50` | 1.0 | — |
+| `has_stone` | `stone:` / `#8b939b` / `#808080` | 1.0 | — |
+| `has_water` | `water:` / `waterMat` / `#2f7fd4` | 1.0 | — |
+| `has_camera` | `PerspectiveCamera` / `.lookAt(` | 1.5 | — |
+| `has_render_loop` | `requestAnimationFrame(` / `function animate(` | 1.5 | — |
 | `no_external_assets` | no `.png/.jpg/.jpeg/.gif/.zip` references | 1.0 | — |
 
-The score is the weighted share of passing checks. The static web validator
-also verifies that the HTML parses, has a title/lang/viewport, one `h1`,
-inline JS syntax, labelled inputs and no external scripts/styles.
+The score is the weighted share of passing checks, **except that a critical
+failure vetoes the attempt to `0.0`**. The regex checks target real code
+constructs, not prose mentions. The static web validator also verifies that the
+HTML parses, has a title/lang/viewport, one `h1`, inline JS syntax, labelled
+inputs and no external scripts/styles.
 
 ## Frontier result (DeepSeek V4.1 Flash agent)
 
