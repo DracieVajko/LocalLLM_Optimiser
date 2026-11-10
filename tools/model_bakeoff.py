@@ -106,12 +106,18 @@ async def _run_task(
         if feedback:
             prompt = feedback + "\n\n" + prompt
         started = time.perf_counter()
+        if not thinking:
+            reasoning_value = "off"
+        elif reasoning_effort.strip().lower() in ("", "default"):
+            reasoning_value = None
+        else:
+            reasoning_value = reasoning_effort
         response = await client.chat_completion(
             model=model,
             input_text=prompt,
             temperature=0.0,
             max_output_tokens=definition.max_output_tokens,
-            reasoning=(reasoning_effort if thinking else "off"),
+            reasoning=reasoning_value,
         )
         elapsed = time.perf_counter() - started
         if isinstance(response, dict):
@@ -349,8 +355,7 @@ def main() -> int:
     parser.add_argument(
         "--reasoning-effort",
         default="on",
-        choices=("on", "low", "medium", "high"),
-        help="value for LM Studio's reasoning field",
+        help="Reasoning level: off|on|low|medium|high|xhigh|default or any server value",
     )
     parser.add_argument("--out", default=str(DEFAULT_ROOT))
     return asyncio.run(main_async(parser.parse_args()))

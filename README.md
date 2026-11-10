@@ -379,6 +379,12 @@ that are NOT the runtime optimizer:
 
 All agentic tasks run offline (`network_allowed=false`) with an evidence-only repair loop: on failure the model gets the failing checks, not the solution.
 
+Reasoning levels are pass-through: `lab sandbox --reasoning <level>` and
+`tools/model_bakeoff.py --reasoning-effort <level>` accept `off`, `on`, `low`,
+`medium`, `high`, `xhigh`, `default` or any value the server exposes. This
+LM Studio build advertises `off|on` per model; a rejected value is retried
+without the key, and `default` omits it entirely.
+
 **Frontier benchmark example.** `minecraft_world` is also published as a
 reproducible frontier-model benchmark: the exact prompt, acceptance checks and
 the committed DeepSeek V4.1 Flash artifacts/results live in

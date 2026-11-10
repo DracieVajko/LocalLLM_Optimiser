@@ -300,15 +300,20 @@ def quality_lab(
                 log_best_effort("best-effort operation failed", exc)
     import asyncio
     asyncio.run(_run())
-async def _chat(client, model: str, prompt: str, max_tokens: int) -> str:
-    # reasoning="off" keeps the thinking trace out of the artifact; the client
-    # retries without the key for models that reject it.
+async def _chat(
+    client, model: str, prompt: str, max_tokens: int, reasoning: str = "off"
+) -> str:
+    # The reasoning value is passed through as-is (off/on/low/medium/high/
+    # xhigh/default/...). "default" omits the key so the server uses its own
+    # default. The client retries without the key when a model or server
+    # rejects the value, so unknown levels degrade safely.
+    reasoning_value = None if reasoning.strip().lower() in ("", "default") else reasoning
     response = await client.chat_completion(
         model=model,
         input_text=prompt,
         temperature=0.0,
         max_output_tokens=max_tokens,
-        reasoning="off",
+        reasoning=reasoning_value,
     )
     choices = response.get("choices") or []
     if not choices:
@@ -1021,6 +1026,7 @@ def _run_sandbox_one(
     *,
     custom_prompt: str | None = None,
     context_length: int | None = None,
+    reasoning: str = "off",
 ) -> dict:
     """Execute one sandbox task for one model and return the result dict."""
     from dataclasses import replace as _replace
@@ -1095,7 +1101,11 @@ def _run_sandbox_one(
                 if feedback:
                     prompt = feedback + "\n\n" + definition.prompt
                 return await _chat(
-                    client, lease.model, prompt, definition.max_output_tokens
+                    client,
+                    lease.model,
+                    prompt,
+                    definition.max_output_tokens,
+                    reasoning=reasoning,
                 )
 
             try:
@@ -1157,6 +1167,11 @@ def sandbox(
     context_length: int | None = typer.Option(
         None, "--context", help="Force context length (default: best config, min 4096)"
     ),
+    reasoning: str = typer.Option(
+        "off",
+        "--reasoning",
+        help="Reasoning level: off|on|low|medium|high|xhigh|default (unknown values fall back)",
+    ),
 ):
     """Run one sandbox task with the repair loop (P4).
 
@@ -1178,6 +1193,7 @@ def sandbox(
             model,
             custom_prompt=custom_prompt,
             context_length=context_length,
+            reasoning=reasoning,
         )
     except ValueError as exc:
         console.print(f"[red]{exc}[/red]")
@@ -1333,6 +1349,11 @@ def sandbox_all(
     context_length: int | None = typer.Option(
         None, "--context", help="Force context length for every run"
     ),
+    reasoning: str = typer.Option(
+        "off",
+        "--reasoning",
+        help="Reasoning level: off|on|low|medium|high|xhigh|default",
+    ),
 ):
     """Run every sandbox task (or a subset) for one model.
 
@@ -1365,6 +1386,7 @@ def sandbox_all(
                 model,
                 custom_prompt=custom_prompt or overrides.get(task_id),
                 context_length=context_length,
+                reasoning=reasoning,
             )
         except Exception as exc:  # noqa: BLE001
             failed += 1
@@ -1399,6 +1421,11 @@ def sandbox_matrix(
     ),
     context_length: int | None = typer.Option(
         None, "--context", help="Force context length for every run"
+    ),
+    reasoning: str = typer.Option(
+        "off",
+        "--reasoning",
+        help="Reasoning level: off|on|low|medium|high|xhigh|default",
     ),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Print the matrix without running anything"
@@ -1476,6 +1503,7 @@ def sandbox_matrix(
                         model_id,
                         custom_prompt=custom_prompt or overrides.get(task_id),
                         context_length=context_length,
+                        reasoning=reasoning,
                     )
                     entry.update(
                         {
