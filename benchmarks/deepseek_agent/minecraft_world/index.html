@@ -57,6 +57,18 @@
       white-space: nowrap;
     }
     .hud b { color: #ffffff; }
+    .credit {
+      position: fixed;
+      right: 14px;
+      bottom: 14px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: rgba(12, 26, 40, 0.55);
+      color: #dbe9f7;
+      font-size: 11px;
+      pointer-events: auto;
+    }
+    .credit a { color: #ffd44d; }
     @media (max-width: 700px) {
       .hero { top: 12px; left: 12px; max-width: 280px; padding: 13px 15px; }
       .hero h1 { font-size: 20px; }
@@ -76,6 +88,11 @@
   </div>
 
   <div class="hud"><b>Camera</b> orbits the island automatically</div>
+
+  <div class="credit">
+    Textures: Pixel Perfection by XSSheep · CC BY-SA 4.0
+    <a href="https://creativecommons.org/licenses/by-sa/4.0/">license</a>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
   <script>
@@ -128,7 +145,7 @@
     // Procedural 16x16 pixel-art texture atlas (16 tiles in a 4x4 grid).
     // ---------------------------------------------------------------------
     const TILE = 16;
-    const COLS = 4;
+    const COLS = 5;
     const ROWS = 4;
     const atlasCanvas = document.createElement("canvas");
     atlasCanvas.width = TILE * COLS;
@@ -222,7 +239,11 @@
       }
     }
 
-    const atlas = new THREE.CanvasTexture(atlasCanvas);
+    // Pixel Perfection texture atlas (CC BY-SA 4.0), embedded as a data URI.
+    const ATLAS_BASE64 = "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";
+    const atlas = new THREE.TextureLoader().load(
+      "data:image/png;base64," + ATLAS_BASE64
+    );
     atlas.magFilter = THREE.NearestFilter;
     atlas.minFilter = THREE.NearestFilter;
     atlas.encoding = THREE.sRGBEncoding;
@@ -230,9 +251,12 @@
 
     const tile = {
       grassTop: [0, 0], grassSide: [1, 0], dirt: [2, 0], stone: [3, 0],
+      path: [4, 0],
       woodSide: [0, 1], woodTop: [1, 1], leaves: [2, 1], water: [3, 1],
-      chest: [0, 2], planks: [1, 2], roof: [2, 2], path: [3, 2],
-      furnace: [0, 3], crafting: [1, 3], bed: [2, 3], glass: [3, 3]
+      sand: [4, 1],
+      chest: [0, 2], chestSide: [1, 2], chestTop: [2, 2], planks: [3, 2],
+      roof: [4, 2],
+      furnace: [0, 3], furnaceSide: [1, 3], furnaceTop: [2, 3], glass: [3, 3]
     };
 
     // Remap the six box faces into the selected atlas tiles.
@@ -266,6 +290,11 @@
       transparent: true,
       opacity: 0.55
     });
+    const leavesMat = new THREE.MeshLambertMaterial({
+      map: atlas,
+      alphaTest: 0.5,
+      side: THREE.DoubleSide
+    });
     const fireMat = new THREE.MeshBasicMaterial({ color: 0xff8a2a });
     const lampMat = new THREE.MeshBasicMaterial({ color: 0xffe08a });
 
@@ -279,13 +308,14 @@
       stone: same(tile.stone),
       wood: blockGeometry(tile.woodTop, tile.woodSide, tile.woodTop),
       leaves: same(tile.leaves),
-      chest: same(tile.chest),
+      chest: blockGeometry(tile.chestTop, tile.chestSide, tile.chestTop),
       planks: same(tile.planks),
       roof: same(tile.roof),
       path: same(tile.path),
-      furnace: same(tile.furnace),
-      crafting: same(tile.crafting),
-      bed: same(tile.bed),
+      furnace: blockGeometry(tile.furnaceTop, tile.furnaceSide, tile.furnaceTop),
+      crafting: same(tile.planks),
+      bed: same(tile.roof),
+      pillow: same(tile.sand),
       glass: same(tile.glass),
       water: same(tile.water),
       fire: new THREE.BoxGeometry(1, 1, 1),
@@ -298,7 +328,7 @@
     const groups = {
       grass: [], dirt: [], stone: [], wood: [], leaves: [],
       chest: [], planks: [], roof: [], path: [], water: [],
-      furnace: [], crafting: [], bed: [], glass: [], fire: [], lamp: []
+      furnace: [], crafting: [], bed: [], pillow: [], glass: [], fire: [], lamp: []
     };
     const add = (group, x, y, z) => groups[group].push([x, y, z]);
 
@@ -453,6 +483,7 @@
     // Furniture inside the cabin.
     add("bed", CABIN.x - 1, CABIN.h + 1, CABIN.z - 1);
     add("bed", CABIN.x, CABIN.h + 1, CABIN.z - 1);
+    add("pillow", CABIN.x - 1, CABIN.h + 2, CABIN.z - 1);
     add("furnace", CABIN.x - 2, CABIN.h + 1, CABIN.z + 1);
     add("crafting", CABIN.x + 3, heightAt(CABIN.x + 3, CABIN.z + 3) + 1, CABIN.z + 3);
 
@@ -502,6 +533,7 @@
     const materials = {
       water: waterMat,
       glass: glassMat,
+      leaves: leavesMat,
       fire: fireMat,
       lamp: lampMat
     };

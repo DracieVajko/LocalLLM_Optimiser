@@ -39,14 +39,24 @@ dirt and stone, a pond and a waterfall, five trees, a cabin with a furnace,
 crafting table, bed and porch lantern, a campfire, flowers and rocks, with the
 camera orbiting automatically. It is intentionally not a playable game.
 
-## Optional predefined texture atlas
+### Textures and license
 
-A ready-made 16x16 pixel-art atlas lives in
-[`deepseek_agent/minecraft_world/texture_atlas.js`](deepseek_agent/minecraft_world/texture_atlas.js).
-Paste it inside the same `<script>` block and call `createVoxelAtlas(THREE)`;
-it provides grass top/side, dirt, stone, wood side/top, leaves, water, chest,
-planks, roof, path, furnace, crafting table, bed and glass tiles, generated at
-runtime with no image files. The committed artifact uses this atlas.
+The committed example uses **Pixel Perfection** by Hugh "XSSheep" Rutland,
+licensed **CC BY-SA 4.0**. Only 19 basic block textures are included; they are
+packed into a 5x4 atlas and embedded as a base64 data URI so the artifact stays
+a single file. Attribution and the full license are in
+[`deepseek_agent/minecraft_world/textures/pixel_perfection/`](deepseek_agent/minecraft_world/textures/pixel_perfection/):
+
+- [NOTICE.md](deepseek_agent/minecraft_world/textures/pixel_perfection/NOTICE.md)
+- [LICENSE-CC-BY-SA-4.0.txt](deepseek_agent/minecraft_world/textures/pixel_perfection/LICENSE-CC-BY-SA-4.0.txt)
+- [ATLAS.md](deepseek_agent/minecraft_world/textures/pixel_perfection/ATLAS.md)
+
+The texture work is CC BY-SA 4.0; the surrounding code stays under the
+repository's MIT license. The original Minecraft textures are **not** used.
+
+A procedural atlas (`deepseek_agent/minecraft_world/texture_atlas.js`) remains
+available as an asset-free alternative for models that should generate their
+own textures.
 
 ## Acceptance criteria (same harness for every model)
 

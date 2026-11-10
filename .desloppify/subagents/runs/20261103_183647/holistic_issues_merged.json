@@ -1,0 +1,1137 @@
+{
+  "assessments": {
+    "abstraction_fitness": 70.0,
+    "ai_generated_debt": 76.0,
+    "api_surface_coherence": 73.0,
+    "authorization_consistency": 72.0,
+    "contract_coherence": 72.0,
+    "convention_outlier": 76.0,
+    "cross_module_architecture": 76.0,
+    "dependency_health": 84.0,
+    "design_coherence": 71.0,
+    "error_consistency": 74.0,
+    "high_level_elegance": 74.0,
+    "incomplete_migration": 77.0,
+    "initialization_coupling": 71.0,
+    "logic_clarity": 70.0,
+    "low_level_elegance": 72.0,
+    "mid_level_elegance": 70.0,
+    "naming_quality": 80.0,
+    "package_organization": 73.0,
+    "test_strategy": 79.0,
+    "type_safety": 66.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "Two import cycles are detected: cli/__init__.py <-> cli/main.py and optimizer/engine.py <-> storage/checkpoint.py.",
+        "domain/models.py is imported by 112 modules and logging_config.py by 43; services/optimizer.py is imported by 41, so changes there have a very large blast radius.",
+        "lm_optimizer/services/ holds 29,278 LOC (98.4% of package LOC) and mixes orchestration, backends, persistence, reporting and UI helpers in one flat package.",
+        "A deprecated parallel stack (ui/web.py, optimizer/engine.py, storage/checkpoint.py, api/client.py) is still imported by discovery/inspector.py and several tests.",
+        "domain/models.py is now a re-export facade over seven aggregate modules; services/orchestration and services/host are capability subpackages."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "domain/models.py is now a re-export facade over seven aggregate modules; services/orchestration and services/host are capability subpackages."
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "Two complete optimization stacks coexist: services/optimizer.py AdaptiveOptimizer (5,294 LOC) and optimizer/engine.py OptimizationEngine (806 LOC) with different state models.",
+        "cli/main.py is 5,718 LOC and owns argument parsing, preflight, host lifecycle, phase orchestration, reporting and result rendering for 25+ commands.",
+        "lm_optimizer/services/ is a flat 29k-LOC package instead of capability-aligned ownership boundaries.",
+        "The repository still ships a deprecated ui/web.py plus its legacy client/engine/checkpoint dependencies.",
+        "One workflow service, one host lifecycle module and capability subpackages replace the duplicated legacy and flat-service ownership."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "One workflow service, one host lifecycle module and capability subpackages replace the duplicated legacy and flat-service ownership."
+    },
+    "convention_outlier": {
+      "evidence": [
+        "snake_case is consistent across all 1,666 detected names and every package directory.",
+        "Domain objects mix dataclasses (domain/models.py), Pydantic models (api/schemas.py) and plain dicts (advanced settings) without a documented rule.",
+        "print() is used 571 times (421 in cli/main.py, 108 in cli/lab.py) while the rest of the codebase uses structlog; services/optimizer.py and community_benchmarks.py also print.",
+        "Tests are split across tests/ (62 files) and lm_optimizer/tests/ (70 files) with different fixture styles.",
+        "Unit/integration markers and the documented type strategy make the two test roots and dataclass/Pydantic split explicit."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Unit/integration markers and the documented type strategy make the two test roots and dataclass/Pydantic split explicit."
+    },
+    "error_consistency": {
+      "evidence": [
+        "522 'except Exception' handlers across 63 production files; 153 of them swallow the error with 'pass'.",
+        "Silent-pass counts are concentrated in services/optimizer.py (41), api/routes.py (29) and cli/main.py (14).",
+        "Strategy census mixes try/catch (352 in services), throws (140) and returns_null (90) with only 5 Result-type paths.",
+        "Repositories commonly return None (7) while clients raise, and API handlers convert both into heterogeneous HTTP responses.",
+        "128 silent catches log through best_effort; API 500s go through one _internal_error/exception handler."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "128 silent catches log through best_effort; API 500s go through one _internal_error/exception handler."
+    },
+    "naming_quality": {
+      "evidence": [
+        "Domain vocabulary is strong: model, run, configuration, phase, stage, winner, finalist, ladder are used consistently.",
+        "The name OptimizationState is defined twice (services/optimizer.py and optimizer/engine.py) with different fields, so imports are ambiguous.",
+        "cli/main.py uses optimize (603 lines), _optimize (185), _run_optimization (55), auto (603) and _auto (402) for different layers of the same workflow.",
+        "Generic helpers such as _require_backend, _handle_connection_error and _connect_guarded communicate intent reasonably; tools/ has ad-hoc names like speed16k_part2.py and swift_runs.py.",
+        "Legacy duplicate state is gone; internal CLI workflow helpers were renamed by responsibility."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Legacy duplicate state is gone; internal CLI workflow helpers were renamed by responsibility."
+    },
+    "abstraction_fitness": {
+      "evidence": [
+        "The abstraction census reports 20 facade modules, 26 pass-through wrappers, 51 indirection hotspots and 60 wide parameter bags.",
+        "api/routes.py defines _convert_model/_convert_hardware/_convert_config/_convert_preset that only map domain objects to Pydantic schemas.",
+        "Advanced settings travel as an untyped dict through prepare_run, execute and _test_config, so every consumer re-implements key lookup and defaults.",
+        "77 dict[str, Any] annotations remain, concentrated in lmstudio_defaults.py (23), duel.py (11) and hostguard.py (8).",
+        "AdvancedSettings, build_optimizer and Pydantic model_validate replace the main implicit dict/wrapper boundaries."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "AdvancedSettings, build_optimizer and Pydantic model_validate replace the main implicit dict/wrapper boundaries."
+    },
+    "dependency_health": {
+      "evidence": [
+        "Two import cycles remain in the package graph.",
+        "GPUtil 1.4 is declared for GPU discovery but is unmaintained and emits a find_executable deprecation warning on Python 3.14.",
+        "Dependencies are otherwise focused: httpx for HTTP, pydantic/pydantic-settings, FastAPI/uvicorn, Typer/Rich, structlog, numpy, psutil.",
+        "No duplicate HTTP client library or duplicate settings framework was found.",
+        "GPUtil and both cycles are gone; requirements.txt mirrors pyproject and uv.lock pins 63 packages."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "GPUtil and both cycles are gone; requirements.txt mirrors pyproject and uv.lock pins 63 packages."
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "36 functions are at least 120 lines; the worst are cli/main.py optimize/auto (603 each), reporting.save_best_report (531) and optimizer._test_config (244).",
+        "Broad catches and silent passes recur inside these long bodies, so side effects and recovery paths are interleaved with the happy path.",
+        "Small helpers such as _looks_incomplete, _sample_mem and _extract_mtp_metrics are direct and readable.",
+        "Some async functions perform synchronous work without awaits, and several loops mix persistence, logging and control flow in one block.",
+        "Host lifecycle and optimizer composition moved out of the 5.7k-LOC CLI module; silent catches are logged."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Host lifecycle and optimizer composition moved out of the 5.7k-LOC CLI module; silent catches are logged."
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "The advanced-settings dict is the main handoff object between CLI/API, optimizer and benchmark, with defaults re-applied at each layer.",
+        "BenchmarkService is constructed separately in cli/main.py and api/routes.py with overlapping but not identical arguments, which previously produced CLI/UI parity gaps.",
+        "prepare_run returns (run, baseline_config, advanced_settings) and execute takes the same dict again, so the boundary contract is implicit.",
+        "API conversion happens through ad-hoc mappers plus dict enrichment (_enrich_config_detail) rather than one translation seam.",
+        "CLI/API/auto-run compose through one workflow/settings boundary; config detail has one presenter."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "CLI/API/auto-run compose through one workflow/settings boundary; config detail has one presenter."
+    },
+    "test_strategy": {
+      "evidence": [
+        "The suite has roughly 1,490 tests and completes in about five minutes, giving fast feedback for a project of this size.",
+        "Two critical modules are untested according to the scan: optimizer/engine.py and storage/checkpoint.py (3 importers each).",
+        "Tests are split across tests/ (62 files) and lm_optimizer/tests/ (70 files) with different fixture conventions.",
+        "Most tests use fakes/monkeypatching rather than live servers, which keeps them deterministic but leaves some HTTP/load paths covered only by integration-style fakes.",
+        "1508 tests pass; MockTransport contract tests and unit/integration markers were added."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "1508 tests pass; MockTransport contract tests and unit/integration markers were added."
+    },
+    "api_surface_coherence": {
+      "evidence": [
+        "api/routes.py defines 62 route handlers but only 12 declare a response_model.",
+        "The remaining handlers return raw dicts, so the public schema is not visible in OpenAPI and changes silently.",
+        "The API mixes async and sync handlers and uses heterogeneous error shapes (HTTPException detail vs default FastAPI validation).",
+        "api/main.py manually re-registers routes at import time because include_router was reported broken, duplicating the router surface.",
+        "Core endpoints have response models, one error boundary, typed converters and supported include_router registration."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Core endpoints have response models, one error boundary, typed converters and supported include_router registration."
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "All 62 API routes in api/routes.py and all 8 handlers in ui/web.py have no authentication dependency.",
+        "No RLS or per-table access control is present; the SQLite repositories are called directly.",
+        "The default bind address is 127.0.0.1 with CORS restricted to localhost:8080, which limits exposure but is not an authorization boundary.",
+        "Some endpoints mutate host state (apply defaults, delete runs, cancel jobs), so unauthenticated access is not read-only.",
+        "Remote binds require LM_OPTIMIZER_API_TOKEN; mutating non-loopback requests need X-API-Token."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Remote binds require LM_OPTIMIZER_API_TOKEN; mutating non-loopback requests need X-API-Token."
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "The codebase comment ratio is 2.5%, so restating comments are not the main problem.",
+        "Defensive overengineering is visible in 153 silent broad catches and repeated None/empty checks around typed values.",
+        "Service-layer print() calls (optimizer.py 5, community_benchmarks.py 8, deepresearch.py 4) look like debug output left in production paths.",
+        "Docstrings are generally short, but some large functions carry docstrings that describe only one of several responsibilities.",
+        "Service prints are gone, 128 silent catches log, and long-function docstrings now list side effects."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Service prints are gone, 128 silent catches log, and long-function docstrings now list side effects."
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "ui/web.py is explicitly marked DEPRECATED and says it will be removed in 2.0, yet it remains in the tree with its own FastAPI app.",
+        "optimizer/engine.py says it is kept for backward compatibility and duplicates the adaptive optimizer.",
+        "storage/checkpoint.py and benchmark/runner.py belong to the same legacy stack and are still imported by engine.py, ui/web.py and tests.",
+        "discovery/inspector.py still imports LMStudioClient/LoadConfig/ModelInfo from api/client.py rather than services/lm_studio.py.",
+        "Legacy engine/web/checkpoint/runner are deleted; discovery now uses the service client and api/client is documented as test-only."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Legacy engine/web/checkpoint/runner are deleted; discovery now uses the service client and api/client is documented as test-only."
+    },
+    "package_organization": {
+      "evidence": [
+        "Root-level hw_monitor.py and vram_matrix.py are scripts with low fan-in that duplicate hardware concerns already under lm_optimizer/hardware and services.",
+        "lm_optimizer/services/ is a flat directory with 65 functions and 42 classes spanning unrelated capabilities.",
+        "tools/ contains 39 scripts with mixed durability: reusable probes next to one-off speed16k_* and swift_* campaign scripts.",
+        "Domain, storage, backends, benchmark and scoring are purpose-named packages, which gives the layout a usable spine.",
+        "Domain aggregates, orchestration and host are now purpose-named packages; services/ is materially less flat."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Domain aggregates, orchestration and host are now purpose-named packages; services/ is materially less flat."
+    },
+    "initialization_coupling": {
+      "evidence": [
+        "config is a module-level pydantic-settings singleton imported by 33 modules; logging_config imports it and setup_logging creates log directories at import time.",
+        "api/routes.py keeps module-level mutable state (_current_optimizer, _current_run_id) mutated by handlers.",
+        "api/main.py performs route re-registration and late imports at module scope to work around include_router.",
+        "ui/web.py (legacy) defines a module-level app_state dict and templates at import time.",
+        "Route table registration is two include_router calls; logging setup is entrypoint-only; current-run globals remain."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Route table registration is two include_router calls; logging setup is entrypoint-only; current-run globals remain."
+    },
+    "design_coherence": {
+      "evidence": [
+        "cli/main.py optimize/auto are 603-line functions that perform parsing, preflight, orchestration and rendering in one body.",
+        "services/optimizer.py _test_config is 244 lines and combines load, benchmark, quality, persistence and cleanup.",
+        "Two optimization engines and two checkpoint/persistence paths implement overlapping responsibilities.",
+        "Many functions accept wide settings dicts instead of a focused context object, so responsibilities leak across layers.",
+        "One optimizer/workflow/checkpoint path; the remaining drag is the CLI command bodies and _test_config."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "One optimizer/workflow/checkpoint path; the remaining drag is the CLI command bodies and _test_config."
+    },
+    "contract_coherence": {
+      "evidence": [
+        "save_failed_report is annotated -> Path | None but returns None for both 'winner exists' and 'no configurations', so callers cannot distinguish the reasons.",
+        "Several public helpers are annotated -> dict while returning different shapes by branch.",
+        "Module docstrings sometimes describe only the happy path (e.g. save_failed_report says 'Returns path').",
+        "Error contracts are implicit: some functions raise ValueError, others return None/False for the same kind of invalid input.",
+        "Client/benchmark/repository error contracts and failed-report semantics are documented; dict-shaped returns remain."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Client/benchmark/repository error contracts and failed-report semantics are documented; dict-shaped returns remain."
+    },
+    "logic_clarity": {
+      "evidence": [
+        "Control flow is generally direct in helpers, with early returns used for invalid input.",
+        "The largest bodies (603-line commands, 244-line _test_config, 531-line report builder) interleave unrelated branches and side effects.",
+        "Some retry/fallback paths repeat the same operation with slightly different guards, making it hard to see the single success condition.",
+        "No identical if/else branches or code-after-return were found in the sampled modules.",
+        "classify_run is the single success predicate; 46 no-await handlers became sync; retry branches remain in host loading."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "classify_run is the single success predicate; 46 no-await handlers became sync; retry branches remain in host loading."
+    },
+    "type_safety": {
+      "evidence": [
+        "693 parameters and 264 returns in production code have no annotation; 109 functions are annotated -> dict and 47 -> Any.",
+        "77 dict[str, Any] annotations remain, concentrated in defaults/duel/hostguard modules.",
+        "20 type: ignore comments exist, 12 of them in scoring/normalization.py without explanatory codes.",
+        "Enum types exist for phases/stages/status but are bypassed with raw string comparisons in several places.",
+        "AdvancedSettings, DefaultsDocument and annotated public entrypoints improve the boundary; most helpers remain untyped."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "AdvancedSettings, DefaultsDocument and annotated public entrypoints improve the boundary; most helpers remain untyped."
+    }
+  },
+  "dimension_judgment": {
+    "cross_module_architecture": {
+      "dimension_character": "The import graph has two real cycles and a small number of very high fan-in hubs, while the largest package is a flat grab bag of unrelated concerns. A developer cannot rely on dependency direction to tell them what may change independently.",
+      "score_rationale": "domain/models.py is now a re-export facade over seven aggregate modules; services/orchestration and services/host are capability subpackages."
+    },
+    "high_level_elegance": {
+      "dimension_character": "Ownership is blurred because the codebase contains two generations of the optimizer and a CLI that is also a UI layer. A new engineer would struggle to say which module owns orchestration, which owns presentation, and which is dead legacy.",
+      "score_rationale": "One workflow service, one host lifecycle module and capability subpackages replace the duplicated legacy and flat-service ownership."
+    },
+    "convention_outlier": {
+      "dimension_character": "File and symbol naming follows one convention almost everywhere, so navigation by name is reliable. The outliers are not lexical but structural: type strategy, output mechanism and test layout change by directory without an explicit rule.",
+      "score_rationale": "Unit/integration markers and the documented type strategy make the two test roots and dataclass/Pydantic split explicit."
+    },
+    "error_consistency": {
+      "dimension_character": "Error handling is defensive almost everywhere: broad catches and silent passes keep long-running optimization loops alive, but they also hide the cause and make failure modes depend on the call site. Predictability is low at module boundaries.",
+      "score_rationale": "128 silent catches log through best_effort; API 500s go through one _internal_error/exception handler."
+    },
+    "naming_quality": {
+      "dimension_character": "Names usually predict behavior and the domain vocabulary is coherent, which is the main strength. The friction comes from duplicated type names across generations and from overloaded workflow verbs in the CLI, where 'optimize' and 'auto' mean both the command and the internal routine.",
+      "score_rationale": "Legacy duplicate state is gone; internal CLI workflow helpers were renamed by responsibility."
+    },
+    "abstraction_fitness": {
+      "dimension_character": "Most abstractions are direct domain helpers, but the codebase also carries a layer of adapter dicts and conversion wrappers that exist only to move data between representations. The cost is paid at every boundary, especially around settings and API serialization.",
+      "score_rationale": "AdvancedSettings, build_optimizer and Pydantic model_validate replace the main implicit dict/wrapper boundaries."
+    },
+    "dependency_health": {
+      "dimension_character": "The dependency set is small and mostly current, with clear roles for the CLI, API and HTTP layers. The main drag is the two cycles plus a legacy GPU helper whose maintenance status is poor.",
+      "score_rationale": "GPUtil and both cycles are gone; requirements.txt mirrors pyproject and uv.lock pins 63 packages."
+    },
+    "low_level_elegance": {
+      "dimension_character": "At the helper level the code is direct and readable, but the large orchestration functions accumulate loading, benchmarking, quality checks, persistence and rendering in a single body. A reader must hold many side effects in mind at once.",
+      "score_rationale": "Host lifecycle and optimizer composition moved out of the 5.7k-LOC CLI module; silent catches are logged."
+    },
+    "mid_level_elegance": {
+      "dimension_character": "Module boundaries exist, but the data that crosses them is mostly raw dictionaries and tuples. Handoffs work, yet each layer must re-interpret the same keys, which makes integration seams fragile and duplicates policy.",
+      "score_rationale": "CLI/API/auto-run compose through one workflow/settings boundary; config detail has one presenter."
+    },
+    "test_strategy": {
+      "dimension_character": "Test coverage is broad and the suite is fast, so developers get real feedback. The gaps are structural: the legacy engine/checkpoint path is untested, and the two-root layout makes it unclear which tests are the canonical regression suite.",
+      "score_rationale": "1508 tests pass; MockTransport contract tests and unit/integration markers were added."
+    },
+    "api_surface_coherence": {
+      "dimension_character": "The API is broad and mostly REST-shaped, but its response contracts are inconsistent: some endpoints are typed, most are not. A client developer cannot rely on the generated schema or on a single error envelope.",
+      "score_rationale": "Core endpoints have response models, one error boundary, typed converters and supported include_router registration."
+    },
+    "authorization_consistency": {
+      "dimension_character": "Authorization is uniformly absent rather than inconsistently applied: the app is a localhost tool, and every route trusts the local caller. Within that model the behavior is predictable, but the trust boundary is implicit and not documented at the API surface.",
+      "score_rationale": "Remote binds require LM_OPTIMIZER_API_TOKEN; mutating non-loopback requests need X-API-Token."
+    },
+    "ai_generated_debt": {
+      "dimension_character": "The code does not read like unedited generated output: comments are sparse and names are domain-specific. The debt is behavioral rather than cosmetic, mostly defensive exception handling and leftover console output in service paths.",
+      "score_rationale": "Service prints are gone, 128 silent catches log, and long-function docstrings now list side effects."
+    },
+    "incomplete_migration": {
+      "dimension_character": "A full legacy stack coexists with the new one, and the migration is documented but not finished. Active modules still reach into the old client and engine, so the boundary between current and retired code is not real.",
+      "score_rationale": "Legacy engine/web/checkpoint/runner are deleted; discovery now uses the service client and api/client is documented as test-only."
+    },
+    "package_organization": {
+      "dimension_character": "The core packages are named by capability and are easy to navigate. The degradation is at the edges: a flat services grab bag, ad-hoc root scripts and a tools directory that mixes durable utilities with campaign leftovers.",
+      "score_rationale": "Domain aggregates, orchestration and host are now purpose-named packages; services/ is materially less flat."
+    },
+    "initialization_coupling": {
+      "dimension_character": "Boot order matters more than it should: importing a module can create directories, register routes or capture the config snapshot. Global mutable state in the API layer further couples requests to process history.",
+      "score_rationale": "Route table registration is two include_router calls; logging setup is entrypoint-only; current-run globals remain."
+    },
+    "design_coherence": {
+      "dimension_character": "Design decisions are locally reasonable but globally inconsistent: the active optimizer has a clear phase pipeline, while the CLI and the legacy stack duplicate orchestration. Large functions accumulate multiple responsibilities instead of composing collaborators.",
+      "score_rationale": "One optimizer/workflow/checkpoint path; the remaining drag is the CLI command bodies and _test_config."
+    },
+    "contract_coherence": {
+      "dimension_character": "Contracts are mostly honest at the dataclass level, but function-level contracts drift at the edges: None signals multiple outcomes, dict returns vary, and docstrings omit failure paths. A developer often has to read the body to know what a call can produce.",
+      "score_rationale": "Client/benchmark/repository error contracts and failed-report semantics are documented; dict-shaped returns remain."
+    },
+    "logic_clarity": {
+      "dimension_character": "Small functions are easy to trace, but the long orchestration bodies require holding several concurrent states (loaded model, current config, retry budget, report data). The logic is not wrong, but it is not always locally obvious what the success condition is.",
+      "score_rationale": "classify_run is the single success predicate; 46 no-await handlers became sync; retry branches remain in host loading."
+    },
+    "type_safety": {
+      "dimension_character": "Type annotations are trustworthy in the domain dataclasses and Pydantic schemas, but large parts of the service and CLI surface are untyped or typed as dict/Any. A developer cannot rely on annotations to describe runtime behavior across boundaries.",
+      "score_rationale": "AdvancedSettings, DefaultsDocument and annotated public entrypoints improve the boundary; most helpers remain untyped."
+    }
+  },
+  "issues": [
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "remaining_flat_services",
+      "summary": "About fifty services modules still sit at the package root",
+      "confidence": "medium",
+      "suggestion": "Continue the same split for benchmarking, lab and defaults; keep compatibility facades.",
+      "related_files": [
+        "lm_optimizer/services"
+      ],
+      "evidence": [
+        "orchestration and host are subpackages, but benchmarking/lab/defaults modules remain flat."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "two_optimization_engines",
+      "summary": "Two optimization engines own overlapping responsibilities",
+      "confidence": "high",
+      "suggestion": "Delete the legacy engine after migrating its three importers, or demote it to a thin adapter over AdaptiveOptimizer; keep one orchestration owner.",
+      "related_files": [
+        "lm_optimizer/services/optimizer.py",
+        "lm_optimizer/optimizer/engine.py"
+      ],
+      "evidence": [
+        "services/optimizer.py defines AdaptiveOptimizer, OptimizationState and the phase pipeline used by CLI/API.",
+        "optimizer/engine.py defines OptimizationEngine, its own OptimizationStage/State/Result and is only kept for backward compatibility."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "cli_monolith",
+      "summary": "cli/main.py mixes command parsing with application orchestration and rendering",
+      "confidence": "high",
+      "suggestion": "Extract preflight/host lifecycle into services and move command bodies into cli/commands/* modules; keep main.py to Typer registration and output composition.",
+      "related_files": [
+        "lm_optimizer/cli/main.py"
+      ],
+      "evidence": [
+        "The file is 5,718 LOC and contains the 603-line optimize and auto command bodies, 244-line preflight, and 362-line result renderer.",
+        "Preflight, host lifecycle and report generation are reusable operations but live inside the CLI module."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "two_test_roots",
+      "summary": "Two test roots remain even though the split is documented",
+      "confidence": "low",
+      "suggestion": "Consolidate into tests/ by domain when the remaining modules move.",
+      "related_files": [
+        "tests",
+        "lm_optimizer/tests"
+      ],
+      "evidence": [
+        "Markers now make unit vs integration explicit, but the physical split remains."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "retry_fallback_branching",
+      "summary": "Host load retries still branch across response, poll and re-raise paths",
+      "confidence": "medium",
+      "suggestion": "Extract one attempt function and drive retries from one loop with an explicit policy.",
+      "related_files": [
+        "lm_optimizer/services/host/lm_studio.py"
+      ],
+      "evidence": [
+        "The fallback works but a single attempt function would make the success condition explicit."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "naming_quality",
+      "identifier": "generic_tool_script_names",
+      "summary": "Tool scripts use campaign shorthand instead of purpose names",
+      "confidence": "medium",
+      "suggestion": "Rename durable scripts by action and target (e.g. benchmark_16k_suite.py) and archive one-off campaign scripts under tools/archive/ with a README.",
+      "related_files": [
+        "tools/speed16k_part2.py",
+        "tools/swift_runs.py",
+        "tools/full_standard_rest.py"
+      ],
+      "evidence": [
+        "The tools/ directory contains 39 scripts named after one-off campaigns (speed16k_*, swift_*).",
+        "A reader cannot tell from the name which script is still useful or what input it expects."
+      ],
+      "impact_scope": "local",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "remaining_dynamic_dicts",
+      "summary": "Duel judge and host snapshots still use dynamic dicts",
+      "confidence": "medium",
+      "suggestion": "Add total=False TypedDicts for the known judge and host snapshot fields.",
+      "related_files": [
+        "lm_optimizer/services/duel.py",
+        "lm_optimizer/services/host/hostguard.py"
+      ],
+      "evidence": [
+        "These are external model/OS payloads, but their known keys are not typed."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "dependency_health",
+      "identifier": "lockfile_update_drift",
+      "summary": "No CI check keeps uv.lock in sync with pyproject",
+      "confidence": "medium",
+      "suggestion": "Add `uv lock --check` to CI.",
+      "related_files": [
+        "uv.lock",
+        "pyproject.toml"
+      ],
+      "evidence": [
+        "uv.lock is committed but regeneration is manual."
+      ],
+      "impact_scope": "local",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "giant_command_bodies",
+      "summary": "CLI command bodies mix parsing, preflight, orchestration and rendering",
+      "confidence": "high",
+      "suggestion": "Extract one function per phase (prepare, execute, persist, render) and keep the command body as a short composition; pass a small prepared-context object instead of a dozen locals.",
+      "related_files": [
+        "lm_optimizer/cli/main.py"
+      ],
+      "evidence": [
+        "optimize and auto are each 603 lines; _auto is 402 and _display_optimization_result is 362.",
+        "Each body performs several side-effecting phases sequentially with shared local state."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "report_monolith",
+      "summary": "Report generation is one 531-line function with many inline formatting branches",
+      "confidence": "high",
+      "suggestion": "Split into section builders that each return lines, then compose them in save_best_report; this keeps formatting testable without changing output.",
+      "related_files": [
+        "lm_optimizer/services/reporting.py"
+      ],
+      "evidence": [
+        "save_best_report builds every section (header, config table, quality, ladder, presets, diagnostics) in one body.",
+        "Section formatting is interleaved with data lookup and fallback handling."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "remaining_presenter_shapes",
+      "summary": "Some API payloads still vary by branch",
+      "confidence": "medium",
+      "suggestion": "Return typed models or TypedDicts for the remaining resources.",
+      "related_files": [
+        "lm_optimizer/api/routes.py"
+      ],
+      "evidence": [
+        "Config detail has one presenter, but list/export/default payloads still use optional dict keys."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "test_strategy",
+      "identifier": "split_test_roots",
+      "summary": "Unit and integration tests still live in two roots",
+      "confidence": "low",
+      "suggestion": "Consolidate by domain or keep markers as the long-term contract.",
+      "related_files": [
+        "tests",
+        "lm_optimizer/tests"
+      ],
+      "evidence": [
+        "Markers document the split but do not consolidate it."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "untyped_responses",
+      "summary": "Most API handlers return untyped dicts instead of response models",
+      "confidence": "high",
+      "suggestion": "Add response_model (or typed return annotations) to every public handler and move inline dict construction into schemas/presenters.",
+      "related_files": [
+        "lm_optimizer/api/routes.py",
+        "lm_optimizer/api/schemas.py"
+      ],
+      "evidence": [
+        "Only 12 of 62 @router handlers set response_model.",
+        "Handlers such as list_models, get_status and get_runs build dicts inline."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "local_routes_unauthenticated",
+      "summary": "Loopback routes remain unauthenticated by design",
+      "confidence": "medium",
+      "suggestion": "Add a user/session model only if the tool becomes multi-user.",
+      "related_files": [
+        "lm_optimizer/api/routes.py",
+        "lm_optimizer/web_main.py"
+      ],
+      "evidence": [
+        "Remote mutators require a token; local traffic bypasses it so the UI works."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "remaining_defensive_catches",
+      "summary": "Some broad catches remain in API and lab paths",
+      "confidence": "medium",
+      "suggestion": "Audit the remaining broad catches and keep only documented tolerances.",
+      "related_files": [
+        "lm_optimizer/api/routes.py",
+        "lm_optimizer/cli/lab.py"
+      ],
+      "evidence": [
+        "The 128 silent passes were logged, but a few broad catches still build fallback responses."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "api_client_test_only",
+      "summary": "api/client.py remains as a test-only compatibility module",
+      "confidence": "medium",
+      "suggestion": "Move the remaining tests to the service client and delete api/client.py.",
+      "related_files": [
+        "lm_optimizer/api/client.py"
+      ],
+      "evidence": [
+        "Production discovery now uses services/host/lm_studio, but tests still import the legacy client."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "root_script_stragglers",
+      "summary": "Hardware scripts sit at the repository root instead of with the hardware package or tools",
+      "confidence": "high",
+      "suggestion": "Move them under tools/ (or lm_optimizer/hardware/) and update entrypoints/README references.",
+      "related_files": [
+        "hw_monitor.py",
+        "vram_matrix.py"
+      ],
+      "evidence": [
+        "Both root files have low fan-in and import lm_optimizer.services/domain.",
+        "The hardware package already owns detection and monitoring."
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "tools_mixed_durability",
+      "summary": "tools/ mixes durable utilities with one-off campaign scripts",
+      "confidence": "medium",
+      "suggestion": "Move one-off scripts to tools/archive/ with a README, and rename durable tools by action (validate_live.py, audit_webui.py).",
+      "related_files": [
+        "tools/speed16k_part2.py",
+        "tools/live_validation.py",
+        "tools/webui_audit.py"
+      ],
+      "evidence": [
+        "39 scripts include reusable probes (live_validation, webui_audit) and dated campaign slices (speed16k_part2, speed16k_remaining_rerun).",
+        "No README or naming rule distinguishes them."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "initialization_coupling",
+      "identifier": "module_level_mutable_api_state",
+      "summary": "API routes keep current optimizer/run in module-level globals",
+      "confidence": "high",
+      "suggestion": "Move current-run state into app.state or a small RunRegistry created in the lifespan hook and injected via dependency.",
+      "related_files": [
+        "lm_optimizer/api/routes.py"
+      ],
+      "evidence": [
+        "_current_optimizer and _current_run_id are assigned inside request handlers and read by later requests.",
+        "The scan reports 5 mutations of module-level state in this file."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "multi_responsibility_commands",
+      "summary": "Command functions own several distinct responsibilities",
+      "confidence": "high",
+      "suggestion": "Extract a shared optimization workflow service and keep CLI commands as thin adapters that parse input and render results.",
+      "related_files": [
+        "lm_optimizer/cli/main.py"
+      ],
+      "evidence": [
+        "optimize/auto combine argument validation, preflight, host lifecycle, run execution and report rendering.",
+        "The same responsibilities are also implemented in the API path."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "test_config_multi_responsibility",
+      "summary": "_test_config combines load, benchmark, quality and persistence",
+      "confidence": "high",
+      "suggestion": "Split into load_candidate, measure_candidate, evaluate_candidate and record_candidate steps composed by _test_config.",
+      "related_files": [
+        "lm_optimizer/services/optimizer.py"
+      ],
+      "evidence": [
+        "The 244-line function loads a model, runs cases, evaluates quality, records results and cleans up in one body.",
+        "Failure handling for each stage is interleaved."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "contract_coherence",
+      "identifier": "dict_return_shapes",
+      "summary": "Public helpers annotated -> dict return different key sets by branch",
+      "confidence": "medium",
+      "suggestion": "Return Pydantic models or TypedDicts with required/optional fields, and keep raw dicts only at serialization boundaries.",
+      "related_files": [
+        "lm_optimizer/api/routes.py",
+        "lm_optimizer/services/lmstudio_defaults.py"
+      ],
+      "evidence": [
+        "Several handlers and default helpers return dict with optional keys added conditionally.",
+        "Callers use .get(...) because the annotation does not promise a shape."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "logic_clarity",
+      "identifier": "retry_fallback_branching",
+      "summary": "Retry and fallback branches repeat load/benchmark logic with slightly different guards",
+      "confidence": "medium",
+      "suggestion": "Extract a single attempt function returning an outcome and drive retries from one loop with an explicit retry policy.",
+      "related_files": [
+        "lm_optimizer/services/lm_studio.py",
+        "lm_optimizer/services/benchmark.py"
+      ],
+      "evidence": [
+        "LM Studio load fallback checks response, then polls loaded instances, then re-raises with a different message.",
+        "Benchmark reasoning fallback runs the same case twice with a conditional keep."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "type_safety",
+      "identifier": "untyped_service_surface",
+      "summary": "Most service parameters and returns remain unannotated",
+      "confidence": "high",
+      "suggestion": "Annotate public service APIs incrementally and enable mypy on the typed boundary.",
+      "related_files": [
+        "lm_optimizer/services"
+      ],
+      "evidence": [
+        "Public entrypoints are typed, but the AST census still finds hundreds of unannotated helpers."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor"
+    }
+  ],
+  "review_quality": {
+    "batch_count": 20,
+    "dimension_coverage": 0.05,
+    "evidence_density": 4.5,
+    "high_score_missing_issue_note": 0
+  },
+  "context_updates": {
+    "cross_module_architecture": {
+      "add": [
+        {
+          "header": "Explicit backend seam",
+          "description": "backends/base.py defines BackendClient and assert_conforms, and OllamaClient implements the seam; backend-specific code is not spread through the domain.",
+          "settled": true,
+          "positive": true
+        },
+        {
+          "header": "Single authoritative web app",
+          "description": "web_main.py launches api.main:app, and ui/web.py is explicitly marked as deprecated reference code, so the current entrypoint is unambiguous.",
+          "settled": true,
+          "positive": true
+        }
+      ]
+    },
+    "high_level_elegance": {
+      "add": [
+        {
+          "header": "Documented authoritative entrypoint",
+          "description": "The deprecated ui/web.py docstring names api.main:app as authoritative, which prevents a new engineer from wiring the wrong app.",
+          "settled": true,
+          "positive": true
+        },
+        {
+          "header": "Phase vocabulary is explicit",
+          "description": "OptimizationPhase/OptimizationStage enumerate the pipeline stages instead of relying on implicit string flow, which gives the orchestration a readable spine.",
+          "settled": true,
+          "positive": true
+        }
+      ]
+    },
+    "convention_outlier": {
+      "add": [
+        {
+          "header": "Consistent snake_case",
+          "description": "1,666 detected names across all packages use snake_case, so lexical convention is not a source of friction.",
+          "settled": true,
+          "positive": true
+        },
+        {
+          "header": "Mirrored test module names",
+          "description": "Most test modules are named after the production module they cover, which makes coverage discovery predictable.",
+          "settled": true,
+          "positive": true
+        }
+      ]
+    },
+    "error_consistency": {
+      "add": [
+        {
+          "header": "Per-case benchmark outcomes",
+          "description": "BenchmarkService records success=False and an error per case instead of aborting the whole sweep, which keeps one bad prompt from losing a run.",
+          "settled": true,
+          "positive": true
+        },
+        {
+          "header": "Checkpoint-before-cancel",
+          "description": "Cancellation paths explicitly checkpoint state before unwinding, preserving recoverability across failures.",
+          "settled": true,
+          "positive": true
+        }
+      ]
+    },
+    "naming_quality": {
+      "add": [
+        {
+          "header": "Stable domain vocabulary",
+          "description": "Terms such as run, configuration, phase, winner and ladder are used consistently across CLI, API and services, so domain names transfer between layers.",
+          "settled": true,
+          "positive": true
+        }
+      ]
+    },
+    "abstraction_fitness": {
+      "add": [
+        {
+          "header": "Backend seam has real implementations",
+          "description": "The BackendClient protocol is implemented by OllamaClient and exercised by conformance checks, so the abstraction has more than one consumer.",
+          "settled": true,
+          "positive": true
+        },
+        {
+          "header": "Phase helpers are policy-bearing",
+          "description": "Functions such as parse_phase_skips and compose_granular_skips encode real skip semantics rather than forwarding arguments.",
+          "settled": true,
+          "positive": true
+        }
+      ]
+    },
+    "dependency_health": {
+      "add": [
+        {
+          "header": "Focused dependency set",
+          "description": "One HTTP client (httpx), one settings stack (pydantic-settings) and one CLI/UI stack (Typer/Rich + FastAPI) avoid duplicate-purpose libraries.",
+          "settled": true,
+          "positive": true
+        }
+      ]
+    },
+    "low_level_elegance": {
+      "add": [
+        {
+          "header": "Small pure helpers",
+          "description": "Helpers such as _looks_incomplete, _sample_mem and _extract_mtp_metrics are short, side-effect-light and easy to test.",
+          "settled": true,
+          "positive": true
+        }
+      ]
+    },
+    "mid_level_elegance": {
+      "add": [
+        {
+          "header": "Explicit phase pipeline",
+          "description": "The optimizer exposes ordered phases and skip names, so the CLI/API handoff for phase control is at least named and testable.",
+          "settled": true,
+          "positive": true
+        }
+      ]
+    },
+    "test_strategy": {
+      "add": [
+        {
+          "header": "Fast broad regression suite",
+          "description": "About 1,490 tests run in roughly five minutes, covering phases, scoring, persistence and CLI/UI parity.",
+          "settled": true,
+          "positive": true
+        },
+        {
+          "header": "Targeted regression tests for live findings",
+          "description": "Load-response loss, echo-probe cleanup and context-speed ladder retries each gained a dedicated test after being found live.",
+          "settled": true,
+          "positive": true
+        }
+      ]
+    },
+    "api_surface_coherence": {
+      "add": [
+        {
+          "header": "Typed core contracts",
+          "description": "Run, settings, compare, sandbox and judge endpoints use Pydantic response models, giving the most important payloads a stable schema.",
+          "settled": true,
+          "positive": true
+        }
+      ]
+    },
+    "authorization_consistency": {
+      "add": [
+        {
+          "header": "Localhost-first defaults",
+          "description": "The web UI binds 127.0.0.1 by default and CORS allows only localhost origins, reducing accidental network exposure.",
+          "settled": true,
+          "positive": true
+        }
+      ]
+    },
+    "ai_generated_debt": {
+      "add": [
+        {
+          "header": "Sparse, why-focused comments",
+          "description": "The 2.5% comment ratio and short docstrings avoid restating code; comments generally explain constraints or intent.",
+          "settled": true,
+          "positive": true
+        }
+      ]
+    },
+    "incomplete_migration": {
+      "add": [
+        {
+          "header": "Authoritative app is documented",
+          "description": "web_main.py launches api.main:app and the deprecated module points to it, so the target of the migration is unambiguous.",
+          "settled": true,
+          "positive": true
+        }
+      ]
+    },
+    "package_organization": {
+      "add": [
+        {
+          "header": "Capability-named core packages",
+          "description": "domain, storage, backends, benchmark and scoring are named by responsibility, so the main layout is self-explanatory.",
+          "settled": true,
+          "positive": true
+        }
+      ]
+    },
+    "initialization_coupling": {
+      "add": [
+        {
+          "header": "Centralized settings",
+          "description": "pydantic-settings provides one typed config object with environment support, avoiding scattered os.environ reads in most modules.",
+          "settled": true,
+          "positive": true
+        },
+        {
+          "header": "Explicit lifespan hook",
+          "description": "The FastAPI app uses a lifespan context for startup/shutdown work, giving a clear place for future initialization.",
+          "settled": true,
+          "positive": true
+        }
+      ]
+    },
+    "design_coherence": {
+      "add": [
+        {
+          "header": "Phase pipeline as composition",
+          "description": "AdaptiveOptimizer runs named phases (speed, context speed, quality, recovery, validation) with explicit skip handling, which is a coherent orchestration spine.",
+          "settled": true,
+          "positive": true
+        }
+      ]
+    },
+    "contract_coherence": {
+      "add": [
+        {
+          "header": "Round-trip dataclass serialization",
+          "description": "Core domain dataclasses expose to_dict/from_dict pairs and are exercised by round-trip tests, giving persistence a reliable contract.",
+          "settled": true,
+          "positive": true
+        }
+      ]
+    },
+    "logic_clarity": {
+      "add": [
+        {
+          "header": "Guard-clause style",
+          "description": "CLI and API helpers commonly validate inputs and return/raise early, keeping the happy path visible in short functions.",
+          "settled": true,
+          "positive": true
+        }
+      ]
+    },
+    "type_safety": {
+      "add": [
+        {
+          "header": "Typed domain core",
+          "description": "Domain dataclasses and Pydantic schemas type the main entities (runs, configs, metrics, requests), giving the persistence and HTTP layers a reliable core.",
+          "settled": true,
+          "positive": true
+        }
+      ]
+    }
+  },
+  "review_scope": {
+    "reviewed_files_count": 0,
+    "successful_batch_count": 20,
+    "full_sweep_included": false,
+    "total_files": 182,
+    "imported_dimensions": [
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "contract_coherence",
+      "convention_outlier",
+      "cross_module_architecture",
+      "dependency_health",
+      "design_coherence",
+      "error_consistency",
+      "high_level_elegance",
+      "incomplete_migration",
+      "initialization_coupling",
+      "logic_clarity",
+      "low_level_elegance",
+      "mid_level_elegance",
+      "naming_quality",
+      "package_organization",
+      "test_strategy",
+      "type_safety"
+    ]
+  },
+  "provenance": {
+    "kind": "blind_review_batch_import",
+    "blind": true,
+    "runner": "dry-run",
+    "run_stamp": "20261103_183647",
+    "created_at": "2026-11-03T18:37:24+00:00",
+    "batch_count": 20,
+    "batch_indexes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20
+    ],
+    "packet_path": "C:\\Users\\DracieVajko\\Downloads\\PC_Commands\\AI\\LM_Studio_Optimiser\\.desloppify\\review_packet_blind.json",
+    "packet_sha256": "1d85f50ee36c10f4bdb4367dd4a6c82e67f2ba731ab81973c7ba818f56f6d769"
+  },
+  "assessment_coverage": {
+    "scored_dimensions": [
+      "naming_quality",
+      "logic_clarity",
+      "type_safety",
+      "contract_coherence",
+      "error_consistency",
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "high_level_elegance",
+      "mid_level_elegance",
+      "low_level_elegance",
+      "cross_module_architecture",
+      "initialization_coupling",
+      "convention_outlier",
+      "dependency_health",
+      "test_strategy",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "incomplete_migration",
+      "package_organization",
+      "design_coherence"
+    ],
+    "selected_dimensions": [
+      "naming_quality",
+      "logic_clarity",
+      "type_safety",
+      "contract_coherence",
+      "error_consistency",
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "high_level_elegance",
+      "mid_level_elegance",
+      "low_level_elegance",
+      "cross_module_architecture",
+      "initialization_coupling",
+      "convention_outlier",
+      "dependency_health",
+      "test_strategy",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "incomplete_migration",
+      "package_organization",
+      "design_coherence"
+    ],
+    "imported_dimensions": [
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "contract_coherence",
+      "convention_outlier",
+      "cross_module_architecture",
+      "dependency_health",
+      "design_coherence",
+      "error_consistency",
+      "high_level_elegance",
+      "incomplete_migration",
+      "initialization_coupling",
+      "logic_clarity",
+      "low_level_elegance",
+      "mid_level_elegance",
+      "naming_quality",
+      "package_organization",
+      "test_strategy",
+      "type_safety"
+    ],
+    "missing_dimensions": []
+  }
+}

@@ -1,0 +1,189 @@
+{
+  "computed_at": "2026-11-03T14:02:02.466279+00:00",
+  "lookback_scans": 8,
+  "focus_dimensions": [
+    {
+      "name": "high_level_elegance",
+      "reason": "cli/main.py still owns parsing, preflight, orchestration and rendering; splitting it has the largest leverage on three elegance dimensions.",
+      "headroom": 34,
+      "trend": "improving"
+    },
+    {
+      "name": "mid_level_elegance",
+      "reason": "The advanced-settings dict is the main handoff object across CLI/API -> optimizer -> benchmark, with defaults re-applied at each layer.",
+      "headroom": 39,
+      "trend": "stable"
+    },
+    {
+      "name": "type_safety",
+      "reason": "693 unannotated parameters and 77 dict[str, Any] annotations keep the service surface only partially typed.",
+      "headroom": 39,
+      "trend": "improving"
+    },
+    {
+      "name": "design_coherence",
+      "reason": "_test_config and the CLI command bodies still combine several responsibilities in one body.",
+      "headroom": 35,
+      "trend": "improving"
+    },
+    {
+      "name": "error_consistency",
+      "reason": "152 silent broad catches remain, concentrated in optimizer.py and api/routes.py.",
+      "headroom": 37,
+      "trend": "stable"
+    },
+    {
+      "name": "cross_module_architecture",
+      "reason": "domain/models.py is a 112-importer hub and services/ is a flat 29k-LOC package.",
+      "headroom": 33,
+      "trend": "improving"
+    },
+    {
+      "name": "incomplete_migration",
+      "reason": "discovery/inspector.py still imports the legacy api/client; the rest of the deprecated stack is gone.",
+      "headroom": 26,
+      "trend": "improving"
+    },
+    {
+      "name": "authorization_consistency",
+      "reason": "Remote bind is now guarded, but no token exists; state-changing routes are unauthenticated.",
+      "headroom": 32,
+      "trend": "improving"
+    }
+  ],
+  "avoid_areas": [
+    {
+      "name": "tools/ campaign scripts",
+      "reason": "39 one-off scripts; renaming or consolidating them is low score value and high churn.",
+      "type": "low-leverage churn"
+    },
+    {
+      "name": "documentation formatting",
+      "reason": "Docs are not scored and were already updated for the legacy removal.",
+      "type": "unscored rewrites"
+    },
+    {
+      "name": "legacy api/client before a port plan",
+      "reason": "Tests still import it; delete only after discovery and tests move to services/lm_studio.",
+      "type": "blocked deletion"
+    }
+  ],
+  "rework_warnings": [],
+  "file_churn_hotspots": [
+    {
+      "file": "lm_optimizer/cli/main.py",
+      "count": 9,
+      "detectors": [
+        "structural",
+        "complexity",
+        "review"
+      ]
+    },
+    {
+      "file": "lm_optimizer/services/optimizer.py",
+      "count": 8,
+      "detectors": [
+        "structural",
+        "review",
+        "error"
+      ]
+    },
+    {
+      "file": "lm_optimizer/api/routes.py",
+      "count": 8,
+      "detectors": [
+        "review",
+        "security",
+        "error"
+      ]
+    }
+  ],
+  "stagnant_dimensions": [
+    "error_consistency",
+    "mid_level_elegance",
+    "logic_clarity",
+    "abstraction_fitness"
+  ],
+  "debt_trend": "shrinking",
+  "score_trend": "improving",
+  "momentum_dimensions": [
+    "incomplete_migration",
+    "dependency_health",
+    "test_strategy",
+    "naming_quality",
+    "ai_generated_debt"
+  ],
+  "executive_summary": "The repository moved from a duplicated legacy stack to a single orchestration and web path, which removed both import cycles, the deprecated UI/engine/checkpoint modules and the unmaintained GPUtil dependency. Strict score improved from 68.4 to 70.2 and the full suite is green at 1,494 tests. The remaining drag is concentrated rather than systemic: the CLI and services packages are too large, the advanced-settings handoff is still an untyped dict, and broad silent catches hide failures in orchestration paths. The next phase should split responsibilities along existing seams and type the public service boundary before attempting cosmetic cleanup in tools/ or docs.",
+  "observe_guidance": "Verify claims against the current tree rather than the previous review: the legacy stack, cycles and GPUtil are gone, so focus observation on cli/main.py, services/optimizer.py and api/routes.py where size and error handling still concentrate risk.",
+  "reflect_guidance": "Prioritize high_level_elegance, mid_level_elegance, type_safety and design_coherence; avoid re-litigating resolved migration findings and avoid churning tools/ scripts.",
+  "organize_guidance": "Order work by blast radius: first extract the shared optimization workflow from the CLI, then introduce a typed AdvancedSettings boundary, then reduce silent catches in optimizer/routes. Keep api/client deletion blocked until discovery is ported.",
+  "sense_check_guidance": "The highest risk is score-neutral churn in large files without reducing responsibility count. Prefer one structural extraction per file over scattered renames, and do not add abstraction layers that only forward arguments.",
+  "anti_patterns": [
+    {
+      "type": "score-neutral churn",
+      "description": "Renaming or archiving tools/ scripts has little impact on the scored production surface.",
+      "evidence": "39 tools/ scripts, most one-off campaign slices."
+    },
+    {
+      "type": "deferred structural work",
+      "description": "The CLI monolith and services flat package have been identified in multiple reviews but not yet split.",
+      "evidence": "cli/main.py 5,718 LOC; services/ 29k LOC."
+    }
+  ],
+  "strategic_issues": [
+    {
+      "identifier": "split-cli-orchestration",
+      "summary": "Extract the shared optimization workflow out of the CLI command bodies.",
+      "priority": "critical",
+      "recommendation": "Move preflight, host lifecycle, run execution and report rendering into a workflow service; keep Typer commands as thin adapters.",
+      "dimensions_affected": [
+        "high_level_elegance",
+        "design_coherence",
+        "low_level_elegance"
+      ]
+    },
+    {
+      "identifier": "typed-advanced-settings",
+      "summary": "Replace the advanced-settings dict with a typed boundary object.",
+      "priority": "high",
+      "recommendation": "Define AdvancedSettings at the CLI/API boundary, validate once, and pass it through prepare_run/execute.",
+      "dimensions_affected": [
+        "type_safety",
+        "mid_level_elegance",
+        "abstraction_fitness"
+      ]
+    },
+    {
+      "identifier": "silent-catch-audit",
+      "summary": "Audit the 152 silent broad catches and log or propagate unexpected failures.",
+      "priority": "high",
+      "recommendation": "Introduce one logged best-effort helper and replace copied except/pass blocks in optimizer.py and routes.py.",
+      "dimensions_affected": [
+        "error_consistency",
+        "ai_generated_debt"
+      ]
+    },
+    {
+      "identifier": "api-response-models",
+      "summary": "Add response models to the 50 untyped API handlers.",
+      "priority": "high",
+      "recommendation": "Define Pydantic response schemas for status, models, runs, progress and presets, then set response_model on every public route.",
+      "dimensions_affected": [
+        "api_surface_coherence",
+        "contract_coherence",
+        "type_safety"
+      ]
+    },
+    {
+      "identifier": "split-services-package",
+      "summary": "Split the flat services package by capability.",
+      "priority": "medium",
+      "recommendation": "Create orchestration, benchmarking, persistence, reporting and host_lifecycle subpackages with small public APIs.",
+      "dimensions_affected": [
+        "cross_module_architecture",
+        "high_level_elegance",
+        "package_organization"
+      ]
+    }
+  ]
+}
