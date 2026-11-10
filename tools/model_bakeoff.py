@@ -67,13 +67,16 @@ def _resolve_models(spec: str) -> list[str]:
     return resolved
 
 
-def _load_config(model: str, context: int) -> tuple[LoadConfiguration, int]:
+def _load_config(model: str, context: int, kv_ram: bool = False) -> tuple[LoadConfiguration, int]:
     try:
         cfg, _ = _load_best_config(model)
     except ValueError:
         cfg = LoadConfiguration(context_length=context)
     # A fixed context makes the comparison fair and bounds KV-cache cost.
-    return replace(cfg, context_length=context), context
+    cfg = replace(cfg, context_length=context)
+    if kv_ram:
+        cfg = replace(cfg, offload_kv_cache_to_gpu=False)
+    return cfg, context
 
 
 async def _run_task(
@@ -194,12 +197,13 @@ async def _run_model(
     context: int,
     root: Path,
     reasoning_effort: str,
+    kv_ram: bool = False,
 ) -> list[dict]:
     client = get_client()
     rows: list[dict] = []
     await client.connect(echo_probe=False)
     try:
-        cfg, _ = _load_config(model, context)
+        cfg, _ = _load_config(model, context, kv_ram)
         gate = ModelGate(client)
         print(f"[load] {model} ctx={context}", flush=True)
         try:
@@ -309,6 +313,7 @@ async def main_async(args) -> int:
                 context=args.context,
                 root=root,
                 reasoning_effort=args.reasoning_effort,
+                kv_ram=args.kv_ram,
             )
         except Exception as exc:  # one bad model must not stop the sweep
             print(f"[model] {model} crashed: {type(exc).__name__}: {exc}", flush=True)
@@ -335,6 +340,11 @@ def main() -> int:
     parser.add_argument("--tasks", default=DEFAULT_TASKS, help="comma separated sandbox task ids")
     parser.add_argument("--context", type=int, default=8192, help="fixed context for every model")
     parser.add_argument("--thinking", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--kv-ram",
+        action="store_true",
+        help="keep the KV cache in system RAM (offload_kv_cache_to_gpu=false)",
+    )
     parser.add_argument(
         "--reasoning-effort",
         default="on",

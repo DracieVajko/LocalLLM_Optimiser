@@ -170,7 +170,11 @@ def js_syntax_errors(scripts: list[str]) -> list[str]:
                 path = handle.name
             node_path = shutil.which("node")
             if not node_path:
-                return False, "node not found"
+                # Node is an optional checker: without it we cannot validate
+                # inline JS, so do not fail the task (same as FileNotFoundError
+                # below). Returning a tuple here used to crash the "; ".join
+                # in validate_web_files on hosts without Node.
+                return []
             proc = subprocess.run(
                 [node_path, "--check", path],
                 capture_output=True,

@@ -118,3 +118,12 @@ def test_js_syntax_errors_empty_for_valid_code():
 
 def test_js_syntax_errors_ignores_blank_scripts():
     assert js_syntax_errors(["   ", ""]) == []
+
+def test_missing_node_does_not_fail_inline_js(monkeypatch):
+    # On CI hosts without Node, the validator must skip JS syntax checking
+    # rather than crash on a (False, "...") tuple.
+    import lm_optimizer.services.web_validator as web_validator
+
+    monkeypatch.setattr(web_validator.shutil, "which", lambda exe: None)
+    checks = _checks_by_name({"index.html": GOOD_HTML})
+    assert checks["inline_js_parses"].passed is True

@@ -48,6 +48,12 @@ def _rows() -> list[dict]:
             rows.append(json.loads(line))
         except json.JSONDecodeError:
             continue
+    # Keep the latest record per (model, task); append-only history can contain
+    # failed retries of the same run. The latest row is the current status.
+    deduped: dict[tuple[str, str], dict] = {}
+    for row in rows:
+        deduped[(str(row.get("model", "")), str(row.get("task", "")))] = row
+    rows = list(deduped.values())
     # Agent-generated artifacts are scored by the sandbox harness, so their
     # records live in sandbox_runs.jsonl. Merge them with load/gen semantics
     # that make clear no LM Studio load happened.
