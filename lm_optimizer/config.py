@@ -145,6 +145,48 @@ class SafetyConfig(BaseSettings):
     )
 
 
+class ModelGateConfig(BaseSettings):
+    """Cross-backend model slot policy (LM Studio, Ollama, llama.cpp).
+
+    The gate never unloads a model it did not load. When every slot is busy
+    it waits and re-checks instead of failing the job, then tries fallbacks
+    only after the timeout.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="MODEL_GATE_", extra="ignore")
+
+    enabled: bool = Field(
+        default=True, description="Check loaded models before loading another one"
+    )
+    max_loaded_models: int = Field(
+        default=1,
+        ge=1,
+        description="Maximum models loaded across backends, including ours",
+    )
+    wait_timeout_s: float = Field(
+        default=3600.0,
+        ge=0.0,
+        description="How long to wait for a free slot before trying fallbacks",
+    )
+    poll_interval_s: float = Field(
+        default=180.0,
+        gt=0.0,
+        description="How often to re-check while waiting for a slot",
+    )
+    fallback_models: str = Field(
+        default="",
+        description="Comma-separated model ids tried after the wait timeout",
+    )
+    probe_timeout_s: float = Field(
+        default=2.0,
+        gt=0.0,
+        description="Per-backend HTTP probe timeout",
+    )
+
+    def fallbacks(self) -> list[str]:
+        return [m.strip() for m in self.fallback_models.split(",") if m.strip()]
+
+
 class Config(BaseSettings):
     """Main application configuration."""
 
@@ -162,6 +204,7 @@ class Config(BaseSettings):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     web_ui: WebUIConfig = Field(default_factory=WebUIConfig)
     safety: SafetyConfig = Field(default_factory=SafetyConfig)
+    model_gate: ModelGateConfig = Field(default_factory=ModelGateConfig)
 
     backend: Literal["lm-studio", "ollama", "llama-cpp"] = Field(
         default="lm-studio", description="Inference backend (llama-cpp is phase 2)"

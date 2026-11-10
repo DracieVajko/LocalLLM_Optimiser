@@ -26,6 +26,7 @@ from lm_optimizer.cli.main import get_client
 from lm_optimizer.cli.sandbox_duel import _load_best_config
 from lm_optimizer.domain.models import LoadConfiguration
 from lm_optimizer.services.sandbox_history import record_run
+from lm_optimizer.services.model_gate import ModelGate, ModelGateTimeout
 from lm_optimizer.services.sandbox_lab import SANDBOX_TASKS, SandboxPolicy
 from lm_optimizer.services.sandbox_runner import (
     SandboxRunner,
@@ -198,15 +199,13 @@ async def _run_model(
     rows: list[dict] = []
     await client.connect(echo_probe=False)
     try:
-        await client.unload_all()
         cfg, _ = _load_config(model, context)
+        gate = ModelGate(client)
         print(f"[load] {model} ctx={context}", flush=True)
-        started = time.perf_counter()
-        loaded = await client.load_model(model, cfg)
-        load_s = time.perf_counter() - started
-        if not getattr(loaded, "success", False):
-            error = getattr(loaded, "error", "load failed")
-            print(f"[load] FAILED {model}: {error}", flush=True)
+        try:
+            lease = await gate.acquire(model, cfg)
+        except ModelGateTimeout as exc:
+            print(f"[load] BLOCKED {model}: {exc}", flush=True)
             return [
                 {
                     "ts": datetime.now().isoformat(timespec="seconds"),
@@ -214,17 +213,21 @@ async def _run_model(
                     "task": "(load)",
                     "thinking": thinking,
                     "context": context,
-                    "load_s": round(load_s, 1),
-                    "error": str(error)[:300],
+                    "load_s": 0.0,
+                    "error": f"model gate: {exc}"[:300],
                 }
             ]
-        print(f"[load] ok {load_s:.1f}s", flush=True)
+        load_s = lease.load_s
+        suffix = " (reused)" if lease.reused else ""
+        if lease.fallback:
+            suffix += f" (fallback for {model})"
+        print(f"[load] ok {load_s:.1f}s{suffix}", flush=True)
         try:
             for task_id in tasks:
-                print(f"[task] {model} :: {task_id}", flush=True)
+                print(f"[task] {lease.model} :: {task_id}", flush=True)
                 row = await _run_task(
                     client,
-                    model,
+                    lease.model,
                     task_id,
                     thinking=thinking,
                     load_s=load_s,
@@ -240,7 +243,7 @@ async def _run_model(
                     flush=True,
                 )
         finally:
-            await client.ensure_unloaded(model)
+            await gate.release(lease)
     finally:
         await client.close()
     return rows

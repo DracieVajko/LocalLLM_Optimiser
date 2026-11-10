@@ -387,6 +387,31 @@ intentionally not committed.
 
 ![Minecraft-style skyblock benchmark](docs/benchmarks/minecraft_world_preview.png)
 
+## Model gate (shared local backends)
+
+Before a sandbox or bake-off run loads a model, the gate probes **LM Studio**,
+**Ollama** and **llama.cpp** for already-loaded models. Policy:
+
+- `MODEL_GATE_MAX_LOADED_MODELS` (default `1`) is the total number of loaded
+  models across backends, including the one the job needs.
+- If a slot is free, the model is loaded immediately (the preload) and stays
+  loaded for every repair attempt of the run.
+- If every slot is busy, the job does **not** fail: it waits and re-checks
+  every `MODEL_GATE_POLL_INTERVAL_S` (default 180 s) up to
+  `MODEL_GATE_WAIT_TIMEOUT_S` (default 3600 s).
+- After the timeout it tries `MODEL_GATE_FALLBACK_MODELS` (comma separated),
+  then reports a clean error if none can run.
+- The gate never unloads a model it did not load. On release it unloads exactly
+  its own model and verifies it is gone.
+- A model that is already loaded is reused without a reload; a context
+  mismatch is logged.
+
+Example: allow two models on a bigger card:
+
+```powershell
+$env:MODEL_GATE_MAX_LOADED_MODELS="2"
+```
+
 ## Blender / 3D sandbox requirements
 
 The `blender_skyblock` and `blender_city_bridge` sandbox tasks (and duel type `blender`) need **Blender installed on the host** — they run the model-generated Python script through `blender --background --python build_scene.py`, then validate that a real `scene.blend` binary was produced and frames were rendered.

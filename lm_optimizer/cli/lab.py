@@ -1008,20 +1008,17 @@ def _run_sandbox_one(
         workdir=workdir,
         command=build_command_for(definition),
     )
-    async def _generate(feedback: str) -> str:
-        if not model:
-            return ""
-        from dataclasses import replace as _replace_cfg
+    from dataclasses import replace as _replace_cfg
 
-        from lm_optimizer.cli.sandbox_duel import _load_best_config
-        from lm_optimizer.domain.models import LoadConfiguration
+    from lm_optimizer.cli.sandbox_duel import _load_best_config
+    from lm_optimizer.domain.models import LoadConfiguration
+    from lm_optimizer.services.model_gate import ModelGate, ModelGateTimeout
+    from lm_optimizer.services.sandbox_lab import SandboxResult
 
+    async def _run_with_gate():
         client = _client()
+        await client.connect(echo_probe=False)
         try:
-            await client.connect(echo_probe=False)
-            # One resident model at a time: a leftover model from an earlier
-            # experiment makes the new load fail or crash the server.
-            await client.unload_all()
             try:
                 cfg, ctx = _load_best_config(model)
                 effective = context_length or max(MIN_SANDBOX_CONTEXT, ctx or 0)
@@ -1035,21 +1032,28 @@ def _run_sandbox_one(
                 cfg = LoadConfiguration(
                     context_length=context_length or MIN_SANDBOX_CONTEXT
                 )
-            loaded = await client.load_model(model, cfg)
-            if not getattr(loaded, "success", False):
-                return ""
+
+            gate = ModelGate(client)
             try:
+                lease = await gate.acquire(model, cfg)
+            except ModelGateTimeout as exc:
+                console.print(f"[red]model gate: {exc}[/red]")
+                failed = SandboxResult(task_id=task_id)
+                failed.error = f"model gate: {exc}"[:200]
+                return failed
+
+            async def _generate(feedback: str) -> str:
                 prompt = definition.prompt
                 if feedback:
                     prompt = feedback + "\n\n" + definition.prompt
                 return await _chat(
-                    client, model, prompt, definition.max_output_tokens
+                    client, lease.model, prompt, definition.max_output_tokens
                 )
+
+            try:
+                return await runner.run_async(_generate)
             finally:
-                try:
-                    await client.ensure_unloaded(model)
-                except Exception as exc:
-                    log_best_effort("best-effort operation failed", exc)
+                await gate.release(lease)
         finally:
             try:
                 await client.close()
@@ -1058,7 +1062,10 @@ def _run_sandbox_one(
 
     import asyncio
 
-    result = asyncio.run(runner.run_async(_generate))
+    if model:
+        result = asyncio.run(_run_with_gate())
+    else:
+        result = asyncio.run(runner.run_async(lambda feedback: ""))
     # Artifact retention: keep the newest N runs per task (spec §13.5).
     from lm_optimizer.services.sandbox_runner import apply_retention
 
