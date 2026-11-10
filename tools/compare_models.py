@@ -18,7 +18,7 @@ import os
 import re
 import shutil
 import subprocess
-import tempfile
+import sys
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
@@ -184,35 +184,33 @@ def _browser_exe() -> Path | None:
     return None
 
 
+def _html_shot():
+    tools_dir = Path(__file__).resolve().parent
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    import html_shot
+
+    return html_shot
+
+
 def screenshot(path: Path, out: Path, full_page: bool = False) -> str | None:
     out.parent.mkdir(parents=True, exist_ok=True)
     uri = path.resolve().as_uri()
     height = 2600 if full_page else 900
-    browser = _browser_exe()
-    if browser is not None:
-        with tempfile.TemporaryDirectory() as profile:
-            cmd = [
-                str(browser),
-                "--headless=new",
-                "--hide-scrollbars",
-                "--allow-file-access-from-files",
-                "--enable-unsafe-swiftshader",
-                "--use-angle=swiftshader",
-                "--ignore-gpu-blocklist",
-                f"--user-data-dir={profile}",
-                f"--window-size=1280,{height}",
-                f"--screenshot={out}",
-                uri,
-            ]
-            try:
-                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
-            except Exception as exc:
-                print(f"[visual] {path.name}: {type(exc).__name__}: {exc}")
-                proc = None
-            if out.exists() and out.stat().st_size > 0:
-                return out.relative_to(OUT).as_posix()
-            if proc is not None:
-                print(f"[visual] chrome failed: {(proc.stderr or '')[-200:]}")
+
+    try:
+        _html_shot().capture(
+            uri,
+            out,
+            width=1280,
+            height=height,
+            wait_s=5.0,
+            full_page=full_page,
+        )
+    except Exception as exc:
+        print(f"[visual] {path.name}: {type(exc).__name__}: {exc}")
+    if out.exists() and out.stat().st_size > 0:
+        return out.relative_to(OUT).as_posix()
 
     cmd = (
         f'npx playwright screenshot --browser=chromium '
@@ -280,7 +278,7 @@ def write_gallery(rows: list[dict], visuals: dict[int, str | None]) -> None:
             <article class="card">
               <header><span class="provider">{html.escape(row['provider'])}</span>
                 <span class="score">{row['score']}</span></header>
-              <div class="task">{html.escape(row['task'])} Â· pass={row['pass']}</div>
+              <div class="task">{html.escape(row['task'])} Ãƒâ€šÃ‚Â· pass={row['pass']}</div>
               {image_html}{email_html}
               <div class="meta">{html.escape(row['source'])}</div>
             </article>
@@ -328,6 +326,11 @@ def prune_visuals(visuals: dict[int, str | None]) -> None:
             file.unlink(missing_ok=True)
 
 
+def _one_line(text: str, limit: int = 120) -> str:
+    collapsed = " ".join(str(text).split())
+    return collapsed[:limit]
+
+
 def write_tables(rows: list[dict]) -> None:
     md = ["# Cross-provider comparison", ""]
     md.append("| provider | task | score | pass | critical |")
@@ -335,7 +338,7 @@ def write_tables(rows: list[dict]) -> None:
     for row in rows:
         md.append(
             f"| {row['provider']} | {row['task']} | {row['score']} | "
-            f"{row['pass']} | {'; '.join(row['critical'])[:120]} |"
+            f"{row['pass']} | {_one_line('; '.join(row['critical']))} |"
         )
     (OUT / "comparison.md").write_text("\n".join(md) + "\n", encoding="utf-8")
     with (OUT / "comparison.csv").open("w", encoding="utf-8", newline="") as handle:

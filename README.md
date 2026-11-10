@@ -488,6 +488,26 @@ to `results/bakeoff/runs.jsonl` and summarised in
 scores a report produced outside this machine (GPT, Gemini, Perplexity,
 Odysseus) with the same checks.
 
+## Comparing providers side by side
+
+Same task, same prompt, same artifact name - then compared, mostly visually.
+`benchmarks/compare/PROMPTS.md` holds the exact prompts to paste into ChatGPT,
+DeepSeek, Nemotron or any other model.
+
+```powershell
+# import an answer straight from the clipboard (markdown fences are stripped)
+python tools/compare_models.py --provider chatgpt --task minecraft_world --clipboard
+
+# score + screenshot everything, including the newest local bakeoff runs
+$env:PATH += ";C:\Program Files\Blender Foundation\Blender 5.3"
+python tools/compare_models.py --tasks all --include-bakeoff
+```
+
+Outputs land in `results/compare/`: `comparison.md`, `comparison.csv`,
+`gallery.html` (open it in a browser) and `visuals/`. HTML pages are captured
+with headless Chrome using SwiftShader, so Three.js scenes render without a GPU,
+and Blender tasks contribute their real `preview.png` / first frame.
+
 `tools/quick_cache_ab.py` measures the same model twice with identical weights
 and context, changing only where the KV cache lives:
 
