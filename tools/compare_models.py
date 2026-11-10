@@ -278,7 +278,7 @@ def write_gallery(rows: list[dict], visuals: dict[int, str | None]) -> None:
             <article class="card">
               <header><span class="provider">{html.escape(row['provider'])}</span>
                 <span class="score">{row['score']}</span></header>
-              <div class="task">{html.escape(row['task'])} Ãƒâ€šÃ‚Â· pass={row['pass']}</div>
+              <div class="task">{html.escape(row['task'])} &middot; pass={row['pass']}</div>
               {image_html}{email_html}
               <div class="meta">{html.escape(row['source'])}</div>
             </article>
