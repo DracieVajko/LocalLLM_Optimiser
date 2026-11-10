@@ -47,8 +47,10 @@ Artifacts: `results/bakeoff/<model>/blender_city/<timestamp>/build_scene.py`,
 
 The committed DeepSeek V4.1 Flash artifact
 (`benchmarks/deepseek_agent/blender_city/build_scene.py`) scores **1.0** with
-Blender 5.2. Open `scene.blend` in Blender to inspect the city; `preview.png` is
+Blender 5.3. Open `scene.blend` in Blender to inspect the city; `preview.png` is
 the single rendered still.
+
+![Low-poly city preview](blender_city_preview.png)
 
 ## Skyblock stays separate
 
