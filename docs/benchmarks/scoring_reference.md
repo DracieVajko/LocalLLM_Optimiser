@@ -102,6 +102,22 @@ python -m pytest tests/test_scoring_reference.py -v
     stated/provided/mentioned". It now accepts "not specified", "not covered",
     "unclear", "unknown", "insufficient", "cannot be determined" and "the
     sources do not say/state/specify/answer/cover".
+16. **A pure white frame counted as content.** `renders_content` accepts
+    anything that is not blank/flat; a 3D task now additionally requires the
+    verdict `ok` (sd >= 6), so a page with a near-uniform canvas fails. A pure
+    white image is classified `flat` (mean 255, sd 0, one tone) and is covered
+    by `tests/test_png_stats.py`.
+17. **`deep_research_report` kept the narrow gap-wording regex.** It now uses
+    the same broad pattern as `research_synthesis`, so "not specified" is
+    accepted there too.
+18. **`email_and_calendar` rejected "Subject line:".** It now shares
+    `email_write`'s pattern (`Subject` / `Subject line`, `:` or `-`).
+19. **`creative_3d_voxel_island` never parsed its JavaScript.** `js_parses` now
+    also checks `.js` artifacts with `node --check`, and the task treats it as
+    critical.
+20. **The two report tasks had no render check.** A page whose text exists but
+    renders blank could still score on text alone; both now run
+    `renders_content`.
 
 ## What the reference does not prove
 

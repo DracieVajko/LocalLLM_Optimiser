@@ -77,3 +77,15 @@ def test_render_check_skips_without_browser(monkeypatch, tmp_path: Path) -> None
 
     assert ok is True
     assert detail.startswith("skipped:")
+
+def test_pure_white_frame_is_flat(tmp_path):
+    from tests.test_png_stats import _png
+
+    path = tmp_path / "white.png"
+    _png(path, 8, 8, [(255, 255, 255)] * 64)
+
+    stats = measure_png(path)
+
+    assert stats.verdict == "flat"
+    assert stats.has_content is False
+    assert stats.mean == 255.0

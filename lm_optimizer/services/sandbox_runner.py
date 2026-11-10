@@ -442,7 +442,17 @@ class SandboxRunner:
                         renders_content_async,
                     )
 
-                    ok, detail = await renders_content_async(self.workdir / html_name)
+                    required = next(
+                        (
+                            str(check.value or "content")
+                            for check in self.task.checks
+                            if check.name == "renders_content"
+                        ),
+                        "content",
+                    )
+                    ok, detail = await renders_content_async(
+                        self.workdir / html_name, require=required
+                    )
                     custom["renders_content"] = (ok, detail)
             if self.task.kind.value == "web":
                 try:

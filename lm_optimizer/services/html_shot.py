@@ -59,7 +59,7 @@ def capture(
         raise ScreenshotError("no Chromium-based browser found")
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    with tempfile.TemporaryDirectory() as profile:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as profile:
         proc = subprocess.Popen(
             [
                 str(browser),

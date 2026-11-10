@@ -62,6 +62,39 @@ def export_prompts() -> list[str]:
     return written
 
 
+def build_prompt_sheet() -> Path:
+    """One page with every prompt in a copy-paste block, for a chat UI."""
+    lines = [
+        "# All frontier prompts",
+        "",
+        "Paste one prompt per conversation. Do not add follow-ups, do not ask for",
+        "a different design. Save each answer with the importer below.",
+        "",
+    ]
+    for task_id in TASKS:
+        task = SANDBOX_TASKS[task_id]
+        artifact = task.artifacts[0]
+        lines += [
+            f"## {task_id}",
+            "",
+            f"Save the answer as `{artifact}` via:",
+            "",
+            "```powershell",
+            f"python tools/compare_models.py --provider chatgpt --task {task_id} --clipboard",
+            "```",
+            "",
+            "Prompt:",
+            "",
+            "```text",
+            task.prompt.rstrip(),
+            "```",
+            "",
+        ]
+    path = COMPARE / "PROMPTS_ALL.md"
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
 def build_desktop_bundle() -> Path:
     if DESKTOP.exists():
         shutil.rmtree(DESKTOP)
@@ -70,6 +103,9 @@ def build_desktop_bundle() -> Path:
 
     for task_id in TASKS:
         shutil.copyfile(PROMPTS / f"{task_id}.txt", DESKTOP / "prompts" / f"{task_id}.txt")
+
+    sheet = build_prompt_sheet()
+    shutil.copyfile(sheet, DESKTOP / "PROMPTS_ALL.md")
 
     reference = COMPARE / "deepseek"
     for task_id in TASKS:

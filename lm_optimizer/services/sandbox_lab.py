@@ -194,7 +194,7 @@ MINECRAFT_WORLD_TASK = SandboxTask(
         SandboxCheck("has_render_loop", "regex", r"(requestAnimationFrame\s*\(|function\s+animate\s*\()", weight=1.5),
         SandboxCheck("no_external_assets", "regex", r"\.(png|jpg|jpeg|gif|zip)\b", weight=1.0, negate=True),
         SandboxCheck("js_parses", "custom", None, weight=1.5, critical=True),
-        SandboxCheck("renders_content", "custom", None, weight=2.0, critical=True),
+        SandboxCheck("renders_content", "custom", "ok", weight=2.0, critical=True),
     ],
     max_repair_attempts=2,
     timeout_s=300.0,
@@ -400,7 +400,7 @@ EMAIL_CALENDAR_TASK = SandboxTask(
         "No markdown fences."
     ),
     checks=[
-        SandboxCheck("has_subject", "regex", r"Subject:\s*\S+", weight=2.0, critical=True),
+        SandboxCheck("has_subject", "regex", r"Subject(?:\s+line)?\s*[:\-]\s*\S+", weight=2.0, critical=True),
         SandboxCheck("has_next_step", "regex", r"2026-11-07|next step", weight=1.5),
         SandboxCheck("has_calendar_separator", "regex", r"--- CALENDAR ---", weight=1.0),
         SandboxCheck("calendar_start", "regex", r"2026-11-10T10:00", weight=2.0),
@@ -543,6 +543,7 @@ CREATIVE_3D_TASK = SandboxTask(
         SandboxCheck("uses_random", "regex", r"random\s*\(", weight=1.0),
         SandboxCheck("no_html", "regex", r"<[a-z]", weight=1.0, negate=True),
         SandboxCheck("no_markdown_fence", "regex", r"```", weight=1.0, negate=True),
+        SandboxCheck("js_parses", "custom", None, weight=2.0, critical=True),
     ],
     max_repair_attempts=1,
     timeout_s=240.0,
@@ -665,9 +666,10 @@ DEEP_RESEARCH_REPORT_TASK = SandboxTask(
         SandboxCheck("cites_technical", "regex", r"technical_secondary", weight=1.5),
         SandboxCheck("cites_conflicting", "regex", r"conflicting_source", weight=1.5),
         SandboxCheck("no_irrelevant_source", "regex", r"cassette", weight=2.0, negate=True),
-        SandboxCheck("mentions_uncertainty", "regex", r"(not (stated|provided|mentioned)|no (information|mention)|uncertain|limitation)", weight=1.0),
+        SandboxCheck("mentions_uncertainty", "regex", r"(not\s+(stated|provided|mentioned|specified|answered|covered|given|clear)|no\s+(information|mention|data|answer|evidence)|uncertain|limitation|unclear|unknown|insufficient)", weight=1.0),
         SandboxCheck("has_references", "regex", r"(references|bibliography|sources)", weight=1.0),
         SandboxCheck("no_external_assets", "regex", r"\.(png|jpg|jpeg|gif|zip)\b", weight=1.0, negate=True),
+        SandboxCheck("renders_content", "custom", None, weight=1.5, critical=True),
     ],
     max_repair_attempts=2,
     timeout_s=300.0,
@@ -1068,6 +1070,9 @@ def score_attempt(
             ):
                 continue
             scripts.append(body)
+        for name, text in files.items():
+            if name.endswith(".js"):
+                scripts.append(_strip_md_fences(text))
         if not scripts:
             verdict = (True, "no inline scripts")
         else:

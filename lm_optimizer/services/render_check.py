@@ -36,8 +36,14 @@ def measure_html(
     wait_s: float = DEFAULT_WAIT_S,
     width: int = 1280,
     height: int = 900,
+    require: str = "content",
 ) -> RenderVerdict:
-    """Screenshot *html_path* and classify what was rendered."""
+    """Screenshot *html_path* and classify what was rendered.
+
+    ``require="content"`` accepts anything that is not blank/flat;
+    ``require="ok"`` additionally rejects a "weak" frame (sd < 6), which is what
+    a 3D scene task needs.
+    """
     from lm_optimizer.services.html_shot import ScreenshotError, capture, find_browser
 
     if not html_path.exists():
@@ -45,7 +51,7 @@ def measure_html(
     if find_browser() is None:
         return RenderVerdict(True, True, "no browser installed; render not verified")
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         target = Path(tmp) / "render.png"
         try:
             capture(
@@ -63,7 +69,8 @@ def measure_html(
         except (OSError, ValueError) as exc:
             return RenderVerdict(True, True, f"could not measure pixels: {exc}"[:200])
 
-    return RenderVerdict(stats.has_content, False, stats.detail(), stats)
+    ok = stats.verdict == "ok" if require == "ok" else stats.has_content
+    return RenderVerdict(ok, False, stats.detail(), stats)
 
 
 def renders_content(html_path: Path, **kwargs: object) -> tuple[bool, str]:

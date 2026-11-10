@@ -453,3 +453,49 @@ def test_research_synthesis_accepts_everyday_gap_wording():
     score, failing, critical = score_attempt(task, {"answer.txt": answer})
     assert score == pytest.approx(1.0), failing
     assert not critical
+
+def test_creative_3d_rejects_broken_scene_javascript():
+    task = SANDBOX_TASKS["creative_3d_voxel_island"]
+    scene = (
+        "export function createScene({ THREE, random }) {\n"
+        "  const root = new THREE.Group();\n"
+        "  root.name = 'Terrain'; root.name = 'Trees';\n"
+        "  root.name = 'Waterfall'; root.name = 'Vegetation';\n"
+        "  const a = random(); root.add(terrain), trees);\n"
+        "  return root;\n"
+        "}\n"
+    )
+    score, failing, critical = score_attempt(task, {"scene.js": scene})
+    assert score == 0.0
+    assert any("js_parses" in name for name in critical)
+
+
+def test_email_and_calendar_accepts_subject_line_wording():
+    task = SANDBOX_TASKS["email_and_calendar"]
+    answer = (
+        "Subject line: Kickoff follow-up\n\nHi Alice,\n"
+        "Next step is the agenda by 2026-11-07.\n\n--- CALENDAR ---\n"
+        '{"title":"Kickoff","start":"2026-11-10T10:00","end":"2026-11-10T10:45",'
+        '"attendees":["alice@example.com"],"location":"Room 1"}\n'
+    )
+    score, failing, critical = score_attempt(task, {"response.txt": answer})
+    assert not any("has_subject" in name for name in failing)
+
+
+def test_deep_research_report_accepts_not_specified_wording():
+    task = SANDBOX_TASKS["deep_research_report"]
+    html = (
+        "<!DOCTYPE html><html><body><h2>Report</h2>"
+        + ("<p>" + ("word " * 250) + "[primary_official] [technical_secondary] "
+           "[conflicting_source]</p>") * 3
+        + "<h2>Limitations</h2><p>The exact VRAM cost is not specified.</p>"
+        + "<h2>References</h2><p>sources</p></body></html>"
+    )
+    score, failing, critical = score_attempt(task, {"index.html": html})
+    assert not any("mentions_uncertainty" in name for name in failing)
+
+
+def test_minecraft_requires_a_strong_render():
+    task = SANDBOX_TASKS["minecraft_world"]
+    check = next(c for c in task.checks if c.name == "renders_content")
+    assert check.value == "ok"
