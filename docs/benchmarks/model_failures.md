@@ -15,14 +15,15 @@ LM Studio could not load or generate at all, so no artifact exists.
 | Model | Task | Result | Root cause |
 |---|---|---|---|
 | `nvidia-nemotron-3.5-bolt-e4b` | email, minecraft, web | **1.0** | — |
-| `nvidia-nemotron-3.5-bolt-e4b` | blender_skyblock | 0.0 | Model bug: calls a non-existent `bpy.ops.scene.clear()`, so Blender exits 1 and no `.blend` or frames are produced. |
+| `nvidia-nemotron-3.5-bolt-e4b` | blender_skyblock | 0.0 | Model bug: the script creates a camera at line 70 but never assigns `scene.camera`, so the render aborts with `RuntimeError: Cannot render, no camera` and no frames are written. |
 | `nvidia-nemotron-3.5-bolt-74b-a9b` | email | **1.0** | — |
 | `nvidia-nemotron-3.5-bolt-74b-a9b` | minecraft | 0.0 | Model bug: no Three.js `<script src>` at all and a duplicate `function generateWorld()` — `SyntaxError: Identifier 'generateWorld' has already been declared`. Page renders a static splash. |
 | `nvidia-nemotron-3.5-bolt-74b-a9b` | web | not run | Host slowness: 0.4 tok/s, a 4096-token page needs ~3 hours. Run cancelled. |
 | `nvidia-nemotron-3.5-bolt-74b-a9b-24gb` | email | 1.0 | — |
 | `nvidia-nemotron-3.5-bolt-74b-a9b-24gb` | web, blender | 0.0 / load error | Host: needs 41.9 GB with a second model resident; HTTP 400 on load, HTTP 500 on chat. |
 | `swift-qwen3.8-27b` | email | 1.0 | — |
-| `swift-qwen3.8-27b` | web, blender | 0.0 | Model bug with thinking on: reasoning prose is written *into* the artifact (`build_scene.py:66` unterminated string, dashboard script starts with `...`). Needs `--no-thinking`. |
+| `swift-qwen3.8-27b` | web | **1.0** | Fixed by `--no-thinking`: 1128 s, 3.6 tok/s, no reasoning in the file. |
+| `swift-qwen3.8-27b` | blender | 0.0 | Model bug with thinking on: reasoning prose is written *into* `build_scene.py` (`line 66: SyntaxError: unterminated string literal`). Retried with `--no-thinking`. |
 | `qwen3.8-9b-distill` | web | 0.0 | Model bug: `index.html` contains ten lines of reasoning that *describe* the page instead of the page. Caught by `html_document`. |
 | `qwen3.8-9b-distill` | email | 0.0 | Model bug: output is a "Thinking Process" dump, so it has no leading `Subject:` and contains bracketed placeholders in prose. |
 | `prism-ml/bonsai-27b` | web | **1.0** | — |
