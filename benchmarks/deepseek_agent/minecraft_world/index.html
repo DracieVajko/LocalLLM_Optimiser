@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voxelcraft — Floating Skyblock</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(180deg, #9fd7ff 0%, #cfe9ff 55%, #eef7ff 100%);
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    }
+    #scene {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+    .hero {
+      position: fixed;
+      top: 26px;
+      left: 28px;
+      max-width: 340px;
+      padding: 18px 20px;
+      border-radius: 14px;
+      background: rgba(12, 26, 40, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #f7fbff;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+      pointer-events: none;
+    }
+    .hero h1 {
+      margin: 0 0 8px;
+      font-size: 27px;
+      letter-spacing: 0.4px;
+    }
+    .hero p {
+      margin: 0;
+      color: #c9d8e8;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .hero .tag {
+      display: inline-block;
+      margin-bottom: 9px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: rgba(255, 212, 77, 0.18);
+      color: #ffd44d;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .hud {
+      position: fixed;
+      left: 50%;
+      bottom: 20px;
+      transform: translateX(-50%);
+      padding: 9px 15px;
+      border-radius: 999px;
+      background: rgba(12, 26, 40, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: #c9d8e8;
+      font-size: 12px;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .hud b { color: #ffffff; }
+    @media (max-width: 700px) {
+      .hero { top: 12px; left: 12px; max-width: 260px; padding: 13px 15px; }
+      .hero h1 { font-size: 20px; }
+      .hud { font-size: 11px; max-width: 92vw; white-space: normal; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="scene" aria-label="Floating voxel skyblock island"></canvas>
+
+  <div class="hero">
+    <span class="tag">Tiny world, block by block</span>
+    <h1>Voxelcraft</h1>
+    <p>A floating skyblock island in the void: grass, dirt, stone, a tree,
+       a waterfall and a slowly orbiting camera.</p>
+  </div>
+
+  <div class="hud"><b>Camera</b> orbits the island automatically</div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script>
+    // Voxelcraft — a simple floating voxel skyblock.
+    // One HTML file; only Three.js comes from a CDN.
+
+    const canvas = document.getElementById("scene");
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: false,
+      preserveDrawingBuffer: true
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x9fd7ff);
+    scene.fog = new THREE.Fog(0xbfe3ff, 46, 105);
+
+    const camera = new THREE.PerspectiveCamera(
+      60,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      300
+    );
+    camera.position.set(20, 11, 20);
+    camera.lookAt(0, 2, 0);
+
+    // Lights: a warm sun and a soft sky fill.
+    const sun = new THREE.DirectionalLight(0xfff3d0, 1.35);
+    sun.position.set(18, 30, 12);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 90;
+    sun.shadow.camera.left = -25;
+    sun.shadow.camera.right = 25;
+    sun.shadow.camera.top = 25;
+    sun.shadow.camera.bottom = -25;
+    scene.add(sun);
+    scene.add(new THREE.HemisphereLight(0xcfe9ff, 0x4a6b3a, 0.8));
+
+    // A small sun disc in the sky.
+    const sunDisc = new THREE.Mesh(
+      new THREE.SphereGeometry(2.2, 18, 18),
+      new THREE.MeshBasicMaterial({ color: 0xfff2a8 })
+    );
+    sunDisc.position.set(18, 30, 12);
+    scene.add(sunDisc);
+
+    // Block geometry and one flat material per block type (no per-instance
+    // colour shader tricks, so it renders on every WebGL implementation).
+    const cube = new THREE.BoxGeometry(1, 1, 1);
+    const materials = {
+      grass: new THREE.MeshLambertMaterial({ color: 0x4caf50 }),
+      grassSide: new THREE.MeshLambertMaterial({ color: 0x3f8f43 }),
+      dirt: new THREE.MeshLambertMaterial({ color: 0x8d5a3b }),
+      stone: new THREE.MeshLambertMaterial({ color: 0x8b939b }),
+      water: new THREE.MeshLambertMaterial({
+        color: 0x2f7fd4,
+        transparent: true,
+        opacity: 0.72
+      }),
+      wood: new THREE.MeshLambertMaterial({ color: 0x7a4a2a }),
+      leaves: new THREE.MeshLambertMaterial({ color: 0x2f8f3a }),
+      chest: new THREE.MeshLambertMaterial({ color: 0xb5722f }),
+      flower: new THREE.MeshLambertMaterial({ color: 0xe94b4b }),
+      avatar: new THREE.MeshLambertMaterial({ color: 0x3a6ea8 })
+    };
+
+    // Collect block positions by material, then build one InstancedMesh each.
+    const groups = {
+      grass: [], grassSide: [], dirt: [], stone: [], water: [],
+      wood: [], leaves: [], chest: [], flower: [], avatar: []
+    };
+    const add = (group, x, y, z) => groups[group].push([x, y, z]);
+
+    const SIZE = 6; // island radius in blocks
+    for (let x = -SIZE; x <= SIZE; x += 1) {
+      for (let z = -SIZE; z <= SIZE; z += 1) {
+        // Rounded, slightly irregular island footprint.
+        const edge = Math.abs(x) + Math.abs(z) + (Math.abs(x) % 2);
+        if (edge > SIZE + 2) continue;
+        const top = 3 + ((x * 3 + z * 5) % 3 === 0 ? 1 : 0);
+        for (let y = -1; y <= top; y += 1) {
+          if (y === top) add("grass", x, y, z);
+          else if (y >= top - 1) add("grassSide", x, y, z);
+          else if (y >= top - 3) add("dirt", x, y, z);
+          else add("stone", x, y, z);
+        }
+      }
+    }
+
+    // A pond: replace a few top blocks with water and add a waterfall.
+    const pond = [[4, -1], [4, 0], [4, 1], [5, 0]];
+    for (const [px, pz] of pond) {
+      // Remove the top few layers by not adding them (already added above),
+      // then put water blocks at surface level instead.
+      add("water", px, 3, pz);
+      add("water", px, 2, pz);
+    }
+    // Waterfall down the side of the island.
+    for (let y = 2; y >= -3; y -= 1) {
+      add("water", 6, y, 0);
+    }
+
+    // Tree: trunk plus a leafy canopy.
+    for (let y = 4; y <= 6; y += 1) add("wood", 1, y, 0);
+    for (let dx = -1; dx <= 1; dx += 1) {
+      for (let dz = -1; dz <= 1; dz += 1) {
+        add("leaves", 1 + dx, 6, dz);
+      }
+    }
+    add("leaves", 1, 7, 0);
+    add("leaves", 2, 7, 0);
+    add("leaves", 0, 7, 0);
+
+    // A chest, a couple of flowers and a small block avatar.
+    add("chest", -3, 4, 2);
+    add("flower", -2, 4, 3);
+    add("flower", -1, 4, 4);
+    add("avatar", 2, 4, -3);
+    add("avatar", 2, 5, -3);
+
+    // Clouds above the island.
+    const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const clouds = new THREE.Group();
+    for (let i = 0; i < 6; i += 1) {
+      const cloud = new THREE.Mesh(cube, cloudMat);
+      cloud.position.set(
+        Math.cos(i * 1.7) * 16,
+        16 + (i % 3) * 2,
+        Math.sin(i * 1.7) * 16
+      );
+      cloud.scale.set(4 + (i % 2) * 2, 1.1, 2.6);
+      clouds.add(cloud);
+    }
+    scene.add(clouds);
+
+    // Build one InstancedMesh per block material.
+    const dummy = new THREE.Object3D();
+    Object.keys(groups).forEach((name) => {
+      const cells = groups[name];
+      if (!cells.length) return;
+      const mesh = new THREE.InstancedMesh(cube, materials[name], cells.length);
+      cells.forEach((cell, index) => {
+        dummy.position.set(cell[0], cell[1], cell[2]);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(index, dummy.matrix);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+    });
+
+    // Keep the camera orbiting the island.
+    const clock = new THREE.Clock();
+    const radius = 20;
+    let angle = Math.PI / 4;
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+      angle += dt * 0.24;
+      camera.position.set(
+        Math.cos(angle) * radius,
+        10.5 + Math.sin(angle * 0.7) * 1.2,
+        Math.sin(angle) * radius
+      );
+      camera.lookAt(0, 2.2, 0);
+      clouds.rotation.y += dt * 0.02;
+      renderer.render(scene, camera);
+    }
+
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Debug hook used by the benchmark harness to confirm real rendering.
+    window.__voxel = { renderer, scene, camera };
+
+    animate();
+  </script>
+</body>
+</html>

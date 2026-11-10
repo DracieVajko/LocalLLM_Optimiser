@@ -375,8 +375,15 @@ that are NOT the runtime optimizer:
 - `calendar_event` - JSON calendar event (title, start/end ISO 8601, attendees, location).
 - `email_and_calendar` - combined email + calendar JSON from meeting notes.
 - `web_fetch_brief` - JSON with tool=web_fetch, url, title, facts or error; never invents facts.
+- `minecraft_world` - single self-contained HTML file with a Minecraft-style voxel world (Three.js from a CDN, procedural island, camera orbit).
 
 All agentic tasks run offline (`network_allowed=false`) with an evidence-only repair loop: on failure the model gets the failing checks, not the solution.
+
+**Frontier benchmark example.** `minecraft_world` is also published as a
+reproducible frontier-model benchmark: the exact prompt, acceptance checks and
+the committed DeepSeek V4.1 Flash artifacts/results live in
+[`docs/benchmarks/README.md`](docs/benchmarks/README.md). Local model scores are
+intentionally not committed.
 
 ## Blender / 3D sandbox requirements
 
@@ -446,18 +453,6 @@ It reports load time and generation time for `KV_GPU` (default) and `KV_RAM`
 (`offload_kv_cache_to_gpu=false`), which is the practical "weights in VRAM,
 context in RAM" split. LM Studio decides the weight split itself; `gpu_ratio`
 is not accepted over REST.
-
-Measured 2026-11-09 (RTX 3060 6 GB, context 8192, thinking on, same three tasks):
-
-|model|email_write|web_dashboard|blender_skyblock|mean|load|generation|tok/s|
-|-|-|-|-|-|-|-|-|
-|qwen3.8-9b-distill|0.3333|0.0 (HTTP 500)|0.0 (HTTP 500)|0.111|30.0 s|246.5 s|8.31|
-|nvidia-nemotron-3.5-bolt-e4b|1.0|1.0|0.8485|0.950|12.5 s|308.6 s|26.76|
-
-`qwen3.8-9b-distill` crashed the LM Studio server (HTTP 500) on the two
-longer tasks with the KV cache on the GPU; the `KV_RAM` variant exists to test
-that split without changing the weights. The E4B row is the current
-small-model baseline: it passes both text tasks and produces a real 3D scene.
 
 **Verified LM Studio capability boundaries (probed 2026-10-21).** This
 build accepts the whole `speculative_draft_*` family over REST

@@ -31,6 +31,7 @@ def test_all_sandbox_tasks_exist():
         "web_fetch_brief",
         "web_search",
         "deep_research",
+        "minecraft_world",
     }
     kinds = {t.kind for t in SANDBOX_TASKS.values()}
     assert kinds == {
@@ -273,3 +274,10 @@ def test_policy_defaults_are_restrictive(tmp_path):
     assert policy.timeout_s > 0
     assert policy.memory_mb > 0
     assert policy.disk_mb > 0
+
+def test_minecraft_world_task_is_a_single_file_web_task():
+    task = SANDBOX_TASKS["minecraft_world"]
+    assert task.kind is SandboxTaskKind.WEB
+    assert task.artifacts == ("index.html",)
+    names = {check.name for check in task.checks}
+    assert {"index_html_exists", "single_file_html", "has_threejs"} <= names

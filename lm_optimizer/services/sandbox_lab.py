@@ -108,7 +108,50 @@ WEB_TASK = SandboxTask(
 )
 
 
-# --- 13.2 Research task ---------------------------------------------------
+# --- 13.3 Minecraft-style voxel world (single HTML) -------------------------
+
+MINECRAFT_WORLD_TASK = SandboxTask(
+    id="minecraft_world",
+    kind=SandboxTaskKind.WEB,
+    title="Minecraft-style voxel world (single HTML)",
+    prompt=(
+        "Create one single HTML file named index.html — a Minecraft-style voxel "
+        "world rendered with Three.js loaded from a CDN. No build step, no "
+        "bundler, no server, no external assets (no images, sounds or zip "
+        "files); everything except Three.js must be inside this one file.\n\n"
+        "The page must contain:\n"
+        "- A hero section that feels like a tiny Minecraft world.\n"
+        "- Procedural terrain made of colored cubes (grass green, dirt brown, "
+        "  stone gray, water blue).\n"
+        "- Smooth 60fps rendering with requestAnimationFrame.\n"
+        "- First-person look controls (pointer lock or mouse move) and a "
+        "  crosshair in the center.\n"
+        "- A simple block-break / block-place interaction (click to remove or "
+        "  add a cube).\n"
+        "- Animated sky / day-night feel (moving sun or color gradient).\n"
+        "- Clean, modern, commented code.\n\n"
+        "Output ONLY the complete HTML in a markdown code fence starting with "
+        "```html and ending with ```. Do not include any other text."
+    ),
+    checks=[
+        SandboxCheck("index_html_exists", "files", ["index.html"], weight=1.0, critical=True),
+        SandboxCheck("single_file_html", "regex", r"<!DOCTYPE\s+html|<html\b", weight=1.0, critical=True),
+        SandboxCheck("has_threejs", "regex", r"threejs|three\.js", weight=1.0),
+        SandboxCheck("has_voxel_cubes", "regex", r"(cube|voxel|BoxGeometry|Mesh)", weight=1.5),
+        SandboxCheck("has_grass", "regex", r"(grass|0,1,0|#0[a-f]0|green)", weight=1.0),
+        SandboxCheck("has_stone", "regex", r"(stone|gray|grey|128|#808080)", weight=1.0),
+        SandboxCheck("has_water", "regex", r"(water|0,0,1|#00[a-f]|blue)", weight=1.0),
+        SandboxCheck("has_controls", "regex", r"(pointerlock|mousemove|keydown|addEventListener)", weight=1.5),
+        SandboxCheck("has_render_loop", "regex", r"(requestAnimationFrame|animate|render\s*\()", weight=1.5),
+        SandboxCheck("no_external_assets", "regex", r"\.(png|jpg|jpeg|gif|zip)\b", weight=1.0, negate=True),
+    ],
+    max_repair_attempts=2,
+    timeout_s=300.0,
+    max_output_tokens=8192,
+    network_allowed=False,
+    allowed_executables=(),
+    artifacts=("index.html",),
+)
 
 #: Closed-source research package: primary, technical, outdated, conflicting
 #: and irrelevant sources. The model must handle the conflict and must not
@@ -503,6 +546,7 @@ SANDBOX_TASKS: dict[str, SandboxTask] = {
         WEB_SEARCH_TASK,
         DEEP_RESEARCH_TASK,
         CREATIVE_3D_TASK,
+        MINECRAFT_WORLD_TASK,
     )
 }
 

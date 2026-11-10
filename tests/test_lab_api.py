@@ -71,6 +71,7 @@ def test_lab_sandbox_tasks_endpoint(client):
         "web_fetch_brief",
         "web_search",
         "deep_research",
+        "minecraft_world",
     } == ids
     for task in tasks:
         assert task["checks"]
