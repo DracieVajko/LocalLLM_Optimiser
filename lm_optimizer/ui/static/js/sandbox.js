@@ -176,6 +176,13 @@
         return '<span class="badge ' + (ok ? 'badge-success' : 'badge-error') + '">' + text + '</span>';
     }
 
+    function resultBadge(x) {
+        if ((x.status || 'measured') === 'not_measured') {
+            return '<span class="badge badge-warning">NOT MEASURED</span>';
+        }
+        return x.final_success ? badge(true, 'PASS') : badge(false, 'FAIL');
+    }
+
     function scoreText(x) {
         return x.final_score == null ? '-' : Number(x.final_score).toFixed(2);
     }
@@ -278,7 +285,7 @@
                     var x = r.run;
                     return '<tr>'
                         + '<td class="font-mono text-xs">' + esc(x.ts || '') + '</td>'
-                        + '<td>' + (x.final_success ? badge(true, 'PASS') : badge(false, 'FAIL')) + '</td>'
+                        + '<td>' + resultBadge(x) + '</td>'
                         + '<td class="font-mono">' + scoreText(x) + '</td>'
                         + '<td class="font-mono text-xs">' + (x.duration_s ? Number(x.duration_s).toFixed(0) + 's' : '-') + '</td>'
                         + '<td class="text-right"><button class="btn btn-outline btn-sm open-run" data-index="' + r.index + '">Open</button></td>'
@@ -340,7 +347,8 @@
                 + '<tr><td class="font-bold">Model</td><td class="font-mono">' + esc(x.model || '') + '</td></tr>'
                 + '<tr><td class="font-bold">Task</td><td>' + esc(x.task || '') + '</td></tr>'
                 + '<tr><td class="font-bold">Score</td><td class="font-mono">' + scoreText(x) + '</td></tr>'
-                + '<tr><td class="font-bold">Result</td><td>' + (x.final_success ? badge(true, 'PASS') : badge(false, 'FAIL')) + '</td></tr>'
+                + '<tr><td class="font-bold">Result</td><td>' + resultBadge(x) + '</td></tr>'
+                + '<tr><td class="font-bold">Status</td><td>' + esc(x.status || 'measured') + '</td></tr>'
                 + '<tr><td class="font-bold">Repairs</td><td>' + (x.repair_count || 0) + '</td></tr>'
                 + '<tr><td class="font-bold">Duration</td><td class="font-mono">' + (x.duration_s ? Number(x.duration_s).toFixed(0) + 's' : '-') + '</td></tr>'
                 + '<tr><td class="font-bold">Workdir</td><td class="font-mono text-xs truncate" title="' + esc(x.workdir || '') + '">' + esc(x.workdir || '') + '</td></tr>'
