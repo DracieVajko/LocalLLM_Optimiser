@@ -360,6 +360,7 @@ class SandboxRunner:
                     produced = await produced
             except Exception as e:  # noqa: BLE001
                 result.error = f"{type(e).__name__}: {e}"[:200]
+                result.status = "not_measured"
                 debug_attempts.append(
                     {
                         "attempt": attempt,
@@ -385,6 +386,28 @@ class SandboxRunner:
                 output_chars=len(produced or ""),
             )
 
+            if not (produced or "").strip():
+                # A model that returns nothing (crashed engine, empty completion)
+                # was never actually measured. Scoring the empty artifact would
+                # report a 0.00 quality result for a 0.2 s non-run.
+                result.status = "not_measured"
+                result.error = result.error or "empty model output"
+                debug_attempts.append(
+                    {
+                        "attempt": attempt,
+                        "generate_s": round(gen_s, 1),
+                        "output_chars": 0,
+                        "error": "empty model output",
+                    }
+                )
+                logger.warning(
+                    "sandbox attempt produced no text",
+                    task=self.task.id,
+                    model=self.model,
+                    attempt=attempt,
+                )
+                break
+
             # The model returns the file contents; write them into the
             # isolated workdir.
             self._materialise(produced)
@@ -405,6 +428,22 @@ class SandboxRunner:
             # Web tasks get the static HTML/JS validation automatically
             # (spec 13.1 criteria achievable without a browser engine).
             custom = dict(self.custom_checks or {})
+            if any(check.name == "renders_content" for check in self.task.checks):
+                html_name = next(
+                    (
+                        name
+                        for name in files
+                        if name.lower().endswith((".html", ".htm"))
+                    ),
+                    None,
+                )
+                if html_name is not None:
+                    from lm_optimizer.services.render_check import (
+                        renders_content_async,
+                    )
+
+                    ok, detail = await renders_content_async(self.workdir / html_name)
+                    custom["renders_content"] = (ok, detail)
             if self.task.kind.value == "web":
                 try:
                     from lm_optimizer.services.web_validator import (

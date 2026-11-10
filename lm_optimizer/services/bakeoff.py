@@ -120,7 +120,7 @@ async def _run_task(
     task_id: str,
     *,
     thinking: bool,
-    load_s: float,
+    load_s: float | None,
     root: Path,
     reasoning_effort: str,
 ) -> dict:
@@ -206,24 +206,26 @@ async def _run_task(
     apply_retention(base_dir, policy)
 
     gen_s = round(metrics["gen_s"], 1)
-    score = payload.get("final_score")
+    measured = str(payload.get("status") or "measured") == "measured"
     return {
         "ts": datetime.now().isoformat(timespec="seconds"),
         "model": model,
         "task": task_id,
         "thinking": thinking,
         "context": None,
-        "load_s": round(load_s, 1),
+        "load_s": round(load_s, 1) if load_s is not None else None,
+        "load_measured": load_s is not None,
         "gen_s": gen_s,
-        "total_s": round(load_s + metrics["gen_s"], 1),
+        "total_s": round((load_s or 0.0) + metrics["gen_s"], 1),
         "tokens": metrics["tokens"],
         "tok_s": round(metrics["tokens"] / metrics["gen_s"], 2) if metrics["gen_s"] else 0.0,
         "thinking_chars": metrics["thinking_chars"],
+        "status": "measured" if measured else "not_measured",
         "first_pass_success": payload.get("first_pass_success"),
         "final_success": payload.get("final_success"),
         "repair_count": payload.get("repair_count"),
-        "final_score": score,
-        "penalized_score": payload.get("penalized_score"),
+        "final_score": score if measured else None,
+        "penalized_score": payload.get("penalized_score") if measured else None,
         "error": payload.get("error") or "",
         "critical_failures": payload.get("critical_failures") or [],
         "attempts": metrics["attempts"],
@@ -266,11 +268,13 @@ async def _run_model(
                     "error": f"model gate: {exc}"[:300],
                 }
             ]
-        load_s = lease.load_s
+        load_s = lease.load_s if lease.load_measured else None
         suffix = " (reused)" if lease.reused else ""
+        if not lease.load_measured:
+            suffix += " (load response lost; load time not measured)"
         if lease.fallback:
             suffix += f" (fallback for {model})"
-        print(f"[load] ok {load_s:.1f}s{suffix}", flush=True)
+        print(f"[load] ok {lease.load_s:.1f}s{suffix}", flush=True)
         try:
             for task_id in tasks:
                 print(f"[task] {lease.model} :: {task_id}", flush=True)
@@ -312,8 +316,12 @@ def _write_summary(rows: list[dict], root: Path) -> Path:
     lines.append("|---|---|---:|---|---:|---:|---:|---:|---:|")
     for model, model_rows in by_model.items():
         for row in model_rows:
+            score = row.get("final_score")
+            score_text = "-" if score is None else score
+            if row.get("status") == "not_measured":
+                score_text = "not measured"
             lines.append(
-                f"| {model} | {row.get('task')} | {row.get('final_score')} | "
+                f"| {model} | {row.get('task')} | {score_text} | "
                 f"{row.get('final_success')} | {row.get('load_s')} | "
                 f"{row.get('gen_s')} | {row.get('total_s')} | "
                 f"{row.get('tok_s')} | {row.get('thinking_chars')} |"
@@ -321,18 +329,20 @@ def _write_summary(rows: list[dict], root: Path) -> Path:
     lines.append("")
     lines.append("## Model totals (load once + all tasks)")
     lines.append("")
-    lines.append("| model | load_s | gen_s | total_s | tokens | tok/s | mean_score |")
-    lines.append("|---|---:|---:|---:|---:|---:|---:|")
+    lines.append("| model | load_s | gen_s | total_s | tokens | tok/s | mean_score | scored |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
     for model, model_rows in by_model.items():
-        load_s = model_rows[0].get("load_s") or 0.0
+        loads = [r.get("load_s") for r in model_rows if r.get("load_s") is not None]
+        load_s = loads[0] if loads else None
         gen_s = round(sum(r.get("gen_s") or 0.0 for r in model_rows), 1)
         tokens = sum(r.get("tokens") or 0 for r in model_rows)
         scores = [r["final_score"] for r in model_rows if r.get("final_score") is not None]
         toks = round(tokens / gen_s, 2) if gen_s else 0.0
-        mean = round(statistics.fmean(scores), 3) if scores else 0.0
+        mean = round(statistics.fmean(scores), 3) if scores else None
+        total = round((load_s or 0.0) + gen_s, 1)
         lines.append(
-            f"| {model} | {load_s} | {gen_s} | {round(load_s + gen_s, 1)} | "
-            f"{tokens} | {toks} | {mean} |"
+            f"| {model} | {load_s if load_s is not None else 'n/a'} | {gen_s} | {total} | "
+            f"{tokens} | {toks} | {mean if mean is not None else '-'} | {len(scores)}/{len(model_rows)} |"
         )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path

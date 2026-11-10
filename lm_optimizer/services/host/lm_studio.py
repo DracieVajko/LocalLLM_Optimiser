@@ -93,6 +93,9 @@ class LoadModelResult:
     error: str | None = None
     loaded_config: LoadConfiguration | None = None
     echo_mismatches: dict | None = None
+    #: False when the load response was lost and we confirmed via polling, so
+    #: the elapsed "load time" is a timeout, not a measurement.
+    response_received: bool = True
 
 
 def _error_message(exc: httpx.HTTPStatusError) -> str:
@@ -668,6 +671,7 @@ class LMStudioClient:
             identifier=identifier,
             loaded_config=loaded_config,
             echo_mismatches=mismatches or None,
+            response_received=False,
         )
 
     @staticmethod

@@ -292,3 +292,61 @@ before any other model is touched.
 - Phase-timing breakdown for one ctx-8192 configuration.
 - `benchmarks/creative_3d/voxel_island/` runner output (`result.json`) with a sample model scene.
 - What is still deferred and why — say it plainly, do not work around it.
+
+---
+
+## 10. Audit follow-up 2026-11-10: four defects, fixed
+
+The 241-row audit of `results/sandbox_runs.jsonl` and the 50 bake-off runs found
+four measurement defects. All four are fixed, with tests.
+
+### 10.1 A non-run was scored 0.00
+
+Evidence: 12 rows with `final_score=0.00` and `duration_s` 0.1-0.8 s, four tasks
+in one second. The model never loaded; the harness wrote an empty artifact and
+scored it.
+
+Fix: `SandboxResult.status` is `measured` or `not_measured`. An empty/whitespace
+completion, or a generation exception, is `not_measured`; the score is `None`
+and never enters a mean. History and bake-off persist `status`, and
+`tools/bakeoff_report.py` prints `not measured` instead of a number.
+Tests: `tests/test_measurement_status.py`.
+
+### 10.2 Visual tasks scored 1.00 for a blank canvas
+
+Evidence: Bonsai `minecraft_world` 100 % dark pixels, gpt-oss 1 tone, both 1.00.
+
+Fix: `renders_content` is a critical check on `minecraft_world` and
+`company_website`. It screenshots the artifact through Chrome CDP
+(`services/html_shot.py`) and measures it with `services/png_stats.py`:
+`blank` (>= 97 % dark) and `flat` (one tone) fail, `weak` (sd < 6) is reported.
+When no browser is installed the check reports `skipped` instead of failing
+everything. Verified: Bonsai blank and gpt-oss flat now score 0.00; the e4b,
+74b and DeepSeek scenes stay at 1.00.
+
+### 10.3 `load_s` was a 30.0 fallback
+
+Evidence: 39 of 50 bake-off runs show exactly `load_s=30.0`. That is the client
+waiting out `LOAD_RESPONSE_TIMEOUT_S` because the server loaded the model but
+never answered, not a measurement.
+
+Fix: `LoadModelResult.response_received` and `ModelLease.load_measured` carry
+the fact that the response was lost; bake-off writes `load_s=null` and
+`load_measured=false` for those rows. A real load still reports its seconds.
+
+### 10.4 `research_synthesis` could never reach 1.00
+
+Evidence: every model capped at 0.867 = 6.5/7.5, i.e. one 1.0-weight check was
+unreachable.
+
+Fix: `mentions_unknown` accepted only "not stated/provided/mentioned" and "no
+information/mention". It now also accepts "not specified", "not covered",
+"unclear", "unknown", "insufficient", "cannot be determined", "the sources do
+not say/state/specify/answer/cover". A source-grounded answer that admits a gap
+now scores 1.00.
+
+### 10.5 Related pages
+
+- `SCOREBOARD.md` - clean Tier-A table plus per-artifact pixel verdicts.
+- `tools/scoreboard.py` - rebuilds the measured part from `results/`.
+- `tools/png_stats.py` - CLI wrapper around the same classifier.

@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Northwind Studio — Design and Engineering Consultancy</title>
+  <style>
+    :root {
+      --ink: #14181f;
+      --muted: #5a6572;
+      --line: #e2e6ec;
+      --paper: #ffffff;
+      --wash: #f5f7fa;
+      --accent: #1f5f5b;
+      --accent-ink: #ffffff;
+      --radius: 14px;
+      --max: 1080px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    h1, h2, h3 { line-height: 1.2; margin: 0 0 0.5em; letter-spacing: -0.02em; }
+    h1 { font-size: clamp(2rem, 5vw, 3.25rem); font-weight: 700; }
+    h2 { font-size: clamp(1.5rem, 3vw, 2rem); }
+    h3 { font-size: 1.1rem; }
+    p { margin: 0 0 1em; color: var(--muted); }
+    a { color: inherit; }
+    .wrap { width: 100%; max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+    .site-header {
+      position: sticky; top: 0; z-index: 20;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--line);
+    }
+    .site-header .wrap {
+      display: flex; align-items: center; justify-content: space-between;
+      min-height: 64px; gap: 16px;
+    }
+    .brand { font-weight: 700; letter-spacing: -0.01em; text-decoration: none; }
+    .brand span { color: var(--accent); }
+    nav ul { list-style: none; display: flex; gap: 24px; margin: 0; padding: 0; }
+    nav a { text-decoration: none; color: var(--muted); font-size: 0.95rem; }
+    nav a:hover { color: var(--ink); }
+    .hero {
+      padding: 96px 0 72px;
+      background:
+        radial-gradient(900px 380px at 80% -10%, #dff0ee 0%, transparent 65%),
+        linear-gradient(180deg, var(--wash), var(--paper));
+    }
+    .hero p.lede { font-size: 1.15rem; max-width: 46ch; }
+    .hero .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 12px 22px; border-radius: 999px; border: 1px solid transparent;
+      font-weight: 600; font-size: 0.95rem; text-decoration: none; cursor: pointer;
+      background: var(--accent); color: var(--accent-ink);
+    }
+    .btn:hover { filter: brightness(1.08); }
+    .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+    section { padding: 72px 0; }
+    .eyebrow {
+      text-transform: uppercase; letter-spacing: 0.12em;
+      font-size: 0.72rem; font-weight: 700; color: var(--accent); margin-bottom: 10px;
+    }
+    .grid { display: grid; gap: 20px; }
+    .services { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card {
+      border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 24px; background: var(--paper);
+    }
+    .card h3 { margin-bottom: 6px; }
+    .card p { margin: 0; font-size: 0.95rem; }
+    .about { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 48px; align-items: start; }
+    .facts { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
+    .facts li { display: flex; gap: 12px; font-size: 0.95rem; color: var(--muted); }
+    .facts strong { color: var(--ink); min-width: 92px; }
+    blockquote {
+      margin: 0; padding: 32px; border-radius: var(--radius);
+      background: var(--wash); border-left: 4px solid var(--accent);
+    }
+    blockquote p { color: var(--ink); font-size: 1.1rem; }
+    blockquote footer { color: var(--muted); font-size: 0.9rem; }
+    .contact { background: var(--wash); }
+    form { display: grid; gap: 16px; max-width: 560px; }
+    .field { display: grid; gap: 6px; }
+    label { font-size: 0.85rem; font-weight: 600; }
+    input, textarea {
+      font: inherit; padding: 12px 14px; border-radius: 10px;
+      border: 1px solid var(--line); background: var(--paper); color: var(--ink);
+    }
+    textarea { min-height: 132px; resize: vertical; }
+    input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .form-note { font-size: 0.85rem; color: var(--muted); margin: 0; }
+    .site-footer { border-top: 1px solid var(--line); padding: 28px 0; }
+    .site-footer .wrap {
+      display: flex; flex-wrap: wrap; gap: 8px 24px;
+      align-items: center; justify-content: space-between;
+      font-size: 0.85rem; color: var(--muted);
+    }
+    @media (max-width: 900px) {
+      .services { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .about { grid-template-columns: 1fr; gap: 32px; }
+    }
+    @media (max-width: 600px) {
+      .hero { padding: 64px 0 48px; }
+      section { padding: 52px 0; }
+      .services { grid-template-columns: 1fr; }
+      nav ul { gap: 14px; }
+      nav a { font-size: 0.85rem; }
+      .brand { font-size: 0.95rem; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="#top">Northwind <span>Studio</span></a>
+      <nav aria-label="Main">
+        <ul>
+          <li><a href="#services">Services</a></li>
+          <li><a href="#about">About</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="wrap">
+        <p class="eyebrow">Design and engineering consultancy</p>
+        <h1>We turn rough ideas into products people actually use.</h1>
+        <p class="lede">
+          Northwind Studio is a five-person team of designers and engineers. We
+          help small companies ship their first real product, and help larger
+          ones fix the one that stopped working.
+        </p>
+        <div class="actions">
+          <a class="btn" href="#contact">Start a project</a>
+          <a class="btn ghost" href="#services">See what we do</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="services">
+      <div class="wrap">
+        <p class="eyebrow">Services</p>
+        <h2>Three things we do well</h2>
+        <div class="grid services">
+          <article class="card">
+            <h3>Product design</h3>
+            <p>
+              Research, flows, wireframes and a design system that your
+              developers can implement without guessing.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Web engineering</h3>
+            <p>
+              Fast, accessible interfaces built with boring, reliable
+              technology. No framework of the month, no rewrite in a year.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Technical rescue</h3>
+            <p>
+              Performance audits, accessibility fixes and migrations for
+              products that grew faster than their architecture.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="about">
+      <div class="wrap about">
+        <div>
+          <p class="eyebrow">About</p>
+          <h2>A small studio with a narrow focus</h2>
+          <p>
+            We started in 2019 after years of agency work where projects were
+            sold by people who never touched the code. Northwind is the
+            opposite: the people you meet on the first call are the people who
+            design and build the thing.
+          </p>
+          <p>
+            That means we take on fewer projects, keep timelines honest and
+            write documentation you can hand to the next team. Most of our
+            clients come from referrals, which is the only marketing we have
+            ever needed.
+          </p>
+        </div>
+        <ul class="facts">
+          <li><strong>Founded</strong> 2019, Rotterdam</li>
+          <li><strong>Team</strong> 5 people, no subcontractors</li>
+          <li><strong>Focus</strong> B2B tools and public-sector services</li>
+          <li><strong>Typical run</strong> 6 to 14 weeks per project</li>
+        </ul>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <p class="eyebrow">Testimonial</p>
+        <blockquote>
+          <p>
+            “They replaced a dashboard our team had been avoiding for two years.
+            Support tickets dropped by half in the first month, and the handover
+            documentation was better than anything we had written ourselves.”
+          </p>
+          <footer>— Marta de Vries, Operations Lead at Helder Logistics</footer>
+        </blockquote>
+      </div>
+    </section>
+
+    <section id="contact" class="contact">
+      <div class="wrap">
+        <p class="eyebrow">Contact</p>
+        <h2>Tell us what you are trying to build</h2>
+        <p>
+          Send a short description of the project and the deadline you are
+          working towards. We reply within two working days.
+        </p>
+        <form id="contact-form" novalidate>
+          <div class="field">
+            <label for="name">Name</label>
+            <input id="name" name="name" type="text" autocomplete="name" required />
+          </div>
+          <div class="field">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" autocomplete="email" required />
+          </div>
+          <div class="field">
+            <label for="message">Message</label>
+            <textarea id="message" name="message" required></textarea>
+          </div>
+          <button class="btn" type="submit">Send message</button>
+          <p class="form-note" id="form-note" role="status"></p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <span>Northwind Studio</span>
+      <span>&copy; 2026 Northwind Studio. All rights reserved.</span>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      var form = document.getElementById("contact-form");
+      var note = document.getElementById("form-note");
+      if (!form || !note) return;
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        var name = form.elements.name.value.trim();
+        var email = form.elements.email.value.trim();
+        var message = form.elements.message.value.trim();
+        if (!name || !email || !message) {
+          note.textContent = "Please fill in all three fields.";
+          return;
+        }
+        note.textContent = "Thanks, " + name + ". We will reply within two working days.";
+        form.reset();
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -29,15 +29,18 @@ def record_run(
     path: Path | None = None,
 ) -> dict[str, Any]:
     """Append one sandbox run record; returns the stored record."""
+    status = str(result.get("status") or "measured")
+    measured = status == "measured"
     record = {
         "ts": datetime.now().isoformat(timespec="seconds"),
         "model": model,
         "task": task,
+        "status": status,
         "first_pass_success": bool(result.get("first_pass_success")),
         "final_success": bool(result.get("final_success")),
         "repair_count": result.get("repair_count", 0),
-        "final_score": result.get("final_score"),
-        "penalized_score": result.get("penalized_score"),
+        "final_score": result.get("final_score") if measured else None,
+        "penalized_score": result.get("penalized_score") if measured else None,
         "artifacts": list(result.get("artifacts") or []),
         "critical_failures": list(result.get("critical_failures") or []),
         "error": str(result.get("error") or "")[:300],

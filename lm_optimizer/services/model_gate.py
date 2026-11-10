@@ -62,6 +62,9 @@ class ModelLease:
     model: str
     loaded_by_gate: bool
     load_s: float = 0.0
+    #: False when the server loaded the model but never answered the load call,
+    #: so ``load_s`` is the response timeout rather than a measurement.
+    load_measured: bool = True
     backend: str = ""
     reused: bool = False
     fallback: bool = False
@@ -278,11 +281,13 @@ class ModelGate:
 
         success = getattr(response, "success", None)
         error = getattr(response, "error", None)
+        response_received = getattr(response, "response_received", True)
         if isinstance(response, dict):
             if success is None:
                 success = response.get("success", True)
             if error is None:
                 error = response.get("error")
+            response_received = response.get("response_received", True)
         if success is False:
             raise ModelGateTimeout(
                 f"load failed for {model_id!r}: {error or 'unknown error'}"
@@ -291,6 +296,7 @@ class ModelGate:
             model=model_id,
             loaded_by_gate=True,
             load_s=round(self._clock() - started, 1),
+            load_measured=bool(response_received),
             backend=_backend_name(self.client),
             fallback=fallback,
         )

@@ -125,6 +125,7 @@ WEB_TASK = SandboxTask(
         SandboxCheck("no_external_styles", "regex", r"<link[^>]+href=[\"']https?://", weight=1.5, negate=True),
         SandboxCheck("no_external_assets", "regex", r"\.(png|jpg|jpeg|gif|webp|svg)\b", weight=1.0, negate=True),
         SandboxCheck("js_parses", "custom", None, weight=1.5, critical=True),
+        SandboxCheck("renders_content", "custom", None, weight=2.0, critical=True),
     ],
     max_repair_attempts=1,
     timeout_s=300.0,
@@ -193,6 +194,7 @@ MINECRAFT_WORLD_TASK = SandboxTask(
         SandboxCheck("has_render_loop", "regex", r"(requestAnimationFrame\s*\(|function\s+animate\s*\()", weight=1.5),
         SandboxCheck("no_external_assets", "regex", r"\.(png|jpg|jpeg|gif|zip)\b", weight=1.0, negate=True),
         SandboxCheck("js_parses", "custom", None, weight=1.5, critical=True),
+        SandboxCheck("renders_content", "custom", None, weight=2.0, critical=True),
     ],
     max_repair_attempts=2,
     timeout_s=300.0,
@@ -260,7 +262,7 @@ RESEARCH_TASK = SandboxTask(
         SandboxCheck("cites_technical", "regex", r"technical_secondary", weight=1.5),
         SandboxCheck("cites_conflicting", "regex", r"conflicting_source", weight=1.0),
         SandboxCheck("no_irrelevant_source", "regex", r"cassette", weight=2.0, negate=True),
-        SandboxCheck("mentions_unknown", "regex", r"(not (stated|provided|mentioned)|no (information|mention))", weight=1.0),
+        SandboxCheck("mentions_unknown", "regex", r"(not\s+(stated|provided|mentioned|specified|answered|covered|given|clear)|no\s+(information|mention|data|answer|evidence)|unclear|unknown|insufficient|cannot\s+(be\s+)?determin|does\s+not\s+(say|state|specify|answer|cover))", weight=1.0),
     ],
     max_repair_attempts=1,
     timeout_s=240.0,
@@ -306,7 +308,7 @@ BLENDER_TASK = SandboxTask(
         SandboxCheck("frames_rendered", "custom", None, weight=1.0),
     ],
     max_repair_attempts=2,
-    timeout_s=600.0,
+    timeout_s=900.0,
     max_output_tokens=6144,
     network_allowed=False,
     allowed_executables=("blender",),
@@ -581,7 +583,7 @@ BLENDER_CITY_TASK = SandboxTask(
         SandboxCheck("frames_rendered", "custom", None, weight=1.0),
     ],
     max_repair_attempts=2,
-    timeout_s=600.0,
+    timeout_s=900.0,
     max_output_tokens=6144,
     network_allowed=False,
     allowed_executables=("blender",),
@@ -1166,10 +1168,15 @@ class SandboxResult:
     error: str = ""
     #: Absolute path to a collected .blend file, when the task produced one.
     blend_file: str = ""
+    #: ``measured`` when the model produced output that was scored; ``not_measured``
+    #: when generation failed or returned nothing, so a 0.0 must not be read as a
+    #: quality result.
+    status: str = "measured"
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "task_id": self.task_id,
+            "status": self.status,
             "first_pass_success": self.first_pass_success,
             "final_success": self.final_success,
             "repair_count": self.repair_count,

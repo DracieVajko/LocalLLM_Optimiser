@@ -150,7 +150,11 @@ def test_blender_task_checks_all_spec_elements():
 # --- scoring ---
 
 def test_score_attempt_perfect_solution():
+    from dataclasses import replace
     from pathlib import Path
+
+    from lm_optimizer.services.sandbox_lab import SandboxPolicy
+    from lm_optimizer.services.sandbox_runner import SandboxRunner, build_command_for
 
     reference = (
         Path(__file__).resolve().parents[1]
@@ -159,11 +163,19 @@ def test_score_attempt_perfect_solution():
         / "company_website"
         / "index.html"
     )
-    files = {"index.html": reference.read_text(encoding="utf-8")}
-    score, failing, critical = score_attempt(WEB_TASK, files)
-    assert score == pytest.approx(1.0)
-    assert not failing
-    assert not critical
+    content = reference.read_text(encoding="utf-8")
+    task = replace(WEB_TASK, max_repair_attempts=0)
+    workdir = Path("results") / "pytest_perfect"
+    runner = SandboxRunner(
+        task=task,
+        policy=SandboxPolicy(workdir=workdir, network_enabled=False, timeout_s=task.timeout_s),
+        workdir=workdir,
+        command=build_command_for(task),
+    )
+    result = runner.run(lambda feedback: content)
+    assert result.final_score == pytest.approx(1.0)
+    assert not result.attempts[0].failing_checks
+    assert not result.critical_failures
 
 
 def test_score_attempt_flags_external_resources():
@@ -428,4 +440,16 @@ def test_deep_research_online_requires_scraped_citations():
     )
     score, failing, critical = score_attempt(task, {"index.html": body})
     assert any("distinct_citations" in name for name in failing)
+    assert not critical
+
+def test_research_synthesis_accepts_everyday_gap_wording():
+    task = SANDBOX_TASKS["research_synthesis"]
+    answer = (
+        "The API accepts context_length and flash_attention [primary_official]. "
+        "MTP raised decode throughput from 31.2 to 40.3 tok/s [technical_secondary]. "
+        "The Q3/Q4 conflict is hardware specific [conflicting_source]. "
+        "The exact VRAM cost is not specified in the sources."
+    )
+    score, failing, critical = score_attempt(task, {"answer.txt": answer})
+    assert score == pytest.approx(1.0), failing
     assert not critical

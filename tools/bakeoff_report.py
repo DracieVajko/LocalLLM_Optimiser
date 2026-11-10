@@ -118,23 +118,25 @@ def write_markdown(rows: list[dict], path: Path, frontier_only: bool = False) ->
     lines.append("## Model totals (load once + all tasks)")
     lines.append("")
     lines.append(
-        "| model | mean score | tasks passed | load_s | total gen_s | total_s | tokens | tok/s | thinking_chars |"
+        "| model | mean score | scored | tasks passed | load_s | total gen_s | total_s | tokens | tok/s | thinking_chars |"
     )
-    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
     order = list(by_model.keys())
     for model in order:
         model_rows = [r for r in by_model[model] if r.get("task") != "(load)" and r.get("task") != "(crash)"]
-        load_s = next((r.get("load_s") or 0 for r in by_model[model]), 0)
+        loads = [r.get("load_s") for r in by_model[model] if r.get("load_s") is not None]
+        load_s = loads[0] if loads else None
         gen_s = round(sum(float(r.get("gen_s") or 0) for r in model_rows), 1)
-        total_s = round(load_s + gen_s, 1)
+        total_s = round((load_s or 0) + gen_s, 1)
         tokens = sum(int(r.get("tokens") or 0) for r in model_rows)
         toks = round(tokens / gen_s, 2) if gen_s else 0.0
         thinking = sum(int(r.get("thinking_chars") or 0) for r in model_rows)
         scores = [float(r["final_score"]) for r in model_rows if r.get("final_score") is not None]
-        mean = round(sum(scores) / len(scores), 3) if scores else 0.0
+        mean = round(sum(scores) / len(scores), 3) if scores else None
         passed = sum(1 for r in model_rows if r.get("final_success"))
         lines.append(
-            f"| {model} | {mean} | {passed}/{len(model_rows)} | {load_s} | {gen_s} | {total_s} | "
+            f"| {model} | {mean if mean is not None else '-'} | {len(scores)}/{len(model_rows)} | "
+            f"{passed}/{len(model_rows)} | {load_s if load_s is not None else 'n/a'} | {gen_s} | {total_s} | "
             f"{tokens} | {toks} | {thinking} |"
         )
     lines.append("")
@@ -148,11 +150,14 @@ def write_markdown(rows: list[dict], path: Path, frontier_only: bool = False) ->
     lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for model in order:
         for r in sorted(by_model[model], key=lambda x: x.get("task", "")):
-            task = r.get("task", "(unknown)")
-            if task in ("(load)", "(crash)"):
+            task_value = r.get("task", "(unknown)")
+            if task_value in ("(load)", "(crash)"):
                 continue
+            score_value = _fmt(r.get("final_score"))
+            if r.get("status") == "not_measured" or r.get("final_score") is None:
+                score_value = "not measured"
             lines.append(
-                f"| {model} | {task} | {_fmt(r.get('final_score'))} | "
+                f"| {model} | {task_value} | {score_value} | "
                 f"{_fmt(r.get('final_success'))} | {_fmt(r.get('repair_count'))} | "
                 f"{_fmt(r.get('load_s'))} | {_fmt(r.get('gen_s'))} | {_fmt(r.get('total_s'))} | "
                 f"{_fmt(r.get('tokens'))} | {_fmt(r.get('tok_s'))} | {_fmt(r.get('thinking_chars'))} | "

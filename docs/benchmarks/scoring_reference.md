@@ -16,12 +16,15 @@ python -m pytest tests/test_scoring_reference.py -v
 | Case | Score | Pass | Critical failures |
 |---|---:|---|---|
 | `minecraft_world` good artifact | **1.000** | yes | — |
-| `minecraft_world` empty file | **0.000** | no | `html_not_empty`, `single_file_html` |
-| `minecraft_world` wrong content (no Three.js) | **0.320** | no | — |
+| `minecraft_world` empty completion | **not measured** | no | — (no run to score) |
+| `minecraft_world` prose instead of HTML | **0.000** | no | `html_document` |
+| `minecraft_world` wrong content (no Three.js) | **<0.6** | no | — |
 | `minecraft_world` external asset (`.png`) | **<1.0** | no | negative check fails |
 | `minecraft_world` JS syntax error (duplicate function) | **0.000** | no | `js_parses` |
+| `minecraft_world` blank canvas | **0.000** | no | `renders_content` (blank) |
+| `minecraft_world` single-colour canvas | **0.000** | no | `renders_content` (flat) |
 | `company_website` good artifact | **1.000** | yes | — |
-| `company_website` empty file | **0.000** | no | `html_not_empty` |
+| `company_website` empty completion | **not measured** | no | — |
 | `company_website` JS syntax error (unbalanced paren) | **0.000** | no | `js_parses` |
 | `company_website` JS body without a form | **<1.0** | no | `has_contact_form` |
 | `email_write` good artifact | **1.000** | yes | — |
@@ -79,6 +82,26 @@ python -m pytest tests/test_scoring_reference.py -v
     script with an `IndentationError` cost a full headless render before
     failing. `is_python_code` is now a critical check on all Blender tasks, so
     the syntax error is reported instead.
+12. **A non-run was scored 0.00.** Twelve rows showed a 0.00 after 0.1-0.8 s
+    (four tasks in one second) because the engine never loaded but the harness
+    wrote an empty artifact and scored it. `SandboxResult.status` is now
+    `measured` / `not_measured`; empty completions and generation exceptions
+    are `not_measured` with a `None` score and are excluded from every mean.
+13. **A blank canvas scored 1.00.** Bonsai's minecraft page was 100 % dark and
+    gpt-oss's was a single flat tone; both scored 1.00 because only the HTML
+    text was checked. `renders_content` (critical) screenshots the artifact and
+    measures the pixels: `blank` (>= 97 % dark) and `flat` (one tone) fail.
+    The e4b, 74b and DeepSeek scenes still pass, so the check is not a blanket
+    penalty.
+14. **`load_s` was a 30.0 fallback.** 39 of 50 bake-off rows showed exactly
+    30.0 s, which is `LOAD_RESPONSE_TIMEOUT_S` (server loaded the model but
+    never answered), not a measurement. Those rows now record `load_s=null`
+    and `load_measured=false`.
+15. **`research_synthesis` could never reach 1.00.** Every model capped at
+    0.867 = 6.5/7.5 because `mentions_unknown` only accepted "not
+    stated/provided/mentioned". It now accepts "not specified", "not covered",
+    "unclear", "unknown", "insufficient", "cannot be determined" and "the
+    sources do not say/state/specify/answer/cover".
 
 ## What the reference does not prove
 

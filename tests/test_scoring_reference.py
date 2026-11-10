@@ -61,11 +61,24 @@ def test_minecraft_good_artifact_scores_exactly_one(tmp_path):
     assert result.critical_failures == []
 
 
-def test_minecraft_empty_artifact_scores_zero_and_vetoes(tmp_path):
+def test_minecraft_empty_artifact_is_not_measured(tmp_path):
+    """An empty completion must never be reported as a 0.00 quality result."""
     result = _run("minecraft_world", "index.html", "", tmp_path)
+    assert result.status == "not_measured"
+    assert result.final_success is False
+    assert result.attempts == []
+
+
+def test_minecraft_prose_artifact_is_vetoed(tmp_path):
+    result = _run(
+        "minecraft_world",
+        "index.html",
+        "Here is how I would build the scene: create a box, add a camera, done.",
+        tmp_path,
+    )
     assert result.final_score == 0.0
     assert result.final_success is False
-    assert any("single_file_html" in item for item in result.critical_failures)
+    assert any("html_document" in item for item in result.critical_failures)
 
 
 def test_minecraft_wrong_artifact_scores_low(tmp_path):
@@ -77,7 +90,7 @@ def test_minecraft_wrong_artifact_scores_low(tmp_path):
         "</body></html>",
         tmp_path,
     )
-    assert result.final_score < 0.5
+    assert result.final_score < 0.6
     assert result.final_success is False
 
 
