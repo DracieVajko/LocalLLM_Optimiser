@@ -33,6 +33,8 @@ def test_all_sandbox_tasks_exist():
         "web_search",
         "deep_research",
         "minecraft_world",
+        "blender_city",
+        "deep_research_report",
     }
     kinds = {t.kind for t in SANDBOX_TASKS.values()}
     assert kinds == {
@@ -290,3 +292,17 @@ def test_minecraft_prompt_accepts_scene_variation():
     assert "fewer trees, a lighthouse and a bigger pond" in varied
     assert "floating skyblock" in varied
     assert build_minecraft_prompt("   ") == base
+
+def test_blender_city_task_requires_preview_and_no_animation():
+    task = SANDBOX_TASKS["blender_city"]
+    names = {check.name for check in task.checks}
+    assert "preview_rendered" in names
+    assert "no_animation" in names
+    assert "preview.png" in task.artifacts
+
+
+def test_deep_research_report_task_is_html_with_citations():
+    task = SANDBOX_TASKS["deep_research_report"]
+    names = {check.name for check in task.checks}
+    assert {"cites_primary", "cites_technical", "cites_conflicting", "min_words"} <= names
+    assert task.artifacts == ("index.html",)

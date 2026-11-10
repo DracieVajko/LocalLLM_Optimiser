@@ -72,6 +72,8 @@ def test_lab_sandbox_tasks_endpoint(client):
         "web_search",
         "deep_research",
         "minecraft_world",
+        "blender_city",
+        "deep_research_report",
     } == ids
     for task in tasks:
         assert task["checks"]
