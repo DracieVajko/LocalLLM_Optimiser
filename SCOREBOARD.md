@@ -24,6 +24,17 @@ Two tables, two different questions:
 - The `.blend` of a Blender run is copied to
   `results/blends/<model>/<task>/<stamp>.blend` for inspection.
 
+## Frontier providers (measured 2026-11-10)
+
+| provider | email | company_website | minecraft_world | blender_city |
+|---|---:|---:|---:|---:|
+| DeepSeek V4.1 Flash | 1.00 | 1.00 | 1.00 | 1.00 |
+| Gemini | 1.00 | 1.00 | 1.00 | 1.00 |
+| ChatGPT | **0.00** | 1.00 | 1.00 | 1.00 |
+
+ChatGPT's email has no `Subject:` line, so it fails `has_subject` exactly like
+the local models that leak reasoning. Everything else renders `ok` on pixels.
+
 ## Tier-A text tasks (reviewer audit, 2026-11-10)
 
 Source: the 2026-11-10 audit of `sandbox_runs.jsonl` (241 rows), after removing
@@ -62,13 +73,19 @@ Notes:
 
 | provider | task | mean | sd | dark | tones | verdict |
 |---|---|---:|---:|---:|---:|---|
+| chatgpt | blender_city | 128.0 | 22.6 | 0% | 108 | **ok** |
+| chatgpt | company_website | 236.3 | 35.5 | 0% | 57 | **ok** |
+| chatgpt | minecraft_world | 62.8 | 51.0 | 0% | 150 | **ok** |
 | deepseek | blender_city | 113.4 | 34.0 | 0% | 76 | **ok** |
 | deepseek | blender_skyblock | 86.4 | 35.7 | 0% | 67 | **ok** |
 | deepseek | company_website | 243.9 | 37.9 | 0% | 70 | **ok** |
 | deepseek | deep_research_report | 246.3 | 37.3 | 0% | 51 | **ok** |
-| deepseek | minecraft_world | 137.0 | 81.2 | 7% | 131 | **ok** |
+| deepseek | minecraft_world | 136.9 | 81.1 | 7% | 132 | **ok** |
+| gemini | blender_city | 71.6 | 58.2 | 34% | 74 | **ok** |
+| gemini | company_website | 246.1 | 28.9 | 0% | 35 | **ok** |
+| gemini | minecraft_world | 161.3 | 43.7 | 0% | 106 | **ok** |
 | nemotron-74b | minecraft_world | 181.6 | 22.1 | 0% | 17 | **ok** |
-| nemotron-e4b | minecraft_world | 164.4 | 20.2 | 0% | 36 | **ok** |
+| nemotron-e4b | minecraft_world | 164.5 | 20.3 | 0% | 51 | **ok** |
 | gpt-oss-20b heretic | minecraft_world | 188.0 | 0.0 | 0% | 1 | **flat** |
 | bonsai-27b | minecraft_world | 2.3 | 23.0 | 99% | 21 | **blank** |
 

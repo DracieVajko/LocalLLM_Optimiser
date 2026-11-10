@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Procedural Voxel World</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #87CEEB;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        #hero-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none; /* Allows interactions to pass through to canvas if needed */
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 5rem;
+            color: #ffffff;
+            margin: 0;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            text-shadow: 4px 4px 0px rgba(0, 0, 0, 0.4);
+        }
+
+        p {
+            font-size: 1.5rem;
+            color: #f0f0f0;
+            margin-top: 1rem;
+            font-weight: 500;
+            text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Import map for Three.js ES module via CDN */
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+    
+    <div id="hero-overlay">
+        <h1>Voxel Hero</h1>
+        <p>A procedural floating island rendered at 60fps.</p>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // --------------------------------------------------------
+        // 1. Core Setup: Scene, Camera, Renderer
+        // --------------------------------------------------------
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+
+        // Background and fog will be dynamically updated in the animation loop
+        scene.background = new THREE.Color(0x87CEEB);
+        scene.fog = new THREE.FogExp2(0x87CEEB, 0.02);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Cap pixel ratio for performance
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        // --------------------------------------------------------
+        // 2. Lighting Setup
+        // --------------------------------------------------------
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        sunLight.castShadow = true;
+        
+        // Optimize shadow map resolution
+        sunLight.shadow.mapSize.width = 1024;
+        sunLight.shadow.mapSize.height = 1024;
+        sunLight.shadow.camera.near = 1;
+        sunLight.shadow.camera.far = 100;
+        
+        // Define shadow camera bounds covering the island
+        const d = 30;
+        sunLight.shadow.camera.left = -d;
+        sunLight.shadow.camera.right = d;
+        sunLight.shadow.camera.top = d;
+        sunLight.shadow.camera.bottom = -d;
+        sunLight.shadow.bias = -0.0005; // Prevent shadow acne
+        scene.add(sunLight);
+
+        // --------------------------------------------------------
+        // 3. Procedural Voxel Generation
+        // --------------------------------------------------------
+        const COLOR_GRASS = new THREE.Color(0x559020);
+        const COLOR_DIRT = new THREE.Color(0x6b4a2d);
+        const COLOR_STONE = new THREE.Color(0x7a7a7a);
+        const COLOR_WATER = new THREE.Color(0x2a9df4);
+
+        // We use a single InstancedMesh for high-performance rendering of thousands of cubes
+        const geometry = new THREE.BoxGeometry(1, 1, 1);
+        const material = new THREE.MeshStandardMaterial({ 
+            roughness: 0.9, 
+            metalness: 0.0,
+        });
+
+        const islandSize = 32;
+        const maxInstances = 20000; // Safe upper limit for our 32x32 area
+        const instancedMesh = new THREE.InstancedMesh(geometry, material, maxInstances);
+        instancedMesh.castShadow = true;
+        instancedMesh.receiveShadow = true;
+
+        const dummy = new THREE.Object3D();
+        let blockCount = 0;
+
+        // Simple smooth noise function using sine wave superposition
+        function smoothNoise(x, z) {
+            return (
+                Math.sin(x * 0.15) + 
+                Math.sin(z * 0.15) + 
+                Math.sin(x * 0.3 + z * 0.2) * 0.5 + 
+                Math.sin(x * 0.1 - z * 0.4) * 0.25
+            ) * 1.5;
+        }
+
+        // Build the floating island
+        for (let x = -islandSize/2; x < islandSize/2; x++) {
+            for (let z = -islandSize/2; z < islandSize/2; z++) {
+                
+                // Calculate distance from center to create a circular island falloff
+                const dist = Math.sqrt(x*x + z*z);
+                const maxDist = 12;
+                
+                // Add jaggedness to the island edges
+                const angle = Math.atan2(z, x);
+                const edgeNoise = Math.sin(angle * 6) * 1.5 + Math.sin(angle * 14) * 0.5;
+                
+                if (dist > maxDist + edgeNoise) continue; // Skip blocks outside the island radius
+
+                // Determine surface height for this (x, z) coordinate
+                let surfaceY = Math.floor(smoothNoise(x, z) * 1.5 + 1);
+                
+                // Make edges slope downward sharply
+                const edgeDropoff = Math.max(0, dist - (maxDist - 3));
+                surfaceY -= Math.floor(edgeDropoff * 1.2);
+                
+                // Generate blocks from bottom of island up to surface
+                // Bottom is jagged to look like ripped earth
+                const bottomY = -6 - Math.floor(Math.abs(Math.sin(x*43 + z*11)) * 3);
+                
+                for (let y = bottomY; y <= Math.max(surfaceY, 0); y++) {
+                    
+                    if (blockCount >= maxInstances) break;
+
+                    let blockColor;
+                    
+                    // Determine block type based on depth and height
+                    if (y > surfaceY) {
+                        if (y === 0) {
+                            blockColor = COLOR_WATER; // Water fills empty space at Y=0
+                        } else {
+                            continue; // Air above water
+                        }
+                    } else if (y === surfaceY && y >= 0) {
+                        blockColor = COLOR_GRASS;
+                    } else if (y >= surfaceY - 2 && y < surfaceY) {
+                        blockColor = COLOR_DIRT;
+                    } else {
+                        blockColor = COLOR_STONE;
+                    }
+
+                    // Position the dummy object, update matrix, and apply to instance
+                    dummy.position.set(x, y, z);
+                    dummy.updateMatrix();
+                    instancedMesh.setMatrixAt(blockCount, dummy.matrix);
+                    instancedMesh.setColorAt(blockCount, blockColor);
+                    blockCount++;
+                }
+            }
+        }
+        
+        // Finalize instanced mesh data
+        instancedMesh.count = blockCount;
+        instancedMesh.instanceMatrix.needsUpdate = true;
+        instancedMesh.instanceColor.needsUpdate = true;
+        scene.add(instancedMesh);
+
+        // --------------------------------------------------------
+        // 4. Animation & Day/Night Cycle
+        // --------------------------------------------------------
+        const clock = new THREE.Clock();
+        
+        // Define sky colors for interpolation
+        const skyDay = new THREE.Color(0x87CEEB);
+        const skySunset = new THREE.Color(0xff8c00);
+        const skyNight = new THREE.Color(0x0b1021);
+        
+        const ambientDay = 0.6;
+        const ambientNight = 0.15;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const elapsedTime = clock.getElapsedTime();
+            
+            // --- Auto-orbiting Camera ---
+            // Circular path around the island
+            const orbitRadius = 35;
+            const orbitSpeed = 0.1;
+            camera.position.x = Math.sin(elapsedTime * orbitSpeed) * orbitRadius;
+            camera.position.z = Math.cos(elapsedTime * orbitSpeed) * orbitRadius;
+            
+            // Slight vertical bobbing
+            camera.position.y = 12 + Math.sin(elapsedTime * orbitSpeed * 1.5) * 4; 
+            camera.lookAt(0, 0, 0);
+
+            // --- Day-Night Cycle ---
+            const dayDuration = 40; // Seconds per full cycle
+            const cycle = (elapsedTime % dayDuration) / dayDuration; 
+            
+            // Start at noon (PI/2)
+            const theta = cycle * Math.PI * 2 + Math.PI/2; 
+            
+            // Rotate sun
+            sunLight.position.x = Math.cos(theta) * 50;
+            sunLight.position.y = Math.sin(theta) * 50;
+            sunLight.position.z = Math.sin(theta) * 20;
+            
+            const sunHeight = sunLight.position.y;
+            let lerpFactor = 0;
+            
+            // Map sun height to sky colors and light intensities
+            if (sunHeight > 15) {
+                // Broad daylight
+                scene.background.copy(skyDay);
+                ambientLight.intensity = ambientDay;
+                sunLight.intensity = 1.2;
+            } else if (sunHeight > 0) {
+                // Sunset / Sunrise
+                lerpFactor = sunHeight / 15;
+                scene.background.lerpColors(skySunset, skyDay, lerpFactor);
+                ambientLight.intensity = THREE.MathUtils.lerp(ambientNight + 0.1, ambientDay, lerpFactor);
+                sunLight.intensity = THREE.MathUtils.lerp(0.1, 1.2, lerpFactor);
+            } else if (sunHeight > -15) {
+                // Twilight
+                lerpFactor = (sunHeight + 15) / 15;
+                scene.background.lerpColors(skyNight, skySunset, lerpFactor);
+                ambientLight.intensity = THREE.MathUtils.lerp(ambientNight, ambientNight + 0.1, lerpFactor);
+                sunLight.intensity = 0; // Sun dropped below horizon
+            } else {
+                // Deep night
+                scene.background.copy(skyNight);
+                ambientLight.intensity = ambientNight;
+                sunLight.intensity = 0;
+            }
+            
+            // Synchronize fog color with the dynamic sky background
+            scene.fog.color.copy(scene.background);
+
+            renderer.render(scene, camera);
+        }
+
+        // --------------------------------------------------------
+        // 5. Window Resize Handler
+        // --------------------------------------------------------
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start loop
+        animate();
+    </script>
+</body>
+</html>

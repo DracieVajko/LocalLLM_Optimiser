@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Northwind Studio | Design & Engineering</title>
+    <style>
+        :root {
+            --primary: #0f172a;
+            --secondary: #334155;
+            --accent: #2563eb;
+            --bg-light: #ffffff;
+            --bg-alt: #f8fafc;
+            --border: #e2e8f0;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+            color: var(--secondary);
+            background-color: var(--bg-light);
+        }
+
+        /* Typography */
+        h1, h2, h3 {
+            color: var(--primary);
+            line-height: 1.2;
+        }
+
+        h2 {
+            font-size: 2.25rem;
+            margin-bottom: 2.5rem;
+            text-align: center;
+        }
+
+        /* Layout & Containers */
+        .section-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 5rem 2rem;
+        }
+
+        .alt-bg {
+            background-color: var(--bg-alt);
+        }
+
+        /* Header & Navigation */
+        .site-header {
+            position: sticky;
+            top: 0;
+            background-color: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid var(--border);
+            z-index: 1000;
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1.25rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            text-decoration: none;
+            letter-spacing: -0.5px;
+        }
+
+        .main-nav ul {
+            list-style: none;
+            display: flex;
+            gap: 2rem;
+        }
+
+        .main-nav a {
+            text-decoration: none;
+            color: var(--secondary);
+            font-weight: 500;
+            transition: color 0.2s ease;
+        }
+
+        .main-nav a:hover {
+            color: var(--accent);
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-block;
+            background-color: var(--accent);
+            color: white;
+            padding: 0.875rem 2rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .btn:hover {
+            background-color: #1d4ed8;
+        }
+
+        /* Hero Section */
+        .hero {
+            padding: 8rem 2rem;
+            text-align: center;
+            background-color: var(--bg-alt);
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            margin-bottom: 1.5rem;
+            letter-spacing: -1px;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            max-width: 600px;
+            margin: 0 auto 2.5rem;
+        }
+
+        /* Services Section */
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .service-card {
+            background: var(--bg-light);
+            padding: 2.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        .service-card h3 {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        /* About Section */
+        .about-content {
+            max-width: 800px;
+            margin: 0 auto;
+            text-align: center;
+            font-size: 1.125rem;
+        }
+
+        /* Testimonial Section */
+        .testimonial-content {
+            max-width: 800px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .testimonial-content blockquote {
+            font-size: 1.5rem;
+            font-style: italic;
+            color: var(--primary);
+            margin-bottom: 1.5rem;
+            line-height: 1.4;
+        }
+
+        .testimonial-content cite {
+            display: block;
+            font-style: normal;
+            font-weight: 600;
+            color: var(--secondary);
+        }
+
+        /* Contact Section */
+        .contact-form {
+            max-width: 600px;
+            margin: 0 auto;
+            background: var(--bg-light);
+            padding: 2.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--primary);
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 1rem;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .form-submit {
+            width: 100%;
+        }
+
+        /* Footer */
+        .site-footer {
+            background-color: var(--primary);
+            color: #94a3b8;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .site-footer p {
+            margin: 0;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 600px) {
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+                padding: 1rem;
+            }
+
+            .main-nav ul {
+                gap: 1rem;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .hero {
+                padding: 5rem 1rem;
+            }
+
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .section-container {
+                padding: 4rem 1rem;
+            }
+
+            h2 {
+                font-size: 1.75rem;
+            }
+
+            .testimonial-content blockquote {
+                font-size: 1.25rem;
+            }
+            
+            .service-card {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header class="site-header">
+        <div class="header-content">
+            <a href="#" class="logo">Northwind Studio</a>
+            <nav class="main-nav" aria-label="Main navigation">
+                <ul>
+                    <li><a href="#services">Services</a></li>
+                    <li><a href="#about">About</a></li>
+                    <li><a href="#testimonials">Testimonials</a></li>
+                    <li><a href="#contact">Contact</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero" id="home">
+            <div class="section-container">
+                <h1>Engineering Elegance</h1>
+                <p>We build robust, scalable, and beautifully designed digital products for modern businesses.</p>
+                <a href="#contact" class="btn">Start a Project</a>
+            </div>
+        </section>
+
+        <section id="services">
+            <div class="section-container">
+                <h2>Our Services</h2>
+                <div class="services-grid">
+                    <div class="service-card">
+                        <h3>UI/UX Design</h3>
+                        <p>We craft intuitive, engaging, and accessible user experiences tailored perfectly to your target audience's needs and behaviors.</p>
+                    </div>
+                    <div class="service-card">
+                        <h3>Full-Stack Development</h3>
+                        <p>Our engineers build highly performant and secure web and mobile applications from the ground up using modern technologies.</p>
+                    </div>
+                    <div class="service-card">
+                        <h3>System Architecture</h3>
+                        <p>We design reliable, scalable cloud infrastructure and backend systems that grow seamlessly alongside your business operations.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="about" class="alt-bg">
+            <div class="section-container">
+                <h2>About Northwind Studio</h2>
+                <div class="about-content">
+                    <p>Northwind Studio is a boutique design and engineering consultancy based on the belief that form and function must work in perfect harmony. We bridge the gap between creative vision and technical execution, partnering intimately with ambitious teams to deliver exceptional digital products that drive real business value.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="testimonials">
+            <div class="section-container">
+                <h2>Client Success</h2>
+                <div class="testimonial-content">
+                    <blockquote>"Northwind Studio completely transformed our core platform. Their holistic approach and unwavering attention to detail in both aesthetic design and underlying engineering is truly unmatched."</blockquote>
+                    <cite>&mdash; Sarah Jenkins, CTO of TechFlow</cite>
+                </div>
+            </div>
+        </section>
+
+        <section id="contact" class="alt-bg">
+            <div class="section-container">
+                <h2>Get in Touch</h2>
+                <form class="contact-form" action="#" method="POST">
+                    <div class="form-group">
+                        <label for="name">Full Name</label>
+                        <input type="text" id="name" name="name" required placeholder="Jane Doe">
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email Address</label>
+                        <input type="email" id="email" name="email" required placeholder="jane@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="message">Project Details</label>
+                        <textarea id="message" name="message" rows="5" required placeholder="Tell us about your goals..."></textarea>
+                    </div>
+                    <button type="submit" class="btn form-submit">Send Message</button>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <p>&copy; 2026 Northwind Studio. All rights reserved.</p>
+    </footer>
+
+</body>
+</html>

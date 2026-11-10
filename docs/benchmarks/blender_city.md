@@ -31,7 +31,7 @@ code fence starting with ```python and ending with ```.
 | `no_animation` (negated) | no animation render | 1.0 | — |
 | `blend_runs` | Blender exited 0 | 1.0 | yes |
 | `blend_is_binary` | real `.blend` (zstd/gzip accepted) | 2.0 | yes |
-| `blend_min_size` | `.blend` > 100 KB | 1.0 | yes |
+| `blend_min_size` | `.blend` > 16 KB (not an empty stub) | 1.0 | yes |
 | `preview_rendered` | `preview.png` exists and > 1 KB | 1.5 | yes |
 
 ## Run

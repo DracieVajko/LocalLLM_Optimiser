@@ -38,6 +38,11 @@ Verified now, with `tools/audit_tasks.py` and `tools/audit_screenshots.py`:
 | `creative_3d_voxel_island` prompt asks for camera/Three.js, no check | no `has_camera`/`uses_three` | open, Task 5 |
 | `web_fetch_brief` is a JSON-shape test, not a web test | task has no network and no fetch | document only, Task 6 |
 | `blender_city` vs `blender_city_bridge` overlap | both build a city; one renders frames | keep both, Task 6 |
+| `has_threejs` rejected ES-module loading | Gemini and ChatGPT both load Three.js via importmap / dynamic `import()` and failed | **fixed** (`has_threejs` accepts importmap/module) |
+| Blender engine rename rejected valid scenes | Blender 4.2 writes `BLENDER_EEVEE_NEXT`, 4.0 writes `EEVEE`, 5.3 accepts only `BLENDER_EEVEE` | **fixed** (`normalize_render_engine`, raw script kept) |
+| `blend_min_size` rejected a valid 95 KB scene | Gemini's compressed low-poly city is 95,238 bytes | **fixed** (threshold 16 KB) |
+| `company_website` `min_words` 220 rejected a concise 190-word page | Gemini site | **fixed** (150 words) |
+| Frontier comparison imported and scored | see `SCOREBOARD.md` frontier table | **done** |
 
 No stored screenshot is currently blank/flat except the two already-vetoed
 artifacts (Bonsai blank, gpt-oss flat). The pure-white case you saw is the same

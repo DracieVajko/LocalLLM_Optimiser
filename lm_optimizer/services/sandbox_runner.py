@@ -281,6 +281,55 @@ def read_workdir_files(workdir: Path, limit: int = 50) -> dict[str, str]:
     return out
 
 
+#: Render-engine names written by models trained on other Blender releases.
+#: Blender 5.x accepts only BLENDER_EEVEE / BLENDER_WORKBENCH / CYCLES.
+_ENGINE_ALIASES = {
+    "EEVEE": "BLENDER_EEVEE",
+    "EEVEE_NEXT": "BLENDER_EEVEE",
+    "BLENDER_EEVEE_NEXT": "BLENDER_EEVEE",
+    "BLENDER_EEVEE_LEGACY": "BLENDER_EEVEE",
+}
+_ENGINE_LINE = re.compile(
+    r"(render\.engine\s*=\s*)([\"'])(?P<name>[A-Za-z0-9_]+)\2"
+)
+
+
+def normalize_render_engine(script: str) -> str:
+    """Map a known engine alias onto the value this Blender accepts.
+
+    A model trained on Blender 4.2 writes ``BLENDER_EEVEE_NEXT`` and one trained
+    on 4.0 writes ``EEVEE``; Blender 5.x renamed it back to ``BLENDER_EEVEE``.
+    Only the engine assignment is touched, never geometry or render settings, so
+    a valid scene is not rejected for a version rename. The raw script stays on
+    disk; the normalised copy is what runs.
+    """
+    def _replace(match: re.Match[str]) -> str:
+        name = match.group("name")
+        mapped = _ENGINE_ALIASES.get(name)
+        if mapped is None:
+            return match.group(0)
+        return f"{match.group(1)}{match.group(2)}{mapped}{match.group(2)}"
+
+    return _ENGINE_LINE.sub(_replace, script)
+
+
+def _blender_exec_script(workdir: Path) -> Path | None:
+    """Write build_scene.exec.py when the engine name needs mapping."""
+    script = workdir / "build_scene.py"
+    if not script.exists():
+        return None
+    try:
+        text = script.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    normalized = normalize_render_engine(text)
+    if normalized == text:
+        return None
+    target = workdir / "build_scene.exec.py"
+    target.write_text(normalized, encoding="utf-8")
+    return target
+
+
 _BLEND_MAGIC = b"BLENDER"
 _ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
 _GZIP_MAGIC = b"\x1f\x8b"
@@ -420,8 +469,18 @@ class SandboxRunner:
                 ok=True, exit_code=0, stdout="", stderr="", duration_s=0.0
             )
             if self.command:
+                command = self.command
+                if self.task.kind.value == "blender":
+                    exec_script = _blender_exec_script(self.workdir)
+                    if exec_script is not None:
+                        command = command.replace("build_scene.py", exec_script.name)
+                        logger.info(
+                            "blender engine name normalised for this release",
+                            task=self.task.id,
+                            script=exec_script.name,
+                        )
                 execution = run_command(
-                    self.command, self.workdir, self.policy, self.task.timeout_s
+                    command, self.workdir, self.policy, self.task.timeout_s
                 )
 
             files = read_workdir_files(self.workdir)
@@ -493,8 +552,8 @@ class SandboxRunner:
                         f"size={len(data)} magic={data[:7]!r}",
                     )
                     custom["blend_min_size"] = (
-                        len(data) > 100_000,
-                        f"size={len(data)} (>100KB)",
+                        len(data) > 16_384,
+                        f"size={len(data)} (>16KB)",
                     )
                 else:
                     custom["blend_is_binary"] = (

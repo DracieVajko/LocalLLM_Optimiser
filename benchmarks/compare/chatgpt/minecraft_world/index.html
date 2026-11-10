@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#83c6dc" />
+  <meta name="description" content="A tiny procedural voxel world floating somewhere above the clouds." />
+  <title>Blockscape — A Tiny Voxel World</title>
+  <style>
+    :root {
+      --ink: #17251f;
+      --muted: #60756a;
+      --accent: #477e50;
+      --paper: #f5f7ef;
+      --font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { font-family: var(--font); color: var(--ink); background: var(--paper); overflow-x: hidden; }
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; }
+    .hero {
+      position: relative; min-height: 720px; height: 100svh; overflow: hidden; isolation: isolate;
+      background: linear-gradient(180deg, #78c5e3, #d9edcf);
+    }
+    .sky-backdrop { position: absolute; inset: 0; z-index: -2; background: linear-gradient(180deg, #78c5e3, #d9edcf); transition: background 1s linear; }
+    #world-canvas { position: absolute; inset: 0; z-index: -1; display: block; width: 100%; height: 100%; outline: none; }
+    .hero::after {
+      content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+      background: linear-gradient(90deg, rgba(16,37,42,.48) 0%, rgba(16,37,42,.18) 39%, transparent 72%),
+                  linear-gradient(0deg, rgba(16,37,42,.30), transparent 24%);
+    }
+    .site-header {
+      position: absolute; top: 0; left: 0; z-index: 5; display: flex; align-items: center;
+      justify-content: space-between; width: 100%; padding: 26px clamp(22px, 6vw, 88px); color: white;
+    }
+    .brand { display: inline-flex; align-items: center; gap: 11px; font-size: 15px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+    .brand-mark { display: grid; grid-template-columns: repeat(3,6px); grid-template-rows: repeat(3,6px); gap: 2px; transform: rotate(-8deg); }
+    .brand-mark span { background: #e9f5d7; border-radius: 1px; }
+    .brand-mark span:nth-child(2), .brand-mark span:nth-child(4), .brand-mark span:nth-child(8) { opacity: .48; }
+    .brand-mark span:nth-child(5) { background: #a4d77d; }
+    .nav-links { display: flex; align-items: center; gap: clamp(20px,3vw,42px); font-size: 12px; font-weight: 650; letter-spacing: .09em; text-transform: uppercase; }
+    .nav-links a { opacity: .88; transition: opacity 180ms ease; }
+    .nav-links a:hover { opacity: 1; }
+    .nav-status { display: flex; align-items: center; gap: 9px; padding: 9px 13px; border: 1px solid rgba(255,255,255,.3); border-radius: 99px; background: rgba(255,255,255,.11); backdrop-filter: blur(12px); font-size: 10px; font-weight: 750; letter-spacing: .1em; }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #b9ef91; box-shadow: 0 0 12px rgba(185,239,145,.9); }
+    .hero-content { position: absolute; z-index: 2; top: 50%; left: clamp(24px,9vw,140px); width: min(540px,76vw); color: white; transform: translateY(-43%); pointer-events: none; }
+    .hero-content > * { pointer-events: auto; }
+    .eyebrow { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 24px; color: rgba(255,255,255,.88); font-size: 11px; font-weight: 750; letter-spacing: .2em; text-transform: uppercase; }
+    .eyebrow-line { width: 28px; height: 1px; background: #c2e6a0; }
+    h1 { max-width: 560px; font-size: clamp(56px,8vw,108px); font-weight: 850; line-height: .91; letter-spacing: -.075em; text-wrap: balance; text-shadow: 0 8px 34px rgba(17,37,35,.15); }
+    h1 span { display: block; color: #c8eea5; }
+    .hero-description { max-width: 390px; margin-top: 27px; color: rgba(255,255,255,.88); font-size: clamp(14px,1.3vw,16px); line-height: 1.75; }
+    .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 22px; margin-top: 34px; }
+    .primary-button { display: inline-flex; align-items: center; gap: 14px; min-height: 52px; padding: 0 22px; border: 0; border-radius: 5px; background: #d4f0b7; color: #243a2a; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; transition: transform 180ms ease, background 180ms ease; }
+    .primary-button:hover { background: #e5f7d4; transform: translateY(-3px); }
+    .button-arrow { font-size: 18px; line-height: 1; }
+    .text-link { color: white; font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; opacity: .9; }
+    .text-link::after { content: ""; display: block; width: 100%; height: 1px; margin-top: 5px; background: rgba(255,255,255,.6); transform: scaleX(.45); transform-origin: left; transition: transform 180ms ease; }
+    .text-link:hover::after { transform: scaleX(1); }
+    .world-label { position: absolute; z-index: 2; top: 47%; right: clamp(24px,8vw,125px); color: white; text-align: right; pointer-events: none; }
+    .world-label small { display: block; margin-bottom: 7px; color: rgba(255,255,255,.74); font-size: 9px; font-weight: 750; letter-spacing: .2em; text-transform: uppercase; }
+    .world-label strong { display: block; font-size: 14px; font-weight: 750; letter-spacing: .04em; }
+    .world-label .coordinates { margin-top: 7px; font-size: 10px; letter-spacing: .12em; opacity: .68; }
+    .hero-bottom { position: absolute; z-index: 3; right: clamp(22px,6vw,88px); bottom: 32px; left: clamp(22px,6vw,88px); display: flex; align-items: flex-end; justify-content: space-between; color: white; }
+    .world-caption { display: flex; align-items: center; gap: 13px; font-size: 10px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+    .caption-icon { display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid rgba(255,255,255,.38); border-radius: 50%; font-size: 14px; }
+    .scroll-note { display: flex; align-items: center; gap: 12px; font-size: 9px; font-weight: 750; letter-spacing: .17em; text-transform: uppercase; opacity: .8; }
+    .scroll-line { width: 38px; height: 1px; background: white; }
+    .details { position: relative; padding: 105px clamp(24px,9vw,140px) 110px; background: var(--paper); }
+    .details-inner { display: grid; grid-template-columns: 1.05fr 1fr; gap: clamp(40px,9vw,140px); max-width: 1280px; margin: 0 auto; }
+    .section-kicker { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; color: var(--accent); font-size: 10px; font-weight: 800; letter-spacing: .2em; text-transform: uppercase; }
+    .section-kicker::before { content: ""; width: 25px; height: 1px; background: var(--accent); }
+    .details h2 { max-width: 500px; font-size: clamp(34px,4vw,54px); line-height: 1.02; letter-spacing: -.06em; }
+    .details-copy { max-width: 450px; margin-top: 20px; color: var(--muted); font-size: 14px; line-height: 1.85; }
+    .world-facts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-content: center; gap: 12px; }
+    .fact-card { min-height: 115px; padding: 22px; border: 1px solid #e3e9dc; border-radius: 7px; background: #fbfcf7; }
+    .fact-value { display: block; margin-bottom: 8px; color: #315b3d; font-size: 27px; font-weight: 800; letter-spacing: -.06em; }
+    .fact-label { color: #718176; font-size: 10px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+    .site-footer { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 25px clamp(24px,9vw,140px); border-top: 1px solid #e3e9dc; background: var(--paper); color: #819087; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+    .site-footer strong { color: #42584a; }
+    .loading-message { position: absolute; z-index: 4; top: 50%; left: 50%; padding: 13px 18px; border: 1px solid rgba(255,255,255,.3); border-radius: 5px; background: rgba(22,47,46,.45); color: white; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; transform: translate(-50%,-50%); backdrop-filter: blur(12px); transition: opacity 300ms ease; }
+    .loading-message.hidden { opacity: 0; pointer-events: none; }
+    @media (max-width: 760px) {
+      .hero { min-height: 700px; height: 100svh; }
+      .site-header { padding: 22px; }
+      .nav-links { gap: 17px; }
+      .nav-links a:not(:last-child) { display: none; }
+      .nav-status { padding: 8px 10px; font-size: 9px; }
+      .hero-content { top: 47%; left: 25px; width: min(410px,calc(100% - 50px)); transform: translateY(-40%); }
+      .hero-content h1 { font-size: clamp(58px,13vw,85px); }
+      .hero-description { max-width: 330px; font-size: 14px; }
+      .world-label { top: auto; right: 25px; bottom: 115px; }
+      .hero-bottom { bottom: 23px; }
+      .scroll-note { display: none; }
+      .details { padding: 75px 25px; }
+      .details-inner { grid-template-columns: 1fr; gap: 40px; }
+      .world-facts { gap: 9px; }
+      .fact-card { min-height: 100px; padding: 17px; }
+      .site-footer { padding: 22px 25px; }
+    }
+    @media (max-width: 400px) {
+      .brand { font-size: 12px; }
+      .hero-actions { gap: 16px; }
+      .primary-button { min-height: 48px; padding: 0 15px; }
+      .world-caption { font-size: 8px; }
+      .site-footer { font-size: 8px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero" id="world" aria-label="Procedurally generated voxel island">
+      <div class="sky-backdrop" id="sky-backdrop"></div>
+      <canvas id="world-canvas" aria-label="An automatically orbiting 3D voxel island"></canvas>
+      <div class="loading-message" id="loading-message">Generating world...</div>
+
+      <header class="site-header">
+        <a class="brand" href="#world" aria-label="Blockscape home">
+          <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span>
+          Blockscape
+        </a>
+        <nav class="nav-links" aria-label="Main navigation">
+          <a href="#world">The world</a>
+          <a href="#details">About</a>
+          <span class="nav-status"><span class="status-dot"></span>World online</span>
+        </nav>
+      </header>
+
+      <div class="hero-content">
+        <div class="eyebrow"><span class="eyebrow-line"></span>A little world of its own</div>
+        <h1>Small <span>world.</span> Big wonder.</h1>
+        <p class="hero-description">Somewhere above the clouds, a tiny world is taking shape. Explore a peaceful voxel landscape, built block by block.</p>
+        <div class="hero-actions">
+          <a class="primary-button" href="#details">Discover the world <span class="button-arrow" aria-hidden="true">↗</span></a>
+          <a class="text-link" href="#details">How it's made</a>
+        </div>
+      </div>
+
+      <div class="world-label" aria-hidden="true">
+        <small>Current location</small>
+        <strong>Floating Island 001</strong>
+        <div class="coordinates">X: 024 · Y: 008 · Z: 019</div>
+      </div>
+      <div class="hero-bottom">
+        <div class="world-caption"><span class="caption-icon" aria-hidden="true">▦</span><span>Procedural terrain · Endless possibilities</span></div>
+        <div class="scroll-note">Scroll to explore <span class="scroll-line"></span></div>
+      </div>
+    </section>
+
+    <section class="details" id="details">
+      <div class="details-inner">
+        <div>
+          <div class="section-kicker">A world in blocks</div>
+          <h2>Every little detail has its place.</h2>
+          <p class="details-copy">From rolling grass-covered hills to rocky depths and a quiet patch of water, this floating island is generated entirely from code. No imported models, textures, or images. Just geometry, color, light, and a little imagination.</p>
+        </div>
+        <div class="world-facts">
+          <div class="fact-card"><span class="fact-value">Voxel</span><span class="fact-label">World geometry</span></div>
+          <div class="fact-card"><span class="fact-value">3D</span><span class="fact-label">Perspective view</span></div>
+          <div class="fact-card"><span class="fact-value">Live</span><span class="fact-label">Day and night cycle</span></div>
+          <div class="fact-card"><span class="fact-value">∞</span><span class="fact-label">Room to imagine</span></div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer"><span><strong>Blockscape</strong> — A tiny world above the clouds</span><span>Built one block at a time</span></footer>
+
+  <script type="module">
+    // Three.js is the only external dependency. All world geometry and effects are generated here.
+    const THREE_CDN = "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+
+    async function startWorld() {
+      const loadingMessage = document.getElementById("loading-message");
+      const canvas = document.getElementById("world-canvas");
+      const hero = document.getElementById("world");
+      const skyBackdrop = document.getElementById("sky-backdrop");
+
+      let THREE;
+      try {
+        THREE = await import(THREE_CDN);
+      } catch (error) {
+        console.error("Unable to load Three.js:", error);
+        loadingMessage.textContent = "Unable to load the 3D engine. Check your connection.";
+        return;
+      }
+
+      // Scene, camera, and renderer.
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(38, hero.clientWidth / hero.clientHeight, 0.1, 120);
+      camera.position.set(24, 13, 24);
+
+      const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "high-performance" });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6));
+      renderer.setSize(hero.clientWidth, hero.clientHeight, false);
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.15;
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      scene.fog = new THREE.Fog(0x9bcfda, 32, 65);
+
+      // Soft hemisphere and directional lighting.
+      const hemisphereLight = new THREE.HemisphereLight(0xe6f6ff, 0x6c7957, 1.25);
+      scene.add(hemisphereLight);
+      const sunLight = new THREE.DirectionalLight(0xfff0cf, 2.1);
+      sunLight.position.set(12, 22, 10);
+      sunLight.castShadow = true;
+      sunLight.shadow.mapSize.set(1024, 1024);
+      sunLight.shadow.camera.left = -19;
+      sunLight.shadow.camera.right = 19;
+      sunLight.shadow.camera.top = 19;
+      sunLight.shadow.camera.bottom = -19;
+      sunLight.shadow.camera.near = 1;
+      sunLight.shadow.camera.far = 55;
+      sunLight.shadow.bias = -0.0005;
+      sunLight.shadow.normalBias = 0.025;
+      scene.add(sunLight);
+
+      const sunMesh = new THREE.Mesh(new THREE.SphereGeometry(1.15, 20, 20), new THREE.MeshBasicMaterial({ color: 0xffe7a3 }));
+      scene.add(sunMesh);
+
+      // Reusable cube geometry, materials, and per-block color palettes.
+      const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
+      const materials = {
+        grass: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 }),
+        dirt: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 }),
+        stone: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .95 }),
+        water: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .25, metalness: .02, transparent: true, opacity: .88 }),
+        wood: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 }),
+        leaves: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 }),
+        flower: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .8 })
+      };
+      const palettes = {
+        grass: [0x70ad50, 0x79b75a, 0x65a34b, 0x72b052],
+        dirt: [0x936342, 0x86583b, 0x9c6c48, 0x805238],
+        stone: [0x858d91, 0x777f83, 0x949b9d, 0x747d82],
+        water: [0x369bd0, 0x49a8d6, 0x328fc5, 0x56b3d9],
+        wood: [0x895b36, 0x79502f, 0x98663d],
+        leaves: [0x5d9b48, 0x70aa4e, 0x4f8c43, 0x7aaf55],
+        flower: [0xf2d36a, 0xf2a0a0, 0xe8e8d4]
+      };
+      const blocks = { grass: [], dirt: [], stone: [], water: [], wood: [], leaves: [], flower: [] };
+
+      // Deterministic pseudo-random variation keeps the island consistent on every load.
+      function blockHash(x, y, z) {
+        const value = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
+        return value - Math.floor(value);
+      }
+      function choosePalette(type, x, y, z) {
+        const palette = palettes[type];
+        return new THREE.Color(palette[Math.floor(blockHash(x, y, z) * palette.length)]);
+      }
+      // Instancing batches thousands of cubes into only a handful of draw calls.
+      function createInstancedBlocks(type) {
+        const positions = blocks[type];
+        if (!positions.length) return;
+        const mesh = new THREE.InstancedMesh(blockGeometry, materials[type], positions.length);
+        const dummy = new THREE.Object3D();
+        positions.forEach((position, index) => {
+          dummy.position.set(position.x, position.y, position.z);
+          dummy.updateMatrix();
+          mesh.setMatrixAt(index, dummy.matrix);
+          mesh.setColorAt(index, choosePalette(type, position.x, position.y, position.z));
+        });
+        mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+        mesh.castShadow = type !== "water" && type !== "flower";
+        mesh.receiveShadow = type !== "water";
+        mesh.frustumCulled = true;
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        mesh.computeBoundingSphere();
+        scene.add(mesh);
+        return mesh;
+      }
+
+      // Generate an irregular elliptical island with grass, soil, and stone layers.
+      const islandRadiusX = 10.5;
+      const islandRadiusZ = 9.2;
+      const surfaceHeights = new Map();
+      const pondCells = new Set();
+      const cellKey = (x, z) => `${x},${z}`;
+      function getTerrainHeight(x, z) {
+        return Math.round(4 + 1.25 * Math.sin(x * .34) + .9 * Math.cos(z * .3) + .55 * Math.sin((x + z) * .55));
+      }
+      function generateTerrain() {
+        for (let x = -11; x <= 11; x++) {
+          for (let z = -10; z <= 10; z++) {
+            const nx = x / islandRadiusX;
+            const nz = z / islandRadiusZ;
+            const radius = Math.sqrt(nx * nx + nz * nz);
+            const irregularEdge = 1 + .06 * Math.sin(x * 1.3 + z * .7) + .035 * Math.cos(z * 1.9 - x * .3);
+            if (radius > irregularEdge) continue;
+
+            let height = getTerrainHeight(x, z) - Math.max(0, radius - .7) * 3.4;
+            height = Math.round(height);
+            const pondDistance = Math.pow((x - 1.1) / 3, 2) + Math.pow((z + .4) / 2, 2);
+            const underWater = pondDistance < .88;
+            const pondBank = pondDistance >= .88 && pondDistance < 1.45;
+            if (underWater) {
+              height = 2;
+              pondCells.add(cellKey(x, z));
+            } else if (pondBank) {
+              height = Math.min(height, 3);
+            }
+            surfaceHeights.set(cellKey(x, z), height);
+            const bottomY = -Math.max(1, Math.floor((1 - Math.min(radius, 1)) * 5 + 1));
+            for (let y = bottomY; y <= height; y++) {
+              if (y === height) blocks[underWater ? "dirt" : "grass"].push({ x, y, z });
+              else if (y >= height - 2) blocks.dirt.push({ x, y, z });
+              else blocks.stone.push({ x, y, z });
+            }
+            if (underWater) blocks.water.push({ x, y: 3, z });
+          }
+        }
+      }
+      generateTerrain();
+
+      // Add blocky trees and small flower accents to the grass.
+      function addTree(x, z, height = 3) {
+        const groundY = surfaceHeights.get(cellKey(x, z));
+        if (groundY === undefined || pondCells.has(cellKey(x, z))) return;
+        for (let y = 1; y <= height; y++) blocks.wood.push({ x, y: groundY + y, z });
+        const canopyY = groundY + height;
+        for (let dx = -2; dx <= 2; dx++) {
+          for (let dz = -2; dz <= 2; dz++) {
+            for (let dy = 0; dy <= 2; dy++) {
+              const distance = Math.abs(dx) + Math.abs(dz) + Math.abs(dy - 1);
+              if (distance > 4 || (dx === 0 && dz === 0 && dy === 0)) continue;
+              blocks.leaves.push({ x: x + dx, y: canopyY + dy, z: z + dz });
+            }
+          }
+        }
+        blocks.leaves.push({ x, y: canopyY + 3, z });
+      }
+      function addFlower(x, z) {
+        const groundY = surfaceHeights.get(cellKey(x, z));
+        if (groundY === undefined || pondCells.has(cellKey(x, z))) return;
+        blocks.flower.push({ x, y: groundY + .62, z });
+      }
+      addTree(-5, -3, 3);
+      addTree(6, 3, 3);
+      addTree(-4, 5, 2);
+      addTree(4, -5, 2);
+      [[-7,0],[-6,2],[-2,-6],[0,6],[3,6],[7,-2],[6,-5],[-7,-4],[2,-7],[-1,4],[8,1],[-3,1]].forEach(([x,z]) => addFlower(x,z));
+
+      createInstancedBlocks("stone");
+      createInstancedBlocks("dirt");
+      createInstancedBlocks("grass");
+      createInstancedBlocks("wood");
+      createInstancedBlocks("leaves");
+      createInstancedBlocks("flower");
+      createInstancedBlocks("water");
+
+      // Soft, floating voxel clouds.
+      const cloudMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, transparent: true, opacity: .78 });
+      function createCloud(x, y, z, scale = 1) {
+        const group = new THREE.Group();
+        const cloudPieces = [
+          { x: 0, y: 0, z: 0, sx: 2.6, sy: .65, sz: 1.1 },
+          { x: -1.15, y: -.12, z: .05, sx: 1.5, sy: .65, sz: 1.1 },
+          { x: 1.15, y: -.08, z: .05, sx: 1.7, sy: .65, sz: 1.1 },
+          { x: -.3, y: .43, z: 0, sx: 1.5, sy: .55, sz: 1 }
+        ];
+        cloudPieces.forEach(piece => {
+          const mesh = new THREE.Mesh(blockGeometry, cloudMaterial);
+          mesh.position.set(piece.x,piece.y,piece.z);
+          mesh.scale.set(piece.sx,piece.sy,piece.sz);
+          mesh.castShadow = false;
+          mesh.receiveShadow = false;
+          group.add(mesh);
+        });
+        group.position.set(x,y,z);
+        group.scale.setScalar(scale);
+        scene.add(group);
+        return group;
+      }
+      const clouds = [
+        createCloud(-17,11,-9,1.1), createCloud(16,13,-13,.85),
+        createCloud(-12,15,14,.72), createCloud(20,10,11,1.05),
+        createCloud(0,16,-22,.9)
+      ];
+
+      // Stars fade in as the day-night cycle moves toward night.
+      const starGeometry = new THREE.BufferGeometry();
+      const starPositions = [];
+      for (let i = 0; i < 140; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const height = 12 + Math.random() * 25;
+        const distance = 42 + Math.random() * 10;
+        starPositions.push(Math.cos(angle) * distance, height, Math.sin(angle) * distance);
+      }
+      starGeometry.setAttribute("position", new THREE.Float32BufferAttribute(starPositions,3));
+      const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: .16, transparent: true, opacity: 0, sizeAttenuation: true });
+      const stars = new THREE.Points(starGeometry,starMaterial);
+      scene.add(stars);
+
+      // Animated day/night sky palette.
+      const daySkyTop = new THREE.Color("#76c6e5");
+      const daySkyBottom = new THREE.Color("#dcefcf");
+      const nightSkyTop = new THREE.Color("#111d40");
+      const nightSkyBottom = new THREE.Color("#435574");
+      const dayFog = new THREE.Color("#b8dce0");
+      const nightFog = new THREE.Color("#34445f");
+      const daySunColor = new THREE.Color("#fff0c3");
+      const nightSunColor = new THREE.Color("#d5dcf5");
+      const currentTop = new THREE.Color();
+      const currentBottom = new THREE.Color();
+      const currentFog = new THREE.Color();
+      const currentSun = new THREE.Color();
+      let lastSkyUpdate = 0;
+
+      function updateDayNight(elapsed) {
+        // A full cycle takes about 140 seconds.
+        const dayAmount = (Math.sin(elapsed * .045 - .9) + 1) / 2;
+        currentTop.lerpColors(nightSkyTop,daySkyTop,dayAmount);
+        currentBottom.lerpColors(nightSkyBottom,daySkyBottom,dayAmount);
+        currentFog.lerpColors(nightFog,dayFog,dayAmount);
+        currentSun.lerpColors(nightSunColor,daySunColor,dayAmount);
+        scene.fog.color.copy(currentFog);
+        hemisphereLight.intensity = .45 + dayAmount * .95;
+        sunLight.intensity = .35 + dayAmount * 2;
+        sunLight.color.set(dayAmount > .5 ? 0xffedce : 0xa9bde9);
+        starMaterial.opacity = Math.max(0,1 - dayAmount * 1.8);
+        sunMesh.material.color.copy(currentSun);
+        if (elapsed - lastSkyUpdate > .12) {
+          skyBackdrop.style.background = `linear-gradient(180deg, ${currentTop.getStyle()}, ${currentBottom.getStyle()})`;
+          lastSkyUpdate = elapsed;
+        }
+        const sunAngle = elapsed * .045 - Math.PI / 2;
+        const sunX = Math.cos(sunAngle) * 28;
+        const sunY = 10 + Math.sin(sunAngle) * 13;
+        const sunZ = Math.sin(sunAngle) * 25;
+        sunMesh.position.set(sunX,sunY,sunZ);
+        sunLight.position.set(sunX,Math.max(5,sunY + 8),sunZ);
+      }
+
+      // Keep the renderer and perspective camera in sync with the hero size.
+      function resizeRenderer() {
+        const width = hero.clientWidth;
+        const height = hero.clientHeight;
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        renderer.setSize(width,height,false);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,1.6));
+      }
+      window.addEventListener("resize",resizeRenderer);
+
+      // requestAnimationFrame drives the smooth camera orbit and world animation.
+      const clock = new THREE.Clock();
+      let previousTime = 0;
+      function animate() {
+        requestAnimationFrame(animate);
+        const elapsed = clock.getElapsedTime();
+        const delta = Math.min(elapsed - previousTime,.05);
+        previousTime = elapsed;
+
+        const orbitSpeed = .095;
+        const orbitRadius = window.innerWidth < 760 ? 27 : 25;
+        const orbitAngle = elapsed * orbitSpeed;
+        camera.position.set(
+          Math.sin(orbitAngle) * orbitRadius,
+          11.5 + Math.sin(elapsed * .2) * .45,
+          Math.cos(orbitAngle) * orbitRadius
+        );
+        camera.lookAt(0,2.8,0);
+
+        materials.water.opacity = .85 + Math.sin(elapsed * 1.5) * .025;
+        clouds.forEach((cloud,index) => {
+          cloud.position.x += delta * (.32 + index * .035);
+          if (cloud.position.x > 25) cloud.position.x = -25;
+        });
+        updateDayNight(elapsed);
+        renderer.render(scene,camera);
+      }
+
+      loadingMessage.classList.add("hidden");
+      animate();
+    }
+
+    startWorld();
+  </script>
+</body>
+</html>
