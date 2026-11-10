@@ -1600,6 +1600,67 @@ def bakeoff(
         sys.exit(code)
 
 
+@app.command("score-report")
+def score_report(
+    file: Path = typer.Argument(..., help="Report file (HTML for deep_research_report)"),
+    task: str = typer.Option(
+        "deep_research_report", "--task", help="Sandbox task id to score against"
+    ),
+    model: str = typer.Option(
+        "external", "--model", help="Provider/model label recorded in results"
+    ),
+):
+    """Score an external report with the same checks as the sandbox task."""
+    from dataclasses import replace as _replace
+    from datetime import datetime as _dt
+
+    from lm_optimizer.services.sandbox_history import record_run
+    from lm_optimizer.services.sandbox_lab import SANDBOX_TASKS, SandboxPolicy
+    from lm_optimizer.services.sandbox_runner import SandboxRunner, build_command_for
+
+    if not file.exists() or not file.is_file():
+        console.print(f"[red]Report not found: {file}[/red]")
+        sys.exit(2)
+    definition = SANDBOX_TASKS.get(task)
+    if definition is None:
+        console.print(f"[red]Unknown task: {task}[/red]")
+        sys.exit(2)
+    definition = _replace(definition, max_repair_attempts=0)
+    slug = "".join(c if c.isalnum() else "_" for c in model)[:60] or "external"
+    workdir = (
+        Path("results")
+        / "external"
+        / slug
+        / task
+        / _dt.now().strftime("%Y%m%d_%H%M%S")
+    )
+    policy = SandboxPolicy(
+        workdir=workdir,
+        network_enabled=False,
+        timeout_s=definition.timeout_s,
+        allowed_executables=definition.allowed_executables,
+    )
+    runner = SandboxRunner(
+        task=definition,
+        policy=policy,
+        workdir=workdir,
+        command=build_command_for(definition),
+        model=model,
+    )
+    content = file.read_text(encoding="utf-8", errors="replace")
+    result = runner.run(lambda feedback: content)
+    payload = result.as_dict()
+    record_run(
+        model,
+        task,
+        payload,
+        workdir=str(workdir),
+        duration_s=sum(a.duration_s for a in result.attempts),
+    )
+    console.print(json.dumps(payload, indent=2, ensure_ascii=False))
+    console.print(f"[dim]workdir: {workdir}[/dim]")
+
+
 @app.command("community-import")
 def community_import(
     file: Path = typer.Argument(..., help="JSON file with community benchmark records"),

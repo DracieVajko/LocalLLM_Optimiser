@@ -80,17 +80,21 @@ plus `debug.json`. Open the HTML in a browser; print to PDF from the browser.
 
 The prompt is provider-agnostic. Run it in ChatGPT/OpenAI Deep Research, Gemini
 Deep Research, Perplexity Deep Research, or Odysseus (PewDiePie), save each
-answer as `reports/<provider>/deep_research_report/index.html`, then score all
-of them with the same harness:
+answer as an HTML file, then score it with the same harness:
+
+```powershell
+python -m lm_optimizer.cli.main lab score-report reports/openai.html --model "OpenAI Deep Research"
+```
+
+Alternatively, use the batch form with one directory per provider:
 
 ```powershell
 python tools/agent_benchmark.py --tasks deep_research_report ^
   --source reports/openai --model "OpenAI Deep Research" --out results/external
 ```
 
-Repeat for `reports/gemini`, `reports/perplexity`, `reports/odysseus`. The
-recorded score is comparable because the checks and the source package are
-identical.
+Repeat for Gemini, Perplexity and Odysseus. The recorded score is comparable
+because the checks and the source package are identical.
 
 **API keys are not included.** The repo only ships the prompt, task and scorer;
 connecting a paid provider is the user's choice.

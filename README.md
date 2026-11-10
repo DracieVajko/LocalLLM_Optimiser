@@ -484,6 +484,10 @@ includes the model's thinking/reasoning phase), `total_s = load_s + gen_s`,
 to `results/bakeoff/runs.jsonl` and summarised in
 `results/bakeoff/summary_*.md`.
 
+`lab score-report <file> --task deep_research_report --model "OpenAI Deep Research"`
+scores a report produced outside this machine (GPT, Gemini, Perplexity,
+Odysseus) with the same checks.
+
 `tools/quick_cache_ab.py` measures the same model twice with identical weights
 and context, changing only where the KV cache lives:
 
