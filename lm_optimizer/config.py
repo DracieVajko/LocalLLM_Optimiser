@@ -30,6 +30,14 @@ class LMStudioConfig(BaseSettings):
     base_url: str = Field(default="http://127.0.0.1:1234", description="LM Studio API base URL")
     api_version: str | None = Field(default=None, description="API version (auto-detected)")
     timeout: float = Field(default=120.0, description="Request timeout in seconds")
+    chat_timeout_max: float = Field(
+        default=3600.0,
+        description=(
+            "Hard ceiling for a single chat generation in seconds. The per-call "
+            "timeout scales with max_output_tokens to allow slow models, but a "
+            "stalled engine must not block a run indefinitely."
+        ),
+    )
     max_retries: int = Field(default=3, description="Maximum connection retries")
     retry_delay: float = Field(default=2.0, description="Delay between retries in seconds")
 

@@ -853,7 +853,10 @@ class LMStudioClient:
         if stop_sequences:
             body["stop"] = stop_sequences
 
-        chat_timeout = max(CHAT_TIMEOUT_FLOOR_S, float(max_output_tokens))
+        chat_timeout = min(
+            max(CHAT_TIMEOUT_FLOOR_S, float(max_output_tokens)),
+            config.lm_studio.chat_timeout_max,
+        )
         reasoning_retry_used = False
         response = None
         for attempt in range(UNLOADED_RETRY_ATTEMPTS + 1):
