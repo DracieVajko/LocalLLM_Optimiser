@@ -110,29 +110,50 @@ WEB_TASK = SandboxTask(
 
 # --- 13.3 Minecraft-style voxel world (single HTML) -------------------------
 
+MINECRAFT_BASE_PROMPT = (
+    "Create one single HTML file named index.html — a Minecraft-style voxel "
+    "world rendered with Three.js loaded from a CDN. No build step, no "
+    "bundler, no server, no external assets (no images, sounds or zip "
+    "files); everything except Three.js must be inside this one file.\n\n"
+    "The page must contain:\n"
+    "- A hero section that feels like a tiny Minecraft world.\n"
+    "- Procedural terrain made of colored cubes (grass green, dirt brown, "
+    "  stone gray, water blue).\n"
+    "- Smooth 60fps rendering with requestAnimationFrame.\n"
+    "- First-person look controls (pointer lock or mouse move) and a "
+    "  crosshair in the center.\n"
+    "- A simple block-break / block-place interaction (click to remove or "
+    "  add a cube).\n"
+    "- Animated sky / day-night feel (moving sun or color gradient).\n"
+    "- Clean, modern, commented code.\n\n"
+    "Output ONLY the complete HTML in a markdown code fence starting with "
+    "```html and ending with ```. Do not include any other text."
+)
+
+
+def build_minecraft_prompt(scene_brief: str = "") -> str:
+    """Return the base skyblock prompt with an optional user scene variation.
+
+    The variation is appended as an extra instruction, so the model still
+    builds a floating skyblock island; only the requested details change
+    (for example fewer trees, a lighthouse, a bigger pond or a farm).
+    """
+    brief = (scene_brief or "").strip()
+    if not brief:
+        return MINECRAFT_BASE_PROMPT
+    return (
+        MINECRAFT_BASE_PROMPT
+        + "\n\nScene variation (the result must still be a floating skyblock "
+        "island with the base grass/dirt/stone terrain): "
+        + brief
+    )
+
+
 MINECRAFT_WORLD_TASK = SandboxTask(
     id="minecraft_world",
     kind=SandboxTaskKind.WEB,
     title="Minecraft-style voxel world (single HTML)",
-    prompt=(
-        "Create one single HTML file named index.html — a Minecraft-style voxel "
-        "world rendered with Three.js loaded from a CDN. No build step, no "
-        "bundler, no server, no external assets (no images, sounds or zip "
-        "files); everything except Three.js must be inside this one file.\n\n"
-        "The page must contain:\n"
-        "- A hero section that feels like a tiny Minecraft world.\n"
-        "- Procedural terrain made of colored cubes (grass green, dirt brown, "
-        "  stone gray, water blue).\n"
-        "- Smooth 60fps rendering with requestAnimationFrame.\n"
-        "- First-person look controls (pointer lock or mouse move) and a "
-        "  crosshair in the center.\n"
-        "- A simple block-break / block-place interaction (click to remove or "
-        "  add a cube).\n"
-        "- Animated sky / day-night feel (moving sun or color gradient).\n"
-        "- Clean, modern, commented code.\n\n"
-        "Output ONLY the complete HTML in a markdown code fence starting with "
-        "```html and ending with ```. Do not include any other text."
-    ),
+    prompt=MINECRAFT_BASE_PROMPT,
     checks=[
         SandboxCheck("index_html_exists", "files", ["index.html"], weight=1.0, critical=True),
         SandboxCheck("single_file_html", "regex", r"<!DOCTYPE\s+html|<html\b", weight=1.0, critical=True),

@@ -86,7 +86,7 @@ The Blender artifact was rendered headless with Blender 5.2: `scene.blend`
 [blender_skyblock_deepseek_frame_0001.png](blender_skyblock_deepseek_frame_0001.png).
 
 The Minecraft page was verified in a real browser: Three.js loaded, the canvas
-rendered 11 draw calls / 8,172 triangles, the centre pixel was grass green, and
+rendered 21 draw calls / 35,844 triangles, the centre pixel was grass green, and
 the console had no errors.
 
 ![Minecraft-style skyblock preview](minecraft_world_preview.png)
@@ -107,6 +107,17 @@ Run the same task against a local model:
 ```powershell
 python -m lm_optimizer.cli.main lab sandbox --task minecraft_world --model <model-id>
 ```
+
+Customise the scene while keeping the same skyblock base:
+
+```powershell
+python -m lm_optimizer.cli.main lab sandbox --task minecraft_world ^
+  --model <model-id> --scene "fewer trees, a lighthouse and a bigger pond"
+```
+
+`--custom-prompt "..."` replaces the whole prompt when you need full control.
+Keep the base grass/dirt/stone island and (optionally) water in the brief if you
+want all static checks to pass.
 
 Regenerate the frontier-only report:
 

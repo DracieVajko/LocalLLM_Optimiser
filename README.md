@@ -375,7 +375,7 @@ that are NOT the runtime optimizer:
 - `calendar_event` - JSON calendar event (title, start/end ISO 8601, attendees, location).
 - `email_and_calendar` - combined email + calendar JSON from meeting notes.
 - `web_fetch_brief` - JSON with tool=web_fetch, url, title, facts or error; never invents facts.
-- `minecraft_world` - single self-contained HTML file with a Minecraft-style voxel world (Three.js from a CDN, procedural island, camera orbit).
+- `minecraft_world` - single self-contained HTML file with a Minecraft-style voxel world (Three.js from a CDN, procedural island, camera orbit). `--scene "..."` customises the scene (fewer trees, a lighthouse, more flowers) while keeping the skyblock base.
 
 All agentic tasks run offline (`network_allowed=false`) with an evidence-only repair loop: on failure the model gets the failing checks, not the solution.
 

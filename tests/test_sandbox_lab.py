@@ -11,6 +11,7 @@ from lm_optimizer.services.sandbox_lab import (
     SandboxResult,
     SandboxTask,
     SandboxTaskKind,
+    build_minecraft_prompt,
     build_repair_feedback,
     repair_penalty,
     score_attempt,
@@ -281,3 +282,11 @@ def test_minecraft_world_task_is_a_single_file_web_task():
     assert task.artifacts == ("index.html",)
     names = {check.name for check in task.checks}
     assert {"index_html_exists", "single_file_html", "has_threejs"} <= names
+
+def test_minecraft_prompt_accepts_scene_variation():
+    base = build_minecraft_prompt()
+    varied = build_minecraft_prompt("fewer trees, a lighthouse and a bigger pond")
+    assert varied.startswith(base)
+    assert "fewer trees, a lighthouse and a bigger pond" in varied
+    assert "floating skyblock" in varied
+    assert build_minecraft_prompt("   ") == base

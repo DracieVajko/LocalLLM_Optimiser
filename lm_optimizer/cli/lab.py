@@ -1086,6 +1086,11 @@ def sandbox(
     custom_prompt: str | None = typer.Option(
         None, "--custom-prompt", help="Override the task prompt (default: task prompt)"
     ),
+    scene: str | None = typer.Option(
+        None,
+        "--scene",
+        help="Scene variation for minecraft_world, e.g. 'fewer trees, a lighthouse'",
+    ),
     context_length: int | None = typer.Option(
         None, "--context", help="Force context length (default: best config, min 4096)"
     ),
@@ -1097,6 +1102,13 @@ def sandbox(
     the solution) and the remaining repair budget.
     """
     setup_logging()
+    if scene and not custom_prompt:
+        if task != "minecraft_world":
+            console.print("[red]--scene only applies to --task minecraft_world[/red]")
+            sys.exit(2)
+        from lm_optimizer.services.sandbox_lab import build_minecraft_prompt
+
+        custom_prompt = build_minecraft_prompt(scene)
     try:
         payload = _run_sandbox_one(
             task,

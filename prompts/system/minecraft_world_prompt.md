@@ -45,6 +45,21 @@ It provides grass top/side, dirt, stone, wood side/top, leaves, water, chest,
 planks, roof, path, furnace, crafting table, bed and glass tiles, all generated
 at runtime (no image files).
 
+## Custom scene variations
+
+The base skyblock stays the same; only the requested details change. Use
+`--scene` for a short brief:
+
+```powershell
+python -m lm_optimizer.cli.main lab sandbox --task minecraft_world ^
+  --model <model-id> --scene "fewer trees, a lighthouse and a bigger pond"
+```
+
+Or replace the whole prompt with `--custom-prompt "..."` if you need complete
+control. Both are passed through the same acceptance checks, so keep the base
+grass/dirt/stone island and (optionally) water elements present; a scene that
+deliberately removes one of them will score lower on the corresponding check.
+
 ## Acceptance checks
 
 | Check | Weight | Critical |
