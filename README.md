@@ -379,7 +379,8 @@ that are NOT the runtime optimizer:
 
 All agentic tasks run offline (`network_allowed=false`) with an evidence-only repair loop: on failure the model gets the failing checks, not the solution.
 
-Reasoning levels are pass-through: `lab sandbox --reasoning <level>` and
+Reasoning levels are pass-through: `lab sandbox --reasoning <level>`,
+`lab bakeoff --reasoning-effort <level>` and
 `tools/model_bakeoff.py --reasoning-effort <level>` accept `off`, `on`, `low`,
 `medium`, `high`, `xhigh`, `default` or any value the server exposes. This
 LM Studio build advertises `off|on` per model; a rejected value is retried
@@ -460,20 +461,26 @@ repair attempt, clears stale artifacts between attempts, and writes
 
 ## Model bake-off and cache A/B
 
-`tools/model_bakeoff.py` runs one model at a time through the sandbox tasks
-while keeping the model loaded, so load cost is paid once and reported
-separately:
+`lab bakeoff` runs one model at a time through the sandbox tasks while keeping
+the model loaded, so load cost is paid once and reported separately. It works
+with **any** LM Studio or Ollama model id; `--models all` reads the model list
+from the configured backend instead of a hardcoded test set:
 
 ```powershell
-python tools/model_bakeoff.py --models e4b --tasks email_write,web_dashboard,blender_skyblock --context 8192
+python -m lm_optimizer.cli.main lab bakeoff --models all --tasks email_write,web_dashboard,minecraft_world --context 8192
 ```
+
+`--safe` uses the minimal-memory load config (parallel 1, batch 128, KV cache
+in RAM) for large models on small cards. `--kv-ram` only moves the KV cache.
+`--reasoning-effort` accepts `off|on|low|medium|high|xhigh|default` (or any
+value the server exposes). `tools/model_bakeoff.py` remains a thin standalone
+wrapper around the same service.
 
 Each row records `load_s`, `gen_s` (measured around the chat call, so it
 includes the model's thinking/reasoning phase), `total_s = load_s + gen_s`,
-`tokens`, `tok_s`, `thinking_chars` and the sandbox score. Thinking is enabled
-with `reasoning="on"` where the model supports it; the client retries without
-the field when a model rejects it. Results are appended to
-`results/bakeoff/runs.jsonl` and summarised in `results/bakeoff/summary_*.md`.
+`tokens`, `tok_s`, `thinking_chars` and the sandbox score. Results are appended
+to `results/bakeoff/runs.jsonl` and summarised in
+`results/bakeoff/summary_*.md`.
 
 `tools/quick_cache_ab.py` measures the same model twice with identical weights
 and context, changing only where the KV cache lives:

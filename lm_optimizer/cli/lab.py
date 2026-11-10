@@ -1532,6 +1532,74 @@ def sandbox_matrix(
     )
 
 
+@app.command("bakeoff")
+def bakeoff(
+    models: str = typer.Option(
+        "all",
+        "--models",
+        help="'all' (models from the configured backend), comma-separated ids or aliases",
+    ),
+    tasks: str = typer.Option(
+        "email_write,web_dashboard,minecraft_world",
+        "--tasks",
+        help="Comma-separated sandbox task ids",
+    ),
+    context: int = typer.Option(4096, "--context", help="Fixed context for every model"),
+    thinking: bool = typer.Option(
+        True, "--thinking/--no-thinking", help="Request reasoning where supported"
+    ),
+    reasoning_effort: str = typer.Option(
+        "default",
+        "--reasoning-effort",
+        help="off|on|low|medium|high|xhigh|default or any server value",
+    ),
+    kv_ram: bool = typer.Option(
+        False, "--kv-ram", help="Keep the KV cache in system RAM"
+    ),
+    safe: bool = typer.Option(
+        False,
+        "--safe",
+        help="Minimal memory config: parallel 1, batch 128, KV cache in RAM",
+    ),
+    out: str = typer.Option("results/bakeoff", "--out", help="Output directory"),
+):
+    """Benchmark any backend model on sandbox tasks (load vs generation + score).
+
+    Works with any LM Studio or Ollama model id. ``--models all`` lists the
+    models currently available from the configured backend, so nothing is
+    hardcoded to this machine's test set.
+    """
+    import asyncio
+
+    from lm_optimizer.services.bakeoff import _resolve_models, run_bakeoff
+
+    setup_logging()
+    try:
+        model_ids = _resolve_models(models)
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        sys.exit(2)
+    task_ids = [t.strip() for t in tasks.split(",") if t.strip()]
+    console.print(
+        f"[bold]Bake-off[/bold]: {len(model_ids)} model(s) x "
+        f"{len(task_ids)} task(s), ctx={context}, safe={safe}, kv_ram={kv_ram}"
+    )
+    code = asyncio.run(
+        run_bakeoff(
+            model_ids,
+            task_ids,
+            thinking=thinking,
+            context=context,
+            out=out,
+            reasoning_effort=reasoning_effort,
+            kv_ram=kv_ram,
+            safe=safe,
+        )
+    )
+    if code != 0:
+        sys.exit(code)
+
+
 @app.command("community-import")
 def community_import(
     file: Path = typer.Argument(..., help="JSON file with community benchmark records"),
