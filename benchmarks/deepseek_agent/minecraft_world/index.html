@@ -11,19 +11,15 @@
       margin: 0;
       height: 100%;
       overflow: hidden;
-      background: linear-gradient(180deg, #9fd7ff 0%, #cfe9ff 55%, #eef7ff 100%);
+      background: linear-gradient(180deg, #8ecdf5 0%, #bfe6ff 50%, #eaf6ff 100%);
       font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
     }
-    #scene {
-      display: block;
-      width: 100vw;
-      height: 100vh;
-    }
+    #scene { display: block; width: 100vw; height: 100vh; }
     .hero {
       position: fixed;
       top: 26px;
       left: 28px;
-      max-width: 340px;
+      max-width: 360px;
       padding: 18px 20px;
       border-radius: 14px;
       background: rgba(12, 26, 40, 0.55);
@@ -32,17 +28,8 @@
       text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
       pointer-events: none;
     }
-    .hero h1 {
-      margin: 0 0 8px;
-      font-size: 27px;
-      letter-spacing: 0.4px;
-    }
-    .hero p {
-      margin: 0;
-      color: #c9d8e8;
-      font-size: 13px;
-      line-height: 1.55;
-    }
+    .hero h1 { margin: 0 0 8px; font-size: 27px; letter-spacing: 0.4px; }
+    .hero p { margin: 0; color: #c9d8e8; font-size: 13px; line-height: 1.55; }
     .hero .tag {
       display: inline-block;
       margin-bottom: 9px;
@@ -71,9 +58,9 @@
     }
     .hud b { color: #ffffff; }
     @media (max-width: 700px) {
-      .hero { top: 12px; left: 12px; max-width: 260px; padding: 13px 15px; }
+      .hero { top: 12px; left: 12px; max-width: 280px; padding: 13px 15px; }
       .hero h1 { font-size: 20px; }
-      .hud { font-size: 11px; max-width: 92vw; white-space: normal; text-align: center; }
+      .hud { font-size: 11px; max-width: 92vw; white-space: nowrap; }
     }
   </style>
 </head>
@@ -83,15 +70,15 @@
   <div class="hero">
     <span class="tag">Tiny world, block by block</span>
     <h1>Voxelcraft</h1>
-    <p>A floating skyblock island in the void: grass, dirt, stone, a tree,
-       a waterfall and a slowly orbiting camera.</p>
+    <p>A floating skyblock island in the void: textured grass, dirt, stone,
+       a pond with a waterfall, trees, a cabin and a slowly orbiting camera.</p>
   </div>
 
   <div class="hud"><b>Camera</b> orbits the island automatically</div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
   <script>
-    // Voxelcraft — a simple floating voxel skyblock.
+    // Voxelcraft — a floating voxel skyblock with a procedural texture atlas.
     // One HTML file; only Three.js comes from a CDN.
 
     const canvas = document.getElementById("scene");
@@ -108,161 +95,349 @@
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x9fd7ff);
-    scene.fog = new THREE.Fog(0xbfe3ff, 46, 105);
+    scene.fog = new THREE.Fog(0xc3e6ff, 55, 150);
 
     const camera = new THREE.PerspectiveCamera(
-      60,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      300
+      58, window.innerWidth / window.innerHeight, 0.1, 400
     );
-    camera.position.set(20, 11, 20);
-    camera.lookAt(0, 2, 0);
+    camera.position.set(26, 15, 26);
+    camera.lookAt(0, 3, 0);
 
-    // Lights: a warm sun and a soft sky fill.
-    const sun = new THREE.DirectionalLight(0xfff3d0, 1.35);
-    sun.position.set(18, 30, 12);
+    const sun = new THREE.DirectionalLight(0xfff3d0, 1.4);
+    sun.position.set(24, 38, 16);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
+    sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.camera.near = 1;
-    sun.shadow.camera.far = 90;
-    sun.shadow.camera.left = -25;
-    sun.shadow.camera.right = 25;
-    sun.shadow.camera.top = 25;
-    sun.shadow.camera.bottom = -25;
+    sun.shadow.camera.far = 120;
+    sun.shadow.camera.left = -38;
+    sun.shadow.camera.right = 38;
+    sun.shadow.camera.top = 38;
+    sun.shadow.camera.bottom = -38;
     scene.add(sun);
-    scene.add(new THREE.HemisphereLight(0xcfe9ff, 0x4a6b3a, 0.8));
+    scene.add(new THREE.HemisphereLight(0xcfe9ff, 0x4a6b3a, 0.85));
 
-    // A small sun disc in the sky.
     const sunDisc = new THREE.Mesh(
-      new THREE.SphereGeometry(2.2, 18, 18),
+      new THREE.SphereGeometry(2.6, 20, 20),
       new THREE.MeshBasicMaterial({ color: 0xfff2a8 })
     );
-    sunDisc.position.set(18, 30, 12);
+    sunDisc.position.set(24, 38, 16);
     scene.add(sunDisc);
 
-    // Block geometry and one flat material per block type (no per-instance
-    // colour shader tricks, so it renders on every WebGL implementation).
-    const cube = new THREE.BoxGeometry(1, 1, 1);
-    const materials = {
-      grass: new THREE.MeshLambertMaterial({ color: 0x4caf50 }),
-      grassSide: new THREE.MeshLambertMaterial({ color: 0x3f8f43 }),
-      dirt: new THREE.MeshLambertMaterial({ color: 0x8d5a3b }),
-      stone: new THREE.MeshLambertMaterial({ color: 0x8b939b }),
-      water: new THREE.MeshLambertMaterial({
-        color: 0x2f7fd4,
-        transparent: true,
-        opacity: 0.72
-      }),
-      wood: new THREE.MeshLambertMaterial({ color: 0x7a4a2a }),
-      leaves: new THREE.MeshLambertMaterial({ color: 0x2f8f3a }),
-      chest: new THREE.MeshLambertMaterial({ color: 0xb5722f }),
-      flower: new THREE.MeshLambertMaterial({ color: 0xe94b4b }),
-      avatar: new THREE.MeshLambertMaterial({ color: 0x3a6ea8 })
-    };
+    // ---------------------------------------------------------------------
+    // Procedural 16x16 pixel-art texture atlas (16 tiles in a 4x4 grid).
+    // ---------------------------------------------------------------------
+    const TILE = 16;
+    const COLS = 4;
+    const ROWS = 4;
+    const atlasCanvas = document.createElement("canvas");
+    atlasCanvas.width = TILE * COLS;
+    atlasCanvas.height = TILE * ROWS;
+    const ctx = atlasCanvas.getContext("2d");
 
-    // Collect block positions by material, then build one InstancedMesh each.
-    const groups = {
-      grass: [], grassSide: [], dirt: [], stone: [], water: [],
-      wood: [], leaves: [], chest: [], flower: [], avatar: []
-    };
-    const add = (group, x, y, z) => groups[group].push([x, y, z]);
+    function noise(x, y, seed) {
+      const n = Math.sin(x * 127.1 + y * 311.7 + seed * 74.7) * 43758.5453;
+      return n - Math.floor(n);
+    }
 
-    const SIZE = 6; // island radius in blocks
-    for (let x = -SIZE; x <= SIZE; x += 1) {
-      for (let z = -SIZE; z <= SIZE; z += 1) {
-        // Rounded, slightly irregular island footprint.
-        const edge = Math.abs(x) + Math.abs(z) + (Math.abs(x) % 2);
-        if (edge > SIZE + 2) continue;
-        const top = 3 + ((x * 3 + z * 5) % 3 === 0 ? 1 : 0);
-        for (let y = -1; y <= top; y += 1) {
-          if (y === top) add("grass", x, y, z);
-          else if (y >= top - 1) add("grassSide", x, y, z);
-          else if (y >= top - 3) add("dirt", x, y, z);
-          else add("stone", x, y, z);
+    function px(col, row, x, y, color) {
+      ctx.fillStyle = color;
+      ctx.fillRect(col * TILE + x, row * TILE + y, 1, 1);
+    }
+
+    function fillTile(col, row, colors, seed) {
+      for (let y = 0; y < TILE; y += 1) {
+        for (let x = 0; x < TILE; x += 1) {
+          const index = Math.floor(noise(x, y, seed) * colors.length);
+          px(col, row, x, y, colors[index]);
         }
       }
     }
 
-    // A pond: replace a few top blocks with water and add a waterfall.
-    const pond = [[4, -1], [4, 0], [4, 1], [5, 0]];
-    for (const [px, pz] of pond) {
-      // Remove the top few layers by not adding them (already added above),
-      // then put water blocks at surface level instead.
-      add("water", px, 3, pz);
-      add("water", px, 2, pz);
-    }
-    // Waterfall down the side of the island.
-    for (let y = 2; y >= -3; y -= 1) {
-      add("water", 6, y, 0);
-    }
-
-    // Tree: trunk plus a leafy canopy.
-    for (let y = 4; y <= 6; y += 1) add("wood", 1, y, 0);
-    for (let dx = -1; dx <= 1; dx += 1) {
-      for (let dz = -1; dz <= 1; dz += 1) {
-        add("leaves", 1 + dx, 6, dz);
+    // grass top
+    fillTile(0, 0, ["#4caf50", "#57b85a", "#3f8f43", "#66c26a"], 1);
+    // grass side (green top band, dirt below)
+    for (let y = 0; y < TILE; y += 1) {
+      for (let x = 0; x < TILE; x += 1) {
+        const edge = 4 + Math.floor(noise(x, y, 2) * 2);
+        const color = y < edge
+          ? ["#4caf50", "#3f8f43", "#57b85a"][Math.floor(noise(x, y, 3) * 3)]
+          : ["#8d5a3b", "#7a4a2f", "#9b6644"][Math.floor(noise(x, y, 4) * 3)];
+        px(1, 0, x, y, color);
       }
     }
-    add("leaves", 1, 7, 0);
-    add("leaves", 2, 7, 0);
-    add("leaves", 0, 7, 0);
+    // dirt
+    fillTile(2, 0, ["#8d5a3b", "#7a4a2f", "#9b6644", "#6b3f28"], 5);
+    // stone
+    fillTile(3, 0, ["#8b939b", "#7d858d", "#9aa2aa", "#6f777f"], 6);
 
-    // A chest, a couple of flowers and a small block avatar.
-    add("chest", -3, 4, 2);
-    add("flower", -2, 4, 3);
-    add("flower", -1, 4, 4);
-    add("avatar", 2, 4, -3);
-    add("avatar", 2, 5, -3);
-
-    // Clouds above the island.
-    const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-    const clouds = new THREE.Group();
-    for (let i = 0; i < 6; i += 1) {
-      const cloud = new THREE.Mesh(cube, cloudMat);
-      cloud.position.set(
-        Math.cos(i * 1.7) * 16,
-        16 + (i % 3) * 2,
-        Math.sin(i * 1.7) * 16
-      );
-      cloud.scale.set(4 + (i % 2) * 2, 1.1, 2.6);
-      clouds.add(cloud);
+    // wood side (vertical bark stripes)
+    for (let y = 0; y < TILE; y += 1) {
+      for (let x = 0; x < TILE; x += 1) {
+        const stripe = x % 4 === 0 || (x % 7 === 0 && y % 3 === 0);
+        px(0, 1, x, y, stripe ? "#5a341c" : "#7a4a2a");
+      }
     }
-    scene.add(clouds);
+    // wood top (rings)
+    for (let y = 0; y < TILE; y += 1) {
+      for (let x = 0; x < TILE; x += 1) {
+        const d = Math.abs(x - 8) + Math.abs(y - 8);
+        px(1, 1, x, y, d % 5 === 0 ? "#5a341c" : "#8a5731");
+      }
+    }
+    // leaves
+    fillTile(2, 1, ["#2f8f3a", "#257a30", "#3aa347", "#1f6b28"], 7);
+    // water
+    fillTile(3, 1, ["#2f7fd4", "#3a8fe0", "#266bb8", "#55a6ef"], 8);
 
-    // Build one InstancedMesh per block material.
+    // chest
+    fillTile(0, 2, ["#b5722f", "#9d5f24", "#c98443"], 9);
+    // planks
+    for (let y = 0; y < TILE; y += 1) {
+      for (let x = 0; x < TILE; x += 1) {
+        const seam = y % 5 === 0;
+        px(1, 2, x, y, seam ? "#8a5731" : "#b98a52");
+      }
+    }
+    // roof tiles
+    fillTile(2, 2, ["#a33a2f", "#8f2f26", "#bb4a3d", "#7c241c"], 10);
+    // path / gravel
+    fillTile(3, 2, ["#b9a98f", "#a8977d", "#c7b79c", "#94846c"], 11);
+
+    const atlas = new THREE.CanvasTexture(atlasCanvas);
+    atlas.magFilter = THREE.NearestFilter;
+    atlas.minFilter = THREE.NearestFilter;
+    atlas.encoding = THREE.sRGBEncoding;
+    atlas.needsUpdate = true;
+
+    const tile = {
+      grassTop: [0, 0], grassSide: [1, 0], dirt: [2, 0], stone: [3, 0],
+      woodSide: [0, 1], woodTop: [1, 1], leaves: [2, 1], water: [3, 1],
+      chest: [0, 2], planks: [1, 2], roof: [2, 2], path: [3, 2]
+    };
+
+    // Remap the six box faces into the chosen atlas tiles.
+    function blockGeometry(top, side, bottom) {
+      const geo = new THREE.BoxGeometry(1, 1, 1);
+      const uv = geo.attributes.uv;
+      const faces = [side, side, top, bottom, side, side];
+      const du = 1 / COLS;
+      const dv = 1 / ROWS;
+      for (let f = 0; f < 6; f += 1) {
+        const t = faces[f];
+        const u0 = t[0] * du;
+        const v0 = 1 - (t[1] + 1) * dv;
+        for (let i = 0; i < 4; i += 1) {
+          const index = f * 4 + i;
+          uv.setXY(
+            index,
+            u0 + uv.getX(index) * du,
+            v0 + uv.getY(index) * dv
+          );
+        }
+      }
+      uv.needsUpdate = true;
+      return geo;
+    }
+
+    const opaqueMat = new THREE.MeshLambertMaterial({ map: atlas });
+    const waterMat = new THREE.MeshLambertMaterial({
+      map: atlas,
+      transparent: true,
+      opacity: 0.82
+    });
+
+    const geoms = {
+      grass: blockGeometry(tile.grassTop, tile.grassSide, tile.dirt),
+      dirt: blockGeometry(tile.dirt, tile.dirt, tile.dirt),
+      stone: blockGeometry(tile.stone, tile.stone, tile.stone),
+      wood: blockGeometry(tile.woodTop, tile.woodSide, tile.woodTop),
+      leaves: blockGeometry(tile.leaves, tile.leaves, tile.leaves),
+      chest: blockGeometry(tile.chest, tile.chest, tile.chest),
+      planks: blockGeometry(tile.planks, tile.planks, tile.planks),
+      roof: blockGeometry(tile.roof, tile.roof, tile.roof),
+      path: blockGeometry(tile.path, tile.path, tile.path),
+      water: blockGeometry(tile.water, tile.water, tile.water)
+    };
+
+    // ---------------------------------------------------------------------
+    // Island generation.
+    // ---------------------------------------------------------------------
+    const groups = {
+      grass: [], dirt: [], stone: [], wood: [], leaves: [],
+      chest: [], planks: [], roof: [], path: [], water: []
+    };
+    const add = (group, x, y, z) => groups[group].push([x, y, z]);
+
+    const SIZE = 10;
+    const pond = { x: -4, z: 4, r: 3 };
+
+    function heightAt(x, z) {
+      const wave =
+        Math.sin(x * 0.33) * 1.3 +
+        Math.cos(z * 0.29) * 1.1 +
+        Math.sin((x + z) * 0.21) * 0.8;
+      return Math.max(2, Math.round(4 + wave + noise(x, z, 12) * 2));
+    }
+
+    const occupied = new Set();
+    const key = (x, y, z) => x + "," + y + "," + z;
+
+    for (let x = -SIZE; x <= SIZE; x += 1) {
+      for (let z = -SIZE; z <= SIZE; z += 1) {
+        if (x * x + z * z > SIZE * SIZE + 18) continue;
+        const dx = x - pond.x;
+        const dz = z - pond.z;
+        const isPond = dx * dx + dz * dz <= pond.r * pond.r;
+        const h = heightAt(x, z);
+        if (isPond) {
+          // Carve a shallow pond and fill it with water.
+          add("water", x, h, z);
+          add("water", x, h - 1, z);
+          add("stone", x, h - 2, z);
+          continue;
+        }
+        for (let y = -2; y <= h; y += 1) {
+          if (occupied.has(key(x, y, z))) continue;
+          if (y === h) add("grass", x, y, z);
+          else if (y >= h - 2) add("dirt", x, y, z);
+          else add("stone", x, y, z);
+          occupied.add(key(x, y, z));
+        }
+      }
+    }
+
+    // A path from the southern edge to the cabin.
+    for (let z = -9; z <= -3; z += 1) {
+      const h = heightAt(0, z);
+      add("path", 0, h, z);
+    }
+
+    // Trees: trunk plus a layered leaf canopy.
+    const treeSpots = [[-7, -3], [6, -6], [7, 4], [-3, 7], [2, -1]];
+    for (const [tx, tz] of treeSpots) {
+      const base = heightAt(tx, tz) + 1;
+      const trunk = 3 + (Math.abs(tx + tz) % 2);
+      for (let y = base; y < base + trunk; y += 1) {
+        add("wood", tx, y, tz);
+      }
+      const top = base + trunk;
+      for (let dx = -2; dx <= 2; dx += 1) {
+        for (let dz = -2; dz <= 2; dz += 1) {
+          if (Math.abs(dx) === 2 && Math.abs(dz) === 2) continue;
+          add("leaves", tx + dx, top, tz + dz);
+        }
+      }
+      for (let dx = -1; dx <= 1; dx += 1) {
+        for (let dz = -1; dz <= 1; dz += 1) {
+          add("leaves", tx + dx, top + 1, tz + dz);
+        }
+      }
+      add("leaves", tx, top + 2, tz);
+    }
+
+    // A small cabin with plank walls, a roof and a door gap.
+    (function buildCabin() {
+      const cx = 5;
+      const cz = -1;
+      const base = heightAt(cx, cz) + 1;
+      for (let dx = -2; dx <= 2; dx += 1) {
+        for (let dz = -2; dz <= 2; dz += 1) {
+          const edge = Math.abs(dx) === 2 || Math.abs(dz) === 2;
+          if (edge) {
+            for (let y = 0; y < 3; y += 1) {
+              if (dx === 2 && dz === 0 && y < 2) continue; // door
+              add("planks", cx + dx, base + y, cz + dz);
+            }
+          }
+        }
+      }
+      for (let dx = -3; dx <= 3; dx += 1) {
+        for (let dz = -3; dz <= 3; dz += 1) {
+          if (Math.abs(dx) === 3 && Math.abs(dz) === 3) continue;
+          add("roof", cx + dx, base + 3, cz + dz);
+        }
+      }
+      add("roof", cx, base + 4, cz);
+    })();
+
+    // Flowers, rocks and a chest.
+    const flowers = [[-2, -5], [1, 5], [-6, 1], [4, 6], [-8, -1], [3, 8]];
+    flowers.forEach(([fx, fz], index) => {
+      const base = heightAt(fx, fz) + 1;
+      add(index % 2 === 0 ? "roof" : "chest", fx, base, fz);
+    });
+    [[-9, 5], [8, 7], [-5, -8]].forEach(([rx, rz]) => {
+      add("stone", rx, heightAt(rx, rz) + 1, rz);
+    });
+    add("chest", -1, heightAt(-1, 2) + 1, 2);
+
+    // A waterfall from the pond over the island edge.
+    for (let y = 3; y >= -4; y -= 1) {
+      add("water", pond.x - 3, y, pond.z);
+    }
+
+    // Distant floating mini-islands.
+    [[19, 7, -14], [-18, 5, 15]].forEach(([ix, iy, iz]) => {
+      for (let dx = -2; dx <= 2; dx += 1) {
+        for (let dz = -2; dz <= 2; dz += 1) {
+          if (Math.abs(dx) + Math.abs(dz) > 3) continue;
+          add("grass", ix + dx, iy, iz + dz);
+          add("dirt", ix + dx, iy - 1, iz + dz);
+          add("stone", ix + dx, iy - 2, iz + dz);
+        }
+      }
+    });
+
+    // Build one InstancedMesh per block group.
     const dummy = new THREE.Object3D();
     Object.keys(groups).forEach((name) => {
       const cells = groups[name];
       if (!cells.length) return;
-      const mesh = new THREE.InstancedMesh(cube, materials[name], cells.length);
+      const material = name === "water" ? waterMat : opaqueMat;
+      const mesh = new THREE.InstancedMesh(geoms[name], material, cells.length);
       cells.forEach((cell, index) => {
-        dummy.position.set(cell[0], cell[1], cell[2]);
+        dummy.position.set(cell[0] + 0.5, cell[1] + 0.5, cell[2] + 0.5);
         dummy.updateMatrix();
         mesh.setMatrixAt(index, dummy.matrix);
       });
       mesh.instanceMatrix.needsUpdate = true;
-      mesh.castShadow = true;
+      mesh.castShadow = name !== "water";
       mesh.receiveShadow = true;
       scene.add(mesh);
     });
 
-    // Keep the camera orbiting the island.
+    // Clouds.
+    const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const clouds = new THREE.Group();
+    const cloudGeo = new THREE.BoxGeometry(1, 1, 1);
+    for (let i = 0; i < 10; i += 1) {
+      const cloud = new THREE.Mesh(cloudGeo, cloudMat);
+      cloud.position.set(
+        Math.cos(i * 1.3) * (18 + (i % 4) * 4),
+        20 + (i % 3) * 2.5,
+        Math.sin(i * 1.3) * (18 + (i % 4) * 4)
+      );
+      cloud.scale.set(4 + (i % 3) * 2, 1.2, 2.8);
+      clouds.add(cloud);
+    }
+    scene.add(clouds);
+
+    // Camera orbit.
     const clock = new THREE.Clock();
-    const radius = 20;
+    const radius = 26;
     let angle = Math.PI / 4;
 
     function animate() {
       requestAnimationFrame(animate);
       const dt = Math.min(clock.getDelta(), 0.05);
-      angle += dt * 0.24;
+      angle += dt * 0.18;
       camera.position.set(
         Math.cos(angle) * radius,
-        10.5 + Math.sin(angle * 0.7) * 1.2,
+        13 + Math.sin(angle * 0.8) * 1.5,
         Math.sin(angle) * radius
       );
-      camera.lookAt(0, 2.2, 0);
-      clouds.rotation.y += dt * 0.02;
+      camera.lookAt(0, 3, 0);
+      clouds.rotation.y += dt * 0.015;
       renderer.render(scene, camera);
     }
 

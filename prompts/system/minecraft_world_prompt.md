@@ -26,6 +26,24 @@ Output ONLY the complete HTML in a markdown code fence starting with
 ```html and ending with ```. Do not include any other text.
 ```
 
+## Optional predefined texture atlas
+
+A ready-made 16x16 pixel-art atlas is included in
+`benchmarks/deepseek_agent/minecraft_world/texture_atlas.js`. Paste it inside
+the same `<script>` block and use it instead of inventing textures:
+
+```js
+const textures = createVoxelAtlas(THREE);
+const geo = textures.blockGeometry(
+  textures.tile.grassTop,
+  textures.tile.grassSide,
+  textures.tile.dirt
+);
+```
+
+It provides grass top/side, dirt, stone, wood side/top, leaves, water, chest,
+planks, roof and path tiles, all generated at runtime (no image files).
+
 ## Acceptance checks
 
 | Check | Weight | Critical |

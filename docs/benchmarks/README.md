@@ -41,6 +41,15 @@ stone, water and a waterfall, a tree, a chest, a couple of flowers and a block
 avatar, with the camera orbiting automatically. It is intentionally not a
 playable game.
 
+## Optional predefined texture atlas
+
+A ready-made 16x16 pixel-art atlas lives in
+[`deepseek_agent/minecraft_world/texture_atlas.js`](deepseek_agent/minecraft_world/texture_atlas.js).
+Paste it inside the same `<script>` block and call `createVoxelAtlas(THREE)`;
+it provides grass top/side, dirt, stone, wood side/top, leaves, water, chest,
+planks, roof and path tiles, generated at runtime with no image files. The
+committed artifact uses this atlas.
+
 ## Acceptance criteria (same harness for every model)
 
 | Check | What it verifies | Weight | Critical |
