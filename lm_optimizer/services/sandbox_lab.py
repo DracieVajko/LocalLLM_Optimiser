@@ -558,6 +558,92 @@ BLENDER_CITY_TASK = SandboxTask(
     artifacts=("build_scene.py", "scene.blend", "frames/"),
 )
 
+BLENDER_CITY_PREVIEW_TASK = SandboxTask(
+    id="blender_city",
+    kind=SandboxTaskKind.BLENDER,
+    title="Low-poly city with one preview",
+    prompt=(
+        "Write a Blender Python script that builds a simple low-poly city: "
+        "4-8 cubic buildings of varied heights on a ground plane, a road, "
+        "a sun light and a camera looking at the city. Save the scene first "
+        "as scene.blend, then render exactly ONE preview image named "
+        "preview.png (PNG, at least 640x480) using "
+        "bpy.ops.render.render(write_still=True). Do NOT render an animation "
+        "and do not create a frames/ directory. Output ONLY the complete "
+        "Python script in a markdown code fence starting with ```python and "
+        "ending with ```."
+    ),
+    checks=[
+        SandboxCheck("script_defines_scene", "regex", r"(bpy\.ops\.mesh|primitive_cube|primitive_plane)", weight=2.0, critical=True),
+        SandboxCheck("has_buildings", "regex", r"(building|cube|block)", weight=1.5),
+        SandboxCheck("has_ground", "regex", r"(ground|road|plane|floor)", weight=1.0),
+        SandboxCheck("has_camera", "regex", r"(Camera|camera)", weight=1.0),
+        SandboxCheck("has_light", "regex", r"(Light|SUN|sun)", weight=1.0),
+        SandboxCheck("saves_blend", "regex", r"save_as_mainfile", weight=1.0, critical=True),
+        SandboxCheck("renders_still", "regex", r"write_still\s*=\s*True", weight=1.5),
+        SandboxCheck("no_animation", "regex", r"(animation\s*=\s*True|frame_end\s*=\s*[2-9])", weight=1.0, negate=True),
+        SandboxCheck("blend_runs", "custom", None, weight=1.0, critical=True),
+        SandboxCheck("blend_is_binary", "custom", None, weight=2.0, critical=True),
+        SandboxCheck("blend_min_size", "custom", None, weight=1.0, critical=True),
+        SandboxCheck("preview_rendered", "custom", None, weight=1.5, critical=True),
+    ],
+    max_repair_attempts=2,
+    timeout_s=300.0,
+    max_output_tokens=6144,
+    network_allowed=False,
+    allowed_executables=("blender",),
+    artifacts=("build_scene.py", "scene.blend", "preview.png"),
+)
+
+
+DEEP_RESEARCH_REPORT_TASK = SandboxTask(
+    id="deep_research_report",
+    kind=SandboxTaskKind.WEB,
+    title="Deep research HTML report (RACE/FACT simplified)",
+    prompt=(
+        "You are a deep research agent. Write a single self-contained HTML "
+        "report answering the question: 'What are the real limits of running "
+        "a 70B MoE model on consumer hardware with 24 GB VRAM, and how should "
+        "conflicting Q3/Q4 speed claims be resolved?'\n\n"
+        "Use ONLY the sources below. Cite every factual claim with the source "
+        "name in square brackets, e.g. [primary_official]. Do not invent "
+        "sources. If the sources do not answer something, say so explicitly. "
+        "Include: a title, an executive summary, at least four sections with "
+        "headings, a 'Conflicting claims' section, a 'Limitations and "
+        "uncertainty' section, and a References section. Render as a clean "
+        "print-ready HTML page (inline CSS, no external assets).\n\n"
+        "SOURCES:\n"
+        "--- primary_official ---\n" + RESEARCH_PACKAGE["primary_official"] + "\n\n"
+        "--- technical_secondary ---\n" + RESEARCH_PACKAGE["technical_secondary"] + "\n\n"
+        "--- outdated_source ---\n" + RESEARCH_PACKAGE["outdated_source"] + "\n\n"
+        "--- conflicting_source ---\n" + RESEARCH_PACKAGE["conflicting_source"] + "\n\n"
+        "--- irrelevant_source ---\n" + RESEARCH_PACKAGE["irrelevant_source"] + "\n\n"
+        "END OF SOURCES."
+    ),
+    checks=[
+        SandboxCheck("index_html_exists", "files", ["index.html"], weight=1.0, critical=True),
+        SandboxCheck("html_not_empty", "regex", r"<html[\s\S]{1000,}", weight=1.0, critical=True),
+        SandboxCheck("single_file_html", "regex", r"<!DOCTYPE\s+html|<html\b", weight=1.0, critical=True),
+        SandboxCheck("has_title", "regex", r"<title>\s*\S+", weight=1.0),
+        SandboxCheck("has_report_headings", "regex", r"(<h2|<h3)", weight=1.5),
+        SandboxCheck("min_words", "min_words", 800, weight=1.5),
+        SandboxCheck("cites_primary", "regex", r"primary_official", weight=2.0, critical=True),
+        SandboxCheck("cites_technical", "regex", r"technical_secondary", weight=1.5),
+        SandboxCheck("cites_conflicting", "regex", r"conflicting_source", weight=1.5),
+        SandboxCheck("no_irrelevant_source", "regex", r"cassette", weight=2.0, negate=True),
+        SandboxCheck("mentions_uncertainty", "regex", r"(not (stated|provided|mentioned)|no (information|mention)|uncertain|limitation)", weight=1.0),
+        SandboxCheck("has_references", "regex", r"(references|bibliography|sources)", weight=1.0),
+        SandboxCheck("no_external_assets", "regex", r"\.(png|jpg|jpeg|gif|zip)\b", weight=1.0, negate=True),
+    ],
+    max_repair_attempts=2,
+    timeout_s=300.0,
+    max_output_tokens=6144,
+    network_allowed=False,
+    allowed_executables=(),
+    artifacts=("index.html",),
+)
+
+
 SANDBOX_TASKS: dict[str, SandboxTask] = {
     t.id: t
     for t in (
@@ -565,12 +651,14 @@ SANDBOX_TASKS: dict[str, SandboxTask] = {
         RESEARCH_TASK,
         BLENDER_TASK,
         BLENDER_CITY_TASK,
+        BLENDER_CITY_PREVIEW_TASK,
         EMAIL_TASK,
         CALENDAR_TASK,
         EMAIL_CALENDAR_TASK,
         WEB_FETCH_TASK,
         WEB_SEARCH_TASK,
         DEEP_RESEARCH_TASK,
+        DEEP_RESEARCH_REPORT_TASK,
         CREATIVE_3D_TASK,
         MINECRAFT_WORLD_TASK,
     )
@@ -897,6 +985,19 @@ def score_attempt(
             except Exception:
                 ok = False
                 detail = "invalid json"
+        elif check.kind == "min_words":
+            combined = "\n".join(files.values())
+            text = re.sub(
+                r"<style[\s\S]*?</style>|<script[\s\S]*?</script>",
+                " ",
+                combined,
+                flags=re.IGNORECASE,
+            )
+            text = re.sub(r"<[^>]+>", " ", text)
+            words = len(re.findall(r"\w+", text))
+            target = int(check.value or 0)
+            ok = words >= target
+            detail = f"{words} words (min {target})"
         else:
             ok = False
             detail = f"unknown check kind {check.kind}"

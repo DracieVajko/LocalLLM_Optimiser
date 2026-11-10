@@ -376,6 +376,8 @@ that are NOT the runtime optimizer:
 - `email_and_calendar` - combined email + calendar JSON from meeting notes.
 - `web_fetch_brief` - JSON with tool=web_fetch, url, title, facts or error; never invents facts.
 - `minecraft_world` - single self-contained HTML file with a Minecraft-style voxel world (Three.js from a CDN, procedural island, camera orbit). `--scene "..."` customises the scene (fewer trees, a lighthouse, more flowers) while keeping the skyblock base.
+- `blender_city` - static low-poly city: saves `scene.blend` and renders one `preview.png` (no animation). See [`docs/benchmarks/blender_city.md`](docs/benchmarks/blender_city.md).
+- `deep_research_report` - offline deep-research HTML report scored with a deterministic RACE/FACT-style rubric. See [`docs/benchmarks/deep_research.md`](docs/benchmarks/deep_research.md).
 
 All agentic tasks run offline (`network_allowed=false`) with an evidence-only repair loop: on failure the model gets the failing checks, not the solution.
 
@@ -421,7 +423,7 @@ $env:MODEL_GATE_MAX_LOADED_MODELS="2"
 
 ## Blender / 3D sandbox requirements
 
-The `blender_skyblock` and `blender_city_bridge` sandbox tasks (and duel type `blender`) need **Blender installed on the host** — they run the model-generated Python script through `blender --background --python build_scene.py`, then validate that a real `scene.blend` binary was produced and frames were rendered.
+The `blender_skyblock`, `blender_city` and `blender_city_bridge` sandbox tasks (and duel type `blender`) need **Blender installed on the host** - they run the model-generated Python script through `blender --background --python build_scene.py`, then validate that a real `scene.blend` binary was produced and (for skyblock/city_bridge) frames were rendered. `blender_city` renders one `preview.png` instead of an animation.
 
 - The sandbox runner and duel execute `blender` from `PATH`. Add the Blender install directory to `PATH` for the process that runs the CLI.
 - `BLENDER_PATH` is honoured by `tools/preview_blender.py` (preview/launch helper), **not** by the sandbox runner.

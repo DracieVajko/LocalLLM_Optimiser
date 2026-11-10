@@ -27,6 +27,8 @@ TASKS = {
     "web_dashboard": "index.html",
     "email_write": "email.txt",
     "blender_skyblock": "build_scene.py",
+    "blender_city": "build_scene.py",
+    "deep_research_report": "index.html",
 }
 
 
@@ -37,7 +39,25 @@ def main() -> int:
         default="all",
         help="comma-separated task ids, or 'all'",
     )
+    parser.add_argument(
+        "--source",
+        default="",
+        help="Directory containing <task>/<artifact> files (external reports)",
+    )
+    parser.add_argument(
+        "--model",
+        default="",
+        help="Model label recorded in the results (e.g. 'OpenAI o3')",
+    )
+    parser.add_argument(
+        "--out",
+        default="",
+        help="Output directory (default: results/bakeoff/deepseek-agent)",
+    )
     args = parser.parse_args()
+    source_root = Path(args.source) if args.source else SOURCE
+    model_label = args.model or MODEL
+    out_root = Path(args.out) if args.out else OUT
     selected = (
         list(TASKS)
         if args.tasks.strip().lower() in ("all", "*")
@@ -53,12 +73,12 @@ def main() -> int:
         filename = TASKS[task_id]
         definition = SANDBOX_TASKS[task_id]
         definition = replace(definition, max_repair_attempts=0)
-        source = SOURCE / task_id / filename
+        source = source_root / task_id / filename
         if not source.exists():
             print(f"[skip] {task_id}: missing {source}")
             continue
         content = source.read_text(encoding="utf-8")
-        workdir = OUT / task_id / stamp
+        workdir = out_root / task_id / stamp
         policy = SandboxPolicy(
             workdir=workdir,
             network_enabled=False,
@@ -70,13 +90,13 @@ def main() -> int:
             policy=policy,
             workdir=workdir,
             command=build_command_for(definition),
-            model="deepseek-v4.1-flash (agent)",
+            model=model_label,
         )
         started = time.perf_counter()
         result = runner.run(lambda feedback: content)
         wall_s = time.perf_counter() - started
         payload = result.as_dict()
-        record_run(MODEL, task_id, payload, workdir=str(workdir), duration_s=wall_s)
+        record_run(model_label, task_id, payload, workdir=str(workdir), duration_s=wall_s)
         row = {
             "task": task_id,
             "score": payload["final_score"],

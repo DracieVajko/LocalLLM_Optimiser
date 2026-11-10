@@ -424,6 +424,15 @@ class SandboxRunner:
                         False,
                         "no frames directory",
                     )
+                preview_path = self.workdir / "preview.png"
+                if preview_path.exists() and preview_path.is_file():
+                    preview_size = preview_path.stat().st_size
+                    custom["preview_rendered"] = (
+                        preview_size > 1000,
+                        f"preview.png size={preview_size}",
+                    )
+                else:
+                    custom["preview_rendered"] = (False, "no preview.png")
                 # Merge execution result into score too
                 if not exec_result.ok:
                     custom["blender_command_failed"] = (

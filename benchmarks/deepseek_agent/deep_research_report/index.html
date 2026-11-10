@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>70B MoE on 24 GB VRAM: Limits and the Q3/Q4 Speed Dispute</title>
+  <style>
+    :root { --ink:#1c2733; --muted:#5b6b7b; --line:#d9e2ec; --accent:#2f6fed; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0 auto; max-width: 860px; padding: 32px 24px 64px;
+      color: var(--ink); background: #ffffff;
+      font-family: Georgia, "Times New Roman", serif; line-height: 1.6;
+    }
+    h1 { font-size: 30px; line-height: 1.25; margin: 0 0 8px; }
+    h2 { font-size: 20px; margin: 30px 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+    h3 { font-size: 16px; margin: 20px 0 6px; }
+    p, li { font-size: 15px; }
+    .meta { color: var(--muted); font-size: 13px; margin-bottom: 22px; }
+    .callout { border-left: 4px solid var(--accent); background: #f2f6ff; padding: 12px 16px; margin: 16px 0; }
+    code { font-family: Consolas, monospace; font-size: 13px; background: #f4f7fa; padding: 1px 4px; }
+    table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; }
+    .refs li { margin-bottom: 6px; font-size: 14px; }
+    @media print {
+      body { padding: 0; max-width: none; }
+      h2 { page-break-after: avoid; }
+      .callout { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <h1>70B MoE on 24 GB VRAM: What the Sources Actually Support</h1>
+  <div class="meta">Deep research report · sources restricted to the supplied package · April 2026</div>
+
+  <h2>Executive summary</h2>
+  <p>
+    A 70B mixture-of-experts model can be made to start on a 24 GB card, but the
+    supplied sources do not contain a direct 70B-on-24-GB measurement. They do
+    establish the three constraints that decide whether it runs well: the load
+    surface exposed by the server, the cost of speculative decoding, and the
+    size of the quantized weights plus KV cache. The honest conclusion is
+    conditional: a 70B MoE can run if most experts are streamed from system RAM
+    and the context is kept small, but it will not be fast, and the Q3-versus-Q4
+    speed dispute cannot be settled from the supplied evidence alone.
+    <strong>[primary_official]</strong> <strong>[technical_secondary]</strong>
+  </p>
+
+  <h2>What the serving stack exposes</h2>
+  <p>
+    The primary source lists the LM Studio REST load parameters:
+    <code>context_length</code>, <code>flash_attention</code>,
+    <code>offload_kv_cache_to_gpu</code>, <code>eval_batch_size</code>,
+    <code>physical_batch_size</code>, <code>parallel</code>,
+    <code>context_checkpoints</code>, <code>num_experts</code> and
+    <code>speculative_draft_max_tokens</code>. Unknown keys are rejected with
+    HTTP 400 before the model is loaded. <strong>[primary_official]</strong>
+    This matters for a 70B MoE because <code>num_experts</code> and the KV-cache
+    placement are the two levers that decide whether the model fits at all.
+  </p>
+  <p>
+    The source does not state the memory cost of each parameter, nor does it give
+    a formula for a 70B model on a 24 GB card. Those numbers are not provided;
+    this report does not invent them. <strong>[primary_official]</strong>
+  </p>
+
+  <h2>Speculative decoding and throughput</h2>
+  <p>
+    The technical secondary source reports that llama.cpp exposes speculative
+    decoding through <code>--spec-type draft-mtp</code> and the MTP head shipped
+    with Qwen3.8 models. On a dense 27B at Q4_K_M, the acceptance rate of three
+    drafts was about 73 percent, and decode throughput rose from 31.2 to 40.3
+    tokens per second on a V100. <strong>[technical_secondary]</strong>
+  </p>
+  <p>
+    That is evidence that MTP can deliver a meaningful speedup when the draft
+    acceptance rate is high. It is not evidence about a 70B MoE: the source
+    measures a dense 27B, on a different GPU, with a different memory hierarchy.
+    Extrapolating the 29 percent gain to a 70B MoE is an assumption, not a
+    measurement. <strong>[technical_secondary]</strong>
+  </p>
+
+  <h2>The outdated capacity claim</h2>
+  <p>
+    An older guide states that a 27B Q4_K_M model needs 17.5 GB of VRAM and
+    therefore cannot run on consumer cards at all. <strong>[outdated_source]</strong>
+    The same source is explicitly described as predating 3-bit quants and KV
+    cache quantization. Its conclusion is therefore a historical statement, not
+    a current constraint. It should not be used to rule out a 70B MoE today, but
+    it also cannot be used to prove that one fits. <strong>[outdated_source]</strong>
+  </p>
+
+  <h2>Conflicting claims: Q3 versus Q4</h2>
+  <p>
+    The conflicting source contains two opposed community claims. One says Q3_K_M
+    is faster because the model is smaller; the other says Q4_K_M is faster
+    because Q3 needs more dequantization work. Both were measured on Apple
+    Silicon, where the Q3 kernel is described as unusually slow.
+    <strong>[conflicting_source]</strong>
+  </p>
+  <div class="callout">
+    <strong>Resolution:</strong> the two claims are not universal. They are
+    hardware- and kernel-specific. On a CUDA GPU the dequantization cost profile
+    is different from Apple Silicon, so neither claim can be transferred without
+    a local measurement. The defensible procedure is to benchmark both quants on
+    the target machine at the same context and batch size, then keep the faster
+    one that still passes the quality gate.
+    <strong>[conflicting_source]</strong> <strong>[technical_secondary]</strong>
+  </div>
+
+  <h2>What a 24 GB budget implies</h2>
+  <p>
+    A 70B MoE at a 3-bit or 4-bit quantization is larger than 24 GB in weights
+    alone for the configurations described by the sources; the exact file size is
+    not stated in the package. <strong>[primary_official]</strong>
+    <strong>[outdated_source]</strong> The practical consequence is that a
+    substantial part of the experts must live in system RAM, and the KV cache
+    should be kept off the GPU with <code>offload_kv_cache_to_gpu=false</code>.
+    <strong>[primary_official]</strong>
+  </p>
+  <p>
+    With <code>parallel=1</code> and small evaluation and physical batches, the
+    GPU is asked to hold fewer activations at once. That reduces peak VRAM at the
+    cost of throughput. The primary source exposes all three knobs, but it does
+    not quantify the trade-off. <strong>[primary_official]</strong>
+  </p>
+
+  <h2>Limitations and uncertainty</h2>
+  <ul>
+    <li>The package contains no direct 70B-on-24-GB benchmark. The fit conclusion
+      is an inference from the exposed parameters, not a measurement.
+      <strong>[primary_official]</strong></li>
+    <li>The MTP speedup was measured on a dense 27B on a V100, not on a 70B MoE
+      on consumer hardware. <strong>[technical_secondary]</strong></li>
+    <li>The Q3/Q4 conflict is explicitly tied to Apple Silicon; it is not stated
+      whether the result holds on CUDA. <strong>[conflicting_source]</strong></li>
+    <li>The outdated guide predates 3-bit quants and KV quantization and should
+      not be treated as a current limit. <strong>[outdated_source]</strong></li>
+    <li>The package does not state the exact quantized file size of a 70B MoE,
+      so the amount of RAM offload cannot be calculated from these sources.
+      <strong>[primary_official]</strong></li>
+  </ul>
+
+  <h2>References</h2>
+  <ol class="refs">
+    <li><strong>[primary_official]</strong> LM Studio REST API v1 load parameters
+      and the HTTP 400 unrecognized-keys behavior.</li>
+    <li><strong>[technical_secondary]</strong> llama.cpp speculative decoding with
+      <code>--spec-type draft-mtp</code>; dense 27B Q4_K_M acceptance and
+      throughput on a V100.</li>
+    <li><strong>[outdated_source]</strong> Older guide claiming a 27B Q4_K_M needs
+      17.5 GB of VRAM; predates 3-bit quants and KV quantization.</li>
+    <li><strong>[conflicting_source]</strong> Opposed community claims that Q3_K_M
+      and Q4_K_M are faster, both measured on Apple Silicon.</li>
+  </ol>
+  <p class="meta">
+    Source note: only the four sources listed above were used.
+  </p>
+</body>
+</html>
