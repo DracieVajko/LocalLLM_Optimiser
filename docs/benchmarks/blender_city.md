@@ -41,7 +41,11 @@ python -m lm_optimizer.cli.main lab bakeoff --models <model-id> --tasks blender_
 ```
 
 Artifacts: `results/bakeoff/<model>/blender_city/<timestamp>/build_scene.py`,
-`scene.blend`, `preview.png`, `debug.json`.
+`scene.blend`, `preview.png`, `debug.json`. The produced `.blend` is also copied
+to `results/blends/<model>/blender_city/<timestamp>.blend` (also for
+`blender_skyblock`), so you can open it in Blender even after the scratch
+workdir is cleaned; the path is recorded as `blend_file` in the run result and
+shown in the web UI history.
 
 ## Reference result
 

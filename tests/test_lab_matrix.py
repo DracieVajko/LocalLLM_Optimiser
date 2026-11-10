@@ -26,8 +26,8 @@ class TestResolveTasks:
         assert _resolve_tasks("b,c", ["a", "b", "c"]) == ["b", "c"]
 
     def test_glob(self):
-        assert _resolve_tasks("web_*", ["web_dashboard", "email_write"]) == [
-            "web_dashboard"
+        assert _resolve_tasks("company_*", ["company_website", "email_write"]) == [
+            "company_website"
         ]
 
 
@@ -57,8 +57,8 @@ class TestPromptOverrides:
 
     def test_valid_mapping(self, tmp_path):
         path = tmp_path / "prompts.json"
-        path.write_text(json.dumps({"web_dashboard": "Build X"}), encoding="utf-8")
-        assert _load_prompt_overrides(path) == {"web_dashboard": "Build X"}
+        path.write_text(json.dumps({"company_website": "Build X"}), encoding="utf-8")
+        assert _load_prompt_overrides(path) == {"company_website": "Build X"}
 
     def test_non_object_rejected(self, tmp_path):
         path = tmp_path / "prompts.json"
@@ -80,8 +80,8 @@ class TestResolveDuelTasks:
         assert ids == ["instruction_list_three", "reasoning_arithmetic"]
 
     def test_explicit_tasks_override(self):
-        _dt, ids = _resolve_duel_task_ids("micro_quality", "web_dashboard,email_write")
-        assert ids == ["web_dashboard", "email_write"]
+        _dt, ids = _resolve_duel_task_ids("micro_quality", "company_website,email_write")
+        assert ids == ["company_website", "email_write"]
 
     def test_unknown_type_rejected(self):
         with pytest.raises(ValueError):

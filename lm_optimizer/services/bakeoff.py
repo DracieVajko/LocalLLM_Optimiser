@@ -6,9 +6,9 @@ Generation time always includes the model's thinking/reasoning phase, because
 it is measured around the single chat call and thinking is enabled explicitly.
 
 Examples:
-    python tools/model_bakeoff.py --models qwen9b,e4b --tasks email_write,web_dashboard
-    python tools/model_bakeoff.py --models all --tasks web_dashboard,blender_skyblock
-    python tools/model_bakeoff.py --models bonsai --tasks email_write,web_dashboard --vram-only
+    python tools/model_bakeoff.py --models qwen9b,e4b --tasks email_write,company_website
+    python tools/model_bakeoff.py --models all --tasks company_website,blender_skyblock
+    python tools/model_bakeoff.py --models bonsai --tasks email_write,company_website --vram-only
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ CANDIDATES = {
     "gptoss": "openai-gpt-oss-20b-claude-4.5-opus-heretic-uncensored-i1",
 }
 
-DEFAULT_TASKS = "email_write,web_dashboard,blender_skyblock"
+DEFAULT_TASKS = "email_write,company_website,blender_skyblock"
 DEFAULT_ROOT = Path("results") / "bakeoff"
 
 

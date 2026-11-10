@@ -45,7 +45,7 @@ class DuelType(str, Enum):
 #: Task sets per duel type.
 DUEL_TASKS: dict[DuelType, tuple[str, ...]] = {
     DuelType.MICRO_QUALITY: ("instruction_list_three", "reasoning_arithmetic"),
-    DuelType.WEB: ("web_dashboard",),
+    DuelType.WEB: ("company_website",),
     DuelType.RESEARCH: ("research_synthesis",),
     DuelType.BLENDER: ("blender_skyblock",),
     DuelType.AGENTIC: (
@@ -57,7 +57,7 @@ DUEL_TASKS: dict[DuelType, tuple[str, ...]] = {
         "deep_research",
     ),
     DuelType.COMPLETE_SANDBOX: (
-        "web_dashboard",
+        "company_website",
         "research_synthesis",
         "blender_skyblock",
         "email_write",

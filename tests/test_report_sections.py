@@ -106,7 +106,7 @@ def test_report_lists_context_strategies(tmp_path):
 
 def test_report_shows_artifact_test(tmp_path):
     artifact = {
-        "task_id": "web_dashboard",
+        "task_id": "company_website",
         "task_kind": "web",
         "success": True,
         "score": 0.86,
@@ -117,7 +117,7 @@ def test_report_shows_artifact_test(tmp_path):
         _run(artifact=artifact), out_dir=tmp_path
     ).read_text(encoding="utf-8")
     assert "## Artifact test (post-run)" in text
-    assert "web_dashboard" in text
+    assert "company_website" in text
     assert "Score: 0.86" in text
     assert "- Unloaded: True" in text
 

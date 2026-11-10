@@ -134,7 +134,7 @@ def main() -> int:
             run(
                 "sandbox_web",
                 [PY, "-m", "lm_optimizer", "lab", "sandbox",
-                 "--task", "web_dashboard", "--model", model],
+                 "--task", "company_website", "--model", model],
                 timeout_min=20 if short else 60,
             )
         )

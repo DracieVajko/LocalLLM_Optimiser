@@ -59,7 +59,7 @@ def test_resolved_settings_snapshot_covers_every_new_field():
         recovery_budget=0,
         context_strategy_modes=["winner"],
         final_sandbox_mode="all",
-        final_sandbox_preset_ids=["web_dashboard"],
+        final_sandbox_preset_ids=["company_website"],
         final_sandbox_custom_prompts=[{"prompt": "x"}],
         sandbox_compare_baseline=True,
     )

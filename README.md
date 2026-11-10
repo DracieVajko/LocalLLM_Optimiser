@@ -376,6 +376,7 @@ that are NOT the runtime optimizer:
 - `email_and_calendar` - combined email + calendar JSON from meeting notes.
 - `web_fetch_brief` - JSON with tool=web_fetch, url, title, facts or error; never invents facts.
 - `minecraft_world` - single self-contained HTML file with a Minecraft-style voxel world (Three.js from a CDN, procedural island, camera orbit). `--scene "..."` customises the scene (fewer trees, a lighthouse, more flowers) while keeping the skyblock base.
+- `company_website` - single-file marketing website for a fictional consultancy: sticky nav, hero, services, about, testimonial, contact form, footer, responsive with a real media query. No external assets.
 - `blender_city` - static low-poly city: saves `scene.blend` and renders one `preview.png` (no animation). See [`docs/benchmarks/blender_city.md`](docs/benchmarks/blender_city.md).
 - `deep_research_report` - offline deep-research HTML report scored with a deterministic RACE/FACT-style rubric. See [`docs/benchmarks/deep_research.md`](docs/benchmarks/deep_research.md).
 
@@ -428,7 +429,7 @@ The `blender_skyblock`, `blender_city` and `blender_city_bridge` sandbox tasks (
 - The sandbox runner and duel execute `blender` from `PATH`. Add the Blender install directory to `PATH` for the process that runs the CLI.
 - `BLENDER_PATH` is honoured by `tools/preview_blender.py` (preview/launch helper), **not** by the sandbox runner.
 - On Windows the default install is typically `C:\Program Files\Blender Foundation\Blender <version>\blender.exe` — if you installed via the Windows Store or elsewhere, add that directory to `PATH`.
-- Without Blender the task still runs but fails on `blend_is_binary` / `frames_rendered` — that is **expected behavior, not a code bug**. The text-generation tasks (`web_dashboard`, `email_write`, etc.) work without Blender.
+- Without Blender the task still runs but fails on `blend_is_binary` / `frames_rendered` - that is **expected behavior, not a code bug**. The text-generation tasks (`company_website`, `email_write`, etc.) work without Blender.
 
 Per-call (Windows PowerShell):
 
@@ -469,7 +470,7 @@ with **any** LM Studio or Ollama model id; `--models all` reads the model list
 from the configured backend instead of a hardcoded test set:
 
 ```powershell
-python -m lm_optimizer.cli.main lab bakeoff --models all --tasks email_write,web_dashboard,minecraft_world --context 8192
+python -m lm_optimizer.cli.main lab bakeoff --models all --tasks email_write,company_website,minecraft_world --context 8192
 ```
 
 `--safe` uses the minimal-memory load config (parallel 1, batch 128, KV cache

@@ -60,8 +60,8 @@ export const UI = {
                         <p class="text-xs text-gray-500 mt-1">Last error: ${(status && status.error) || 'connection failed or timed out'}</p>
                     </div>
                 </div>`}
-                <!-- LM Studio Status & Hardware -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <!-- LM Studio Status & Hardware (centered) -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
                     ${this.renderStatusCard(status.lm_studio || {})}
                     ${this.renderHardwareCard(hardware)}
                 </div>
@@ -474,7 +474,7 @@ export const UI = {
                     <label class="form-label">Scheduled artifact test</label>
                     <select id="artifact-test" class="form-input form-select">
                         <option value="">None</option>
-                        <option value="web_dashboard">web_dashboard</option>
+                        <option value="company_website">company_website</option>
                         <option value="blender_skyblock">blender_skyblock</option>
                         <option value="research_synthesis">research_synthesis</option>
                     </select>

@@ -46,7 +46,7 @@ TASK_STATUS: dict[str, str] = {
     "prompt (sandbox_lab.py:143); also no_irrelevant_source lacks negate=True",
     "email_and_calendar": "BROKEN: check demands end=10:45 but the notes never "
     "state a duration (sandbox_lab.py:285)",
-    "web_dashboard": "BROKEN: regex checks score prose as HTML; "
+    "company_website": "BROKEN: regex checks score prose as HTML; "
     "has_viewport vs has_viewport_meta name mismatch",
 }
 
@@ -56,7 +56,7 @@ TASK_ORDER = [
     "email_write",
     "calendar_event",
     "deep_research",
-    "web_dashboard",
+    "company_website",
     "email_and_calendar",
     "research_synthesis",
     "blender_skyblock",

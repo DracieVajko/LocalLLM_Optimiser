@@ -223,14 +223,14 @@ if __name__ == "__main__":
 
 #: (task_id, fixture name, file the fixture is materialised as, content, expected)
 FIXTURES: list[tuple[str, str, str, str, tuple[float, float]]] = [
-    ("web_dashboard", "perfect_html", "index.html", PERFECT_HTML, (0.9, 1.0)),
-    ("web_dashboard", "prose_dump", "index.html",
+    ("company_website", "perfect_html", "index.html", PERFECT_HTML, (0.9, 1.0)),
+    ("company_website", "prose_dump", "index.html",
      "The user wants a self-contained HTML dashboard with 4 metrics, a filter, "
      "a model detail view and a light/dark theme toggle. Previous failures: "
      "missing viewport meta tag, missing media queries. So I must include "
      '<meta name="viewport" content="width=device-width, initial-scale=1"> and '
      "CSS @media queries. I will use a grid layout.", (0.0, 0.1)),
-    ("web_dashboard", "empty", "index.html", "", (0.0, 0.05)),
+    ("company_website", "empty", "index.html", "", (0.0, 0.05)),
     ("calendar_event", "perfect_json", "calendar.json", PERFECT_CALENDAR, (0.95, 1.0)),
     ("calendar_event", "fenced_json", "calendar.json",
      "```json\n" + PERFECT_CALENDAR + "\n```", (0.95, 1.0)),

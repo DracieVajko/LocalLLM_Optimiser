@@ -85,7 +85,7 @@ inputs and no external scripts/styles.
 | Task | Score | Pass | Artifact |
 |---|---:|---|---|
 | `minecraft_world` | **1.0** | yes | [index.html](deepseek_agent/minecraft_world/index.html) |
-| `web_dashboard` | **1.0** | yes | [index.html](deepseek_agent/web_dashboard/index.html) |
+| `company_website` | **1.0** | yes | [index.html](deepseek_agent/company_website/index.html) |
 | `email_write` | **1.0** | yes | [email.txt](deepseek_agent/email_write/email.txt) |
 | `blender_skyblock` | **1.0** | yes | [build_scene.py](deepseek_agent/blender_skyblock/build_scene.py) |
 
@@ -110,7 +110,7 @@ The preview above is a headless Chromium screenshot of the committed
 Score the committed artifacts with the same harness:
 
 ```powershell
-python tools/agent_benchmark.py --tasks minecraft_world,web_dashboard,email_write,blender_skyblock
+python tools/agent_benchmark.py --tasks minecraft_world,company_website,email_write,blender_skyblock
 ```
 
 Run the same task against a local model:

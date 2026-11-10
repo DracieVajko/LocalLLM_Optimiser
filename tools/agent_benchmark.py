@@ -24,7 +24,7 @@ MODEL = "deepseek-v4.1-flash (agent)"
 
 TASKS = {
     "minecraft_world": "index.html",
-    "web_dashboard": "index.html",
+    "company_website": "index.html",
     "email_write": "email.txt",
     "blender_skyblock": "build_scene.py",
     "blender_city": "build_scene.py",

@@ -32,9 +32,9 @@ TASKS = {
     "deep_research_report": "index.html",
     "email_write": "email.txt",
     "minecraft_world": "index.html",
-    "web_dashboard": "index.html",
+    "company_website": "index.html",
 }
-HTML_TASKS = {"deep_research_report", "minecraft_world", "web_dashboard"}
+HTML_TASKS = {"deep_research_report", "minecraft_world", "company_website"}
 
 ROOT = Path(__file__).resolve().parents[1]
 PROVIDERS_DIR = ROOT / "benchmarks" / "compare"
@@ -164,6 +164,7 @@ def score(provider: str, task: str, artifact: Path, stamp: str) -> dict:
         "repairs": payload.get("repair_count"),
         "critical": payload.get("critical_failures") or [],
         "artifacts": payload.get("artifacts") or [],
+        "blend_file": payload.get("blend_file") or "",
         "workdir": str(workdir),
         "source": str(artifact),
     }
@@ -273,13 +274,18 @@ def write_gallery(rows: list[dict], visuals: dict[int, str | None]) -> None:
                 email_html = f"<pre>{html.escape(text[:1400])}</pre>"
             except OSError:
                 pass
+        blend_html = ""
+        if row.get("blend_file"):
+            blend_html = (
+                f'<div class="blend">.blend: {html.escape(row["blend_file"])}</div>'
+            )
         cards.append(
             f"""
             <article class="card">
               <header><span class="provider">{html.escape(row['provider'])}</span>
                 <span class="score">{row['score']}</span></header>
               <div class="task">{html.escape(row['task'])} &middot; pass={row['pass']}</div>
-              {image_html}{email_html}
+              {image_html}{email_html}{blend_html}
               <div class="meta">{html.escape(row['source'])}</div>
             </article>
             """
@@ -307,6 +313,8 @@ pre {{ margin:0; padding:12px 14px; font-size:11px; white-space:pre-wrap;
   max-height:260px; overflow:auto; background:#0b1118; color:#cfe1f2; }}
 .meta {{ padding:8px 14px 12px; color:#6b7f93; font-size:11px;
   overflow-wrap:anywhere; }}
+.blend {{ padding:8px 14px; color:#8fd6c0; font-size:11px;
+  overflow-wrap:anywhere; font-family:Consolas,monospace; }}
 </style></head><body>
 <h1>Cross-provider comparison</h1>
 <p class="sub">Same task, same prompt; score from the sandbox checks, image from the real artifact.</p>
@@ -344,7 +352,16 @@ def write_tables(rows: list[dict]) -> None:
     with (OUT / "comparison.csv").open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(
             handle,
-            fieldnames=["provider", "task", "score", "pass", "critical", "source", "workdir"],
+            fieldnames=[
+                "provider",
+                "task",
+                "score",
+                "pass",
+                "critical",
+                "blend_file",
+                "source",
+                "workdir",
+            ],
             extrasaction="ignore",
         )
         writer.writeheader()

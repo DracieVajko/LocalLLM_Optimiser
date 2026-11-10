@@ -29,6 +29,7 @@ import shutil
 import subprocess
 import time
 from dataclasses import dataclass, field
+from datetime import datetime as _dt
 from pathlib import Path
 
 from lm_optimizer.logging_config import get_logger
@@ -216,6 +217,45 @@ def apply_retention(base_dir: Path, policy: SandboxPolicy) -> list[Path]:
         except OSError:
             continue
     return removed
+
+
+def collect_blend(
+    workdir: Path,
+    model: str,
+    task_id: str,
+    *,
+    base: Path | None = None,
+) -> str:
+    """Copy the produced ``scene.blend`` somewhere stable for a human to open.
+
+    Model answers are text; the openable ``.blend`` only exists after Blender
+    runs the generated script. Keeping a copy under ``results/blends/<model>/
+    <task>/`` means the file survives cleanup of the scratch workdir and is easy
+    to find in the UI. Returns the absolute path, or an empty string.
+    """
+    source = workdir / "scene.blend"
+    if not source.exists() or source.stat().st_size == 0:
+        return ""
+    try:
+        if not looks_like_blend(source.read_bytes()):
+            return ""
+    except OSError:
+        return ""
+
+    slug = "".join(c if c.isalnum() else "_" for c in model)[:60] or "model"
+    stamp = workdir.name or _dt.now().strftime("%Y%m%d_%H%M%S")
+    if base is None and "results" not in workdir.parts:
+        # Tests and ad-hoc temp workdirs must not drop files into the repo.
+        return ""
+    target_dir = (base or (Path("results") / "blends")) / slug / task_id
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"{stamp}.blend"
+    try:
+        shutil.copyfile(source, target)
+    except OSError as exc:
+        log_best_effort("best-effort operation failed", exc)
+        return ""
+    return str(target.resolve())
 
 
 def read_workdir_files(workdir: Path, limit: int = 50) -> dict[str, str]:
@@ -511,6 +551,8 @@ class SandboxRunner:
                 failing_checks=failing,
             )
         result.artifacts = sorted(read_workdir_files(self.workdir).keys())
+        if self.task.kind.value == "blender":
+            result.blend_file = collect_blend(self.workdir, self.model, self.task.id)
         if self.debug:
             try:
                 self.workdir.mkdir(parents=True, exist_ok=True)

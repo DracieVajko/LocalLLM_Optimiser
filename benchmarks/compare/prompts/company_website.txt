@@ -1,0 +1,14 @@
+Build a complete single-file marketing website for a fictional company called "Northwind Studio", a small design and engineering consultancy. Everything must live in one index.html: inline CSS, no build step, no external assets, no network calls (no CDN fonts, images, scripts or stylesheets).
+
+The page must contain:
+- A sticky header with the company name and section navigation.
+- A hero section with a headline, one sentence of supporting copy and a primary call-to-action button.
+- A services section with at least three services, each with a title and a short description.
+- An about section that explains who the company is.
+- At least one customer testimonial with a named author.
+- A contact section with a working-looking form (name, email, message) and a submit button.
+- A footer with the company name and a copyright line.
+- Responsive layout that works on mobile (<= 600px) and desktop, with a real media query.
+- Accessible markup: semantic sections, one h1, labels for inputs.
+
+Output ONLY the complete HTML document starting with <!DOCTYPE html>, no markdown fences, no explanations.

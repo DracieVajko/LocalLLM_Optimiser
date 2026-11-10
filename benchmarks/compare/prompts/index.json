@@ -9,10 +9,10 @@
     "prompt_file": "minecraft_world.txt",
     "title": "Minecraft-style voxel world (single HTML)"
   },
-  "web_dashboard": {
+  "company_website": {
     "artifact": "index.html",
-    "prompt_file": "web_dashboard.txt",
-    "title": "Responsive metrics dashboard"
+    "prompt_file": "company_website.txt",
+    "title": "Company marketing website"
   },
   "deep_research_report": {
     "artifact": "index.html",

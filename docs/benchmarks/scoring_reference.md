@@ -20,9 +20,10 @@ python -m pytest tests/test_scoring_reference.py -v
 | `minecraft_world` wrong content (no Three.js) | **0.320** | no | — |
 | `minecraft_world` external asset (`.png`) | **<1.0** | no | negative check fails |
 | `minecraft_world` JS syntax error (duplicate function) | **0.000** | no | `js_parses` |
-| `web_dashboard` good artifact | **1.000** | yes | — |
-| `web_dashboard` empty file | **0.000** | no | `html_not_empty` |
-| `web_dashboard` JS syntax error (unbalanced paren) | **0.000** | no | `js_parses` |
+| `company_website` good artifact | **1.000** | yes | — |
+| `company_website` empty file | **0.000** | no | `html_not_empty` |
+| `company_website` JS syntax error (unbalanced paren) | **0.000** | no | `js_parses` |
+| `company_website` JS body without a form | **<1.0** | no | `has_contact_form` |
 | `email_write` good artifact | **1.000** | yes | — |
 | `email_write` without Subject | **0.000** | no | `has_subject` |
 | `blender_skyblock` valid artifacts | **1.000** | yes | — |
@@ -33,7 +34,7 @@ python -m pytest tests/test_scoring_reference.py -v
 1. **Critical failures were not a veto.** A Blender run that failed every
    artifact check still kept a high weighted score (about 0.71) because the
    regex checks passed. Critical checks now zero the score.
-2. **Empty HTML could score 0.5 on the dashboard.** Negative checks ("no
+2. **Empty HTML could score 0.5 on the web task.** Negative checks ("no
    external scripts/styles") are satisfied by an empty file. `html_not_empty`
    is now a critical check (at least 50 characters).
 3. **Regex checks matched prose.** A page saying "no Three.js, no voxels"
@@ -53,20 +54,20 @@ python -m pytest tests/test_scoring_reference.py -v
    block editing while the intended output is an automatic orbit scene. The
    prompt now asks for an orbiting camera and the check is `has_camera`.
 7. **A page with broken JavaScript scored 1.0.** `minecraft_world` and
-   `web_dashboard` were checked only by regexes, so an HTML file whose inline
+   `company_website` were checked only by regexes, so an HTML file whose inline
    script does not parse still earned full marks while rendering nothing. Both
    tasks now run every inline script through `node --check` (`js_parses`,
    critical). Import maps and JSON script blocks are skipped. Real examples
    caught this way: a duplicate `generateWorld` function (Nemotron 74B
-   minecraft), an unbalanced parenthesis (gpt-oss web dashboard), a Python-style
+   minecraft), an unbalanced parenthesis (gpt-oss company site), a Python-style
    keyword argument `getTerrainHeight(x, y: 0, z)` (Bonsai minecraft) and a
-   stray `...` spread (Swift web dashboard).
-8. **Prose in `index.html` passed the HTML checks.** The qwen 9B dashboard
+   stray `...` spread (Swift company site).
+8. **Prose in `index.html` passed the HTML checks.** The qwen 9B company-site
    artifact was ten lines of reasoning that *described* a viewport tag and a
    media query, and still scored 0.81 because the regexes matched the
    description. `html_document` (critical) now requires the file itself to
    start with `<!DOCTYPE html>` or `<html>` after optional comments.
-9. **`has_table_or_grid` was too literal.** A dashboard using
+9. **`has_table_or_grid` was too literal.** A page using
    `display: grid` or `grid-template` in CSS failed. Both forms now count.
 10. **`has_subject` rejected legitimate wording.** The prompt says "Subject
     line"; the check demanded the exact string `Subject:` at byte 0, so

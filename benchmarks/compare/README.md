@@ -24,7 +24,7 @@ Task → artifact:
 | `deep_research_report` | `index.html` |
 | `email_write` | `email.txt` |
 | `minecraft_world` | `index.html` |
-| `web_dashboard` | `index.html` |
+| `company_website` | `index.html` |
 
 Use the exact prompts from [`PROMPTS.md`](PROMPTS.md) — they are the same text
 the sandbox uses, so the comparison is like-for-like.

@@ -43,6 +43,7 @@ def record_run(
         "error": str(result.get("error") or "")[:300],
         "workdir": workdir,
         "duration_s": round(float(duration_s), 1),
+        "blend_file": str(result.get("blend_file") or ""),
     }
     target = _history_path(path)
     target.parent.mkdir(parents=True, exist_ok=True)

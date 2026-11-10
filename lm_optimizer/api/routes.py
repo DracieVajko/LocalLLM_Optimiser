@@ -4399,7 +4399,7 @@ def lab_sandbox_run(payload: dict, background: BackgroundTasks) -> dict[str, Any
 
 
 
-    Body: {"task": "web_dashboard", "model": "publisher/model"}.
+    Body: {"task": "company_website", "model": "publisher/model"}.
 
     Returns a job id; poll GET /lab/sandbox-run/{job_id}.
 

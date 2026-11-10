@@ -26,7 +26,7 @@ MODELS = [
 DEFAULT_MODELS = MODELS
 
 SANDBOX_TASKS = [
-    "web_dashboard",
+    "company_website",
     "research_synthesis",
     "blender_skyblock",
     "email_write",

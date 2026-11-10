@@ -47,7 +47,7 @@ def test_duel_task_sets_defined():
     for duel_type in DuelType:
         assert DUEL_TASKS[duel_type], f"{duel_type} has no tasks"
     sandbox = DUEL_TASKS[DuelType.COMPLETE_SANDBOX]
-    assert {"web_dashboard", "research_synthesis", "blender_skyblock"} <= set(sandbox)
+    assert {"company_website", "research_synthesis", "blender_skyblock"} <= set(sandbox)
     assert {"email_write", "calendar_event", "web_search", "deep_research"} <= set(sandbox)
     assert len(DUEL_TASKS[DuelType.COMPLETE_MODEL]) >= 5
 

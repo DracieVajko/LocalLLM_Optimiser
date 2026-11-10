@@ -28,19 +28,19 @@ LOGS = ROOT / "results" / "retry"
 PLAN: list[tuple[str, str, list[str], str]] = [
     (
         "prism-ml/bonsai-27b",
-        "minecraft_world,web_dashboard,email_write",
+        "minecraft_world,company_website,email_write",
         ["--safe", "--no-thinking"],
         "kwargs-in-JS and reasoning dump; retry with no-thinking",
     ),
     (
         "qwen3.8-9b-distill",
-        "web_dashboard,email_write",
+        "company_website,email_write",
         ["--safe", "--no-thinking"],
         "prose instead of HTML; retry with no-thinking",
     ),
     (
         "google/gemma-4-26b-a4b-qat",
-        "email_write,web_dashboard",
+        "email_write,company_website",
         ["--safe", "--no-thinking"],
         "engine 500 on chat; one more attempt",
     ),
@@ -52,13 +52,13 @@ PLAN: list[tuple[str, str, list[str], str]] = [
     ),
     (
         "qwen3.8-27b-twin-turbo-fable-cold-fusion-709-ultra-heretic-uncensored-nm-dau-neo-mtp",
-        "email_write,web_dashboard",
+        "email_write,company_website",
         ["--safe", "--no-thinking"],
         "engine 500 on chat; one more attempt",
     ),
     (
         "openai-gpt-oss-20b-claude-4.5-opus-heretic-uncensored-i1",
-        "email_write,web_dashboard,blender_skyblock",
+        "email_write,company_website,blender_skyblock",
         ["--safe", "--no-thinking"],
         "syntax errors and reasoning dump",
     ),

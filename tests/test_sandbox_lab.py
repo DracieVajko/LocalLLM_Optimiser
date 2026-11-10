@@ -21,7 +21,7 @@ from lm_optimizer.services.sandbox_lab import (
 
 def test_all_sandbox_tasks_exist():
     assert set(SANDBOX_TASKS) == {
-        "web_dashboard",
+        "company_website",
         "research_synthesis",
         "blender_skyblock",
         "blender_city_bridge",
@@ -35,6 +35,7 @@ def test_all_sandbox_tasks_exist():
         "minecraft_world",
         "blender_city",
         "deep_research_report",
+        "deep_research_online",
     }
     kinds = {t.kind for t in SANDBOX_TASKS.values()}
     assert kinds == {
@@ -149,14 +150,16 @@ def test_blender_task_checks_all_spec_elements():
 # --- scoring ---
 
 def test_score_attempt_perfect_solution():
-    files = {
-        "index.html": (
-            '<html><head><meta name="viewport" content="width=device-width">'
-            "</head><body><table></table>"
-            "<script>// dark theme toggle</script>"
-            "<style>@media (max-width:600px){}</style></body></html>"
-        )
-    }
+    from pathlib import Path
+
+    reference = (
+        Path(__file__).resolve().parents[1]
+        / "benchmarks"
+        / "deepseek_agent"
+        / "company_website"
+        / "index.html"
+    )
+    files = {"index.html": reference.read_text(encoding="utf-8")}
     score, failing, critical = score_attempt(WEB_TASK, files)
     assert score == pytest.approx(1.0)
     assert not failing
@@ -208,7 +211,7 @@ def test_repair_penalty_schedule():
 def test_repair_feedback_contains_evidence_not_solution():
     feedback = build_repair_feedback(
         WEB_TASK,
-        attempt=1,
+        attempt=0,
         stdout="SyntaxError: unexpected token",
         stderr="line 3",
         failing_checks=["index_html_exists (missing=['index.html'])"],
@@ -226,7 +229,7 @@ def test_repair_feedback_last_attempt_is_marked():
 
 
 def test_sandbox_result_serializes():
-    result = SandboxResult(task_id="web_dashboard", first_pass_success=True, final_score=0.9)
+    result = SandboxResult(task_id="company_website", first_pass_success=True, final_score=0.9)
     payload = result.as_dict()
     assert payload["first_pass_success"] is True
     assert "attempts" in payload
@@ -309,20 +312,38 @@ def test_deep_research_report_task_is_html_with_citations():
 
 import pytest
 
-from lm_optimizer.services.sandbox_lab import SANDBOX_TASKS, score_attempt
+from lm_optimizer.services.sandbox_lab import (
+    SANDBOX_TASKS,
+    SandboxCheck,
+    SandboxTask,
+    SandboxTaskKind,
+    score_attempt,
+)
 
 
-def _task():
-    return SANDBOX_TASKS["web_dashboard"]
+def _probe_task() -> SandboxTask:
+    """Minimal web task so HTML/JS checks are tested without company content."""
+    return SandboxTask(
+        id="web_probe",
+        kind=SandboxTaskKind.WEB,
+        title="probe",
+        prompt="x",
+        checks=[
+            SandboxCheck("index_html_exists", "files", ["index.html"], weight=1.0, critical=True),
+            SandboxCheck("html_document", "custom", None, weight=1.0, critical=True),
+            SandboxCheck("js_parses", "custom", None, weight=1.0, critical=True),
+        ],
+        artifacts=("index.html",),
+    )
 
 
 def test_js_parses_flags_syntax_error():
     html = (
         "<!DOCTYPE html><html><head><meta name=\"viewport\"></head><body>"
-        "<table></table><script>function f(){ document.getElementById('a') ).x = 1; }"
+        "<script>function f(){ document.getElementById('a') ).x = 1; }"
         "</script></body></html>"
     )
-    score, failing, critical = score_attempt(_task(), {"index.html": html})
+    score, failing, critical = score_attempt(_probe_task(), {"index.html": html})
     assert score == 0.0
     assert any("js_parses" in name for name in critical)
 
@@ -330,32 +351,33 @@ def test_js_parses_flags_syntax_error():
 def test_js_parses_accepts_valid_script():
     html = (
         "<!DOCTYPE html><html><head><meta name=\"viewport\"></head><body>"
-        "<table></table><script>function f(){ return 1; } f();</script>"
+        "<script>function f(){ return 1; } f();</script>"
         "</body></html>"
     )
-    score, failing, critical = score_attempt(_task(), {"index.html": html})
-    assert not any("js_parses" in name for name in failing)
-    assert score > 0.5
+    score, failing, critical = score_attempt(_probe_task(), {"index.html": html})
+    assert not failing
+    assert score == 1.0
 
 
 def test_js_parses_ignores_import_map_json():
     html = (
         "<!DOCTYPE html><html><head><meta name=\"viewport\"></head><body>"
         "<script type=\"importmap\">{\"imports\": {\"three\": \"https://x/three.js\"}}</script>"
-        "<table></table><script type=\"module\">import * as THREE from 'three';</script>"
+        "<script type=\"module\">import * as THREE from 'three';</script>"
         "</body></html>"
     )
-    score, failing, critical = score_attempt(_task(), {"index.html": html})
+    score, failing, critical = score_attempt(_probe_task(), {"index.html": html})
     assert not any("js_parses" in name for name in failing)
     assert not critical
 
+
 def test_html_document_rejects_prose_in_index_html():
     prose = (
-        "The user wants a dashboard. I will add a <meta name=\"viewport\"> tag, "
-        "a @media query and a display: grid layout."
+        "The user wants a company site. I will add a <meta name=\"viewport\"> tag, "
+        "a @media query and a <footer> element."
     )
     score, failing, critical = score_attempt(
-        SANDBOX_TASKS["web_dashboard"], {"index.html": prose}
+        SANDBOX_TASKS["company_website"], {"index.html": prose}
     )
     assert score == 0.0
     assert any("html_document" in name for name in critical)
@@ -364,14 +386,11 @@ def test_html_document_rejects_prose_in_index_html():
 def test_html_document_accepts_comment_before_doctype():
     html = (
         "<!-- generated -->\n<!DOCTYPE html><html><head>"
-        "<meta name=\"viewport\"><style>@media (max-width:600px){body{}}</style>"
-        "</head><body><div style=\"display:grid\"></div></body></html>"
+        "<meta name=\"viewport\"></head><body>ok</body></html>"
     )
-    score, failing, critical = score_attempt(
-        SANDBOX_TASKS["web_dashboard"], {"index.html": html}
-    )
+    score, failing, critical = score_attempt(_probe_task(), {"index.html": html})
     assert not critical
-    assert score > 0.5
+    assert score == 1.0
 
 
 def test_email_subject_accepts_subject_line_wording():
@@ -395,3 +414,18 @@ def test_email_subject_rejects_reasoning_dump():
 def test_blender_task_checks_python_syntax_before_running():
     names = {check.name for check in SANDBOX_TASKS["blender_skyblock"].checks}
     assert "is_python_code" in names
+
+def test_deep_research_online_requires_scraped_citations():
+    task = SANDBOX_TASKS["deep_research_online"]
+    names = {check.name for check in task.checks}
+    assert {"cites_scraped_source", "distinct_citations", "has_references"} <= names
+
+    body = (
+        "<!DOCTYPE html><html><body>"
+        + ("<h2>Section</h2><p>" + ("word " * 200) + "[S1][S2]</p>") * 3
+        + "<h2>Limitations</h2><p>sources do not answer it</p>"
+        + "<h2>References</h2></body></html>"
+    )
+    score, failing, critical = score_attempt(task, {"index.html": body})
+    assert any("distinct_citations" in name for name in failing)
+    assert not critical

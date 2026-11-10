@@ -91,19 +91,19 @@ def test_minecraft_external_asset_fails_negative_check(tmp_path):
     assert any("no_external_assets" in item for item in result.attempts[0].error.split("; "))
 
 
-def test_web_dashboard_good_artifact_scores_exactly_one(tmp_path):
+def test_company_website_good_artifact_scores_exactly_one(tmp_path):
     result = _run(
-        "web_dashboard",
+        "company_website",
         "index.html",
-        _read("web_dashboard", "index.html"),
+        _read("company_website", "index.html"),
         tmp_path,
     )
     assert result.final_score == 1.0
     assert result.final_success is True
 
 
-def test_web_dashboard_empty_artifact_scores_zero(tmp_path):
-    result = _run("web_dashboard", "index.html", "", tmp_path)
+def test_company_website_empty_artifact_scores_zero(tmp_path):
+    result = _run("company_website", "index.html", "", tmp_path)
     assert result.final_score == 0.0
     assert result.final_success is False
 

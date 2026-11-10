@@ -27,7 +27,7 @@ PROMPTS = COMPARE / "prompts"
 TASKS = (
     "email_write",
     "minecraft_world",
-    "web_dashboard",
+    "company_website",
     "deep_research_report",
     "blender_city",
     "blender_skyblock",
@@ -99,7 +99,7 @@ No extra instructions, no follow-up messages.
 |---|---|
 | `email_write` | plain text email (no code fence needed) |
 | `minecraft_world` | one HTML file in a ```html fence |
-| `web_dashboard` | one HTML file |
+| `company_website` | one HTML file |
 | `deep_research_report` | one HTML report |
 | `blender_city` | a Python script in a ```python fence |
 | `blender_skyblock` | a Python script in a ```python fence |

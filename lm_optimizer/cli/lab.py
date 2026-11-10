@@ -807,7 +807,7 @@ def duel_matrix(
     """Duel every pair of the selected models on the selected tasks.
 
     Examples:
-      lab duel-matrix --models a,b --tasks web_dashboard
+      lab duel-matrix --models a,b --tasks company_website
       lab duel-matrix --models qwen/* --type complete_sandbox
       lab duel-matrix --models a,b,c --custom-prompt "Explain X"
     """
@@ -1154,7 +1154,7 @@ def _run_sandbox_one(
 
 @app.command("sandbox")
 def sandbox(
-    task: str = typer.Option("web_dashboard", "--task", help="Sandbox task id"),
+    task: str = typer.Option("company_website", "--task", help="Sandbox task id"),
     model: str = typer.Option("", "--model", help="Model that produces the solution"),
     custom_prompt: str | None = typer.Option(
         None, "--custom-prompt", help="Override the task prompt (default: task prompt)"
@@ -1435,7 +1435,7 @@ def sandbox_matrix(
 
     Examples:
       lab sandbox-matrix --models all --tasks all
-      lab sandbox-matrix --models qwen/* --tasks web_dashboard,email_write
+      lab sandbox-matrix --models qwen/* --tasks company_website,email_write
       lab sandbox-matrix --models a,b --tasks all --custom-prompt "Explain X"
       lab sandbox-matrix --models all --tasks all --prompts-file prompts.json
     """
@@ -1540,7 +1540,7 @@ def bakeoff(
         help="'all' (models from the configured backend), comma-separated ids or aliases",
     ),
     tasks: str = typer.Option(
-        "email_write,web_dashboard,minecraft_world",
+        "email_write,company_website,minecraft_world",
         "--tasks",
         help="Comma-separated sandbox task ids",
     ),
@@ -1659,6 +1659,110 @@ def score_report(
     )
     console.print(json.dumps(payload, indent=2, ensure_ascii=False))
     console.print(f"[dim]workdir: {workdir}[/dim]")
+
+
+@app.command("research")
+def research(
+    question: str = typer.Argument(..., help="Research question"),
+    model: str = typer.Option(..., "--model", help="Model id to use"),
+    queries: int = typer.Option(4, "--queries", help="How many sub-queries to plan"),
+    sources: int = typer.Option(6, "--sources", help="Maximum scraped sources"),
+    context: int = typer.Option(8192, "--context", help="Context length for the model"),
+    out: Path = typer.Option(
+        Path("results") / "research", "--out", help="Directory for the report"
+    ),
+    safe: bool = typer.Option(True, "--safe/--no-safe", help="Conservative load config"),
+    thinking: bool = typer.Option(False, "--thinking/--no-thinking"),
+):
+    """Run an online deep-research pass: plan, search, scrape, write a report."""
+    from datetime import datetime
+
+    from lm_optimizer.services.model_gate import ModelGate, ModelGateTimeout
+    from lm_optimizer.services.web_research import (
+        ResearchResult,
+        WebResearcher,
+        build_report_prompt,
+        plan_queries,
+    )
+
+    async def _run() -> ResearchResult:
+        from lm_optimizer.cli.main import get_client
+        from lm_optimizer.services.bakeoff import _load_config
+
+        client = get_client()
+        await client.connect(echo_probe=False)
+        gate = ModelGate(client)
+        cfg, _ = _load_config(model, context, False, safe)
+        console.print(f"[cyan]Loading {model} (ctx={context})[/cyan]")
+        try:
+            lease = await gate.acquire(model, cfg)
+        except ModelGateTimeout as exc:
+            console.print(f"[red]Model gate blocked: {exc}[/red]")
+            raise typer.Exit(code=1) from exc
+
+        async def ask(prompt: str, max_tokens: int = 1024) -> str:
+            response = await client.chat_completion(
+                model=lease.model,
+                input_text=prompt,
+                temperature=0.2,
+                max_output_tokens=max_tokens,
+                reasoning=None if thinking else "off",
+            )
+            return (response.get("choices") or [{}])[0].get("message", {}).get("content", "")
+
+        try:
+            planned = await plan_queries(question, ask, count=queries)
+            console.print(f"[cyan]Queries:[/cyan] {planned}")
+            researcher = WebResearcher(queries=queries, max_sources=sources)
+            try:
+                collected, warnings = await researcher.collect(planned)
+            finally:
+                await researcher.close()
+            if not collected:
+                raise RuntimeError("no sources could be scraped; check the network")
+            console.print(f"[cyan]Sources:[/cyan] {len(collected)} scraped")
+            report = await ask(build_report_prompt(question, collected), max_tokens=8192)
+        finally:
+            await gate.release(lease)
+            await client.close()
+
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        slug = "".join(c if c.isalnum() else "_" for c in question)[:48] or "research"
+        out_dir = out / f"{slug}_{stamp}"
+        (out_dir / "raw").mkdir(parents=True, exist_ok=True)
+        for source in collected:
+            (out_dir / "raw" / f"{source.id}.txt").write_text(
+                f"{source.title}\n{source.url}\n\n{source.text}", encoding="utf-8"
+            )
+        return ResearchResult(
+            question=question,
+            queries=planned,
+            sources=collected,
+            report_html=report,
+            out_dir=out_dir,
+            warnings=warnings,
+        )
+
+    result = asyncio.run(_run())
+    result.out_dir.mkdir(parents=True, exist_ok=True)
+    (result.out_dir / "report.html").write_text(result.report_html, encoding="utf-8")
+    (result.out_dir / "sources.json").write_text(
+        json.dumps(
+            {
+                "question": result.question,
+                "queries": result.queries,
+                "warnings": result.warnings,
+                "sources": result.sources_payload(),
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    console.print(f"[green]Report:[/green] {result.out_dir / 'report.html'}")
+    console.print(f"[green]Sources:[/green] {result.out_dir / 'sources.json'}")
+    for warning in result.warnings:
+        console.print(f"[yellow]{warning}[/yellow]")
 
 
 @app.command("community-import")

@@ -31,7 +31,7 @@ MODELS = [
 ]
 
 TASKS = [
-    "web_dashboard",
+    "company_website",
     "research_synthesis",
     "blender_skyblock",
     "email_write",

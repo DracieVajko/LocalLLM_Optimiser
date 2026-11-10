@@ -83,7 +83,7 @@ def test_invalid_custom_prompts_are_rejected(spec, needle):
 def test_builtin_registry_is_single_source_of_truth():
     assert BUILTIN_TASKS is SANDBOX_TASKS
     assert set(BUILTIN_TASKS) >= {
-        "web_dashboard",
+        "company_website",
         "research_synthesis",
         "blender_skyblock",
     }
@@ -335,9 +335,9 @@ def test_one_mode_runs_only_the_selected_preset(monkeypatch, tmp_path):
     monkeypatch.setattr(sandbox_runner, "run_sandbox_task", fake_run)
     run = _run(
         final_sandbox_mode="one",
-        final_sandbox_preset_ids=["web_dashboard", "research_synthesis"],
+        final_sandbox_preset_ids=["company_website", "research_synthesis"],
     )
     opt = _optimizer_for_sandbox(run, tmp_path)
 
     asyncio.run(opt._run_final_sandbox(_winner()))
-    assert seen == ["web_dashboard"]
+    assert seen == ["company_website"]

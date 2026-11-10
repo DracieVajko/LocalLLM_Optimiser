@@ -60,7 +60,7 @@ def test_lab_sandbox_tasks_endpoint(client):
     tasks = response.json()["tasks"]
     ids = {t["id"] for t in tasks}
     assert {
-        "web_dashboard",
+        "company_website",
         "research_synthesis",
         "blender_skyblock",
         "blender_city_bridge",
@@ -74,6 +74,7 @@ def test_lab_sandbox_tasks_endpoint(client):
         "minecraft_world",
         "blender_city",
         "deep_research_report",
+        "deep_research_online",
     } == ids
     for task in tasks:
         assert task["checks"]
@@ -83,7 +84,7 @@ def test_lab_sandbox_tasks_endpoint(client):
 
 def test_lab_sandbox_run_validates_input(client):
     assert client.post("/api/lab/sandbox-run", json={"task": "nope", "model": "m"}).status_code == 400
-    assert client.post("/api/lab/sandbox-run", json={"task": "web_dashboard"}).status_code == 400
+    assert client.post("/api/lab/sandbox-run", json={"task": "company_website"}).status_code == 400
 
 
 def test_lab_sandbox_unknown_job(client):

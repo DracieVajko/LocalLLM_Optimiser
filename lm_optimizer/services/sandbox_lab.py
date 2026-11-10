@@ -77,18 +77,34 @@ class SandboxTask:
     network_allowed: bool = False
 
 
-# --- 13.1 Web task --------------------------------------------------------
+# --- 13.1 Web task: company marketing site ---------------------------------
 
 WEB_TASK = SandboxTask(
-    id="web_dashboard",
+    id="company_website",
     kind=SandboxTaskKind.WEB,
-    title="Responsive metrics dashboard",
+    title="Company marketing website",
     prompt=(
-        "Build a self-contained HTML dashboard (single file, no external "
-        "network calls) that shows four metrics, a filter, a model detail "
-        "view, a light/dark theme toggle, and works on both mobile and "
-        "desktop widths. Output ONLY the complete HTML starting with "
-        "<!DOCTYPE html>, no markdown fences, no explanations."
+        "Build a complete single-file marketing website for a fictional "
+        "company called \"Northwind Studio\", a small design and engineering "
+        "consultancy. Everything must live in one index.html: inline CSS, no "
+        "build step, no external assets, no network calls (no CDN fonts, "
+        "images, scripts or stylesheets).\n\n"
+        "The page must contain:\n"
+        "- A sticky header with the company name and section navigation.\n"
+        "- A hero section with a headline, one sentence of supporting copy and "
+        "a primary call-to-action button.\n"
+        "- A services section with at least three services, each with a title "
+        "and a short description.\n"
+        "- An about section that explains who the company is.\n"
+        "- At least one customer testimonial with a named author.\n"
+        "- A contact section with a working-looking form (name, email, "
+        "message) and a submit button.\n"
+        "- A footer with the company name and a copyright line.\n"
+        "- Responsive layout that works on mobile (<= 600px) and desktop, with "
+        "a real media query.\n"
+        "- Accessible markup: semantic sections, one h1, labels for inputs.\n\n"
+        "Output ONLY the complete HTML document starting with <!DOCTYPE html>, "
+        "no markdown fences, no explanations."
     ),
     checks=[
         SandboxCheck("index_html_exists", "files", ["index.html"], weight=1.0, critical=True),
@@ -96,15 +112,23 @@ WEB_TASK = SandboxTask(
         SandboxCheck("html_not_empty", "regex", r"<html[\s\S]{50,}", weight=1.0, critical=True),
         SandboxCheck("has_viewport", "regex", r'name=["\']viewport["\']', weight=1.0),
         SandboxCheck("has_media_query", "regex", r"@media", weight=1.0),
-        SandboxCheck("has_theme_toggle", "regex", r"(dark|theme)", weight=1.0),
+        SandboxCheck("has_header_nav", "regex", r"(<header|<nav)", weight=1.0),
+        SandboxCheck("has_hero_h1", "regex", r"<h1[^>]*>\s*\S+", weight=1.5),
+        SandboxCheck("has_services", "regex", r"(service|what we do|expertise)", weight=1.0),
+        SandboxCheck("has_about", "regex", r"(about|who we are|our story)", weight=1.0),
+        SandboxCheck("has_testimonial", "regex", r"(testimonial|quote|said)", weight=1.0),
+        SandboxCheck("has_contact_form", "regex", r"<form[\s\S]*?(<input|<textarea)", weight=1.5),
+        SandboxCheck("has_footer", "regex", r"<footer", weight=1.0),
+        SandboxCheck("has_cta", "regex", r"(class=[\"'][^\"']*(btn|button|cta)|<button)", weight=1.0),
+        SandboxCheck("min_words", "min_words", 220, weight=1.0),
         SandboxCheck("no_external_scripts", "regex", r"<script[^>]+src=[\"']https?://", weight=1.5, negate=True),
         SandboxCheck("no_external_styles", "regex", r"<link[^>]+href=[\"']https?://", weight=1.5, negate=True),
-        SandboxCheck("has_table_or_grid", "regex", r"(<table|role=[\"']grid|class=[\"'][^\"']*grid|display\s*:\s*grid|grid-template)", weight=1.0),
+        SandboxCheck("no_external_assets", "regex", r"\.(png|jpg|jpeg|gif|webp|svg)\b", weight=1.0, negate=True),
         SandboxCheck("js_parses", "custom", None, weight=1.5, critical=True),
     ],
-    max_repair_attempts=2,
+    max_repair_attempts=1,
     timeout_s=300.0,
-    max_output_tokens=4096,
+    max_output_tokens=6144,
     network_allowed=False,
     allowed_executables=(),
     artifacts=("index.html",),
@@ -652,6 +676,40 @@ DEEP_RESEARCH_REPORT_TASK = SandboxTask(
 )
 
 
+DEEP_RESEARCH_ONLINE_TASK = SandboxTask(
+    id="deep_research_online",
+    kind=SandboxTaskKind.WEB,
+    title="Online deep research report (scraped sources)",
+    prompt=(
+        "Research the question with live web sources: plan several sub-queries, "
+        "search the web, scrape the pages you find, and write a single "
+        "self-contained HTML report that cites every claim with the scraped "
+        "source id in square brackets, for example [S1] or [S2][S3]. Include a "
+        "Limitations section and a References section.\n\n"
+        "Generate it with: python -m lm_optimizer.cli.main lab research "
+        "\"<question>\" --model <model>"
+    ),
+    checks=[
+        SandboxCheck("index_html_exists", "files", ["index.html"], weight=1.0, critical=True),
+        SandboxCheck("html_document", "custom", None, weight=2.0, critical=True),
+        SandboxCheck("html_not_empty", "regex", r"<html[\s\S]{1000,}", weight=1.0, critical=True),
+        SandboxCheck("has_report_headings", "regex", r"(<h2|<h3)", weight=1.5),
+        SandboxCheck("min_words", "min_words", 600, weight=1.5),
+        SandboxCheck("cites_scraped_source", "regex", r"\[S[1-9]\d*\]", weight=2.0, critical=True),
+        SandboxCheck("distinct_citations", "distinct_citations", 3, weight=1.5),
+        SandboxCheck("mentions_uncertainty", "regex", r"(limitations|do not answer|uncertain|not covered)", weight=1.0),
+        SandboxCheck("has_references", "regex", r"(references|bibliography|sources)", weight=1.0),
+        SandboxCheck("no_external_assets", "regex", r"\.(png|jpg|jpeg|gif|webp)\b", weight=1.0, negate=True),
+    ],
+    max_repair_attempts=1,
+    timeout_s=300.0,
+    max_output_tokens=8192,
+    network_allowed=False,
+    allowed_executables=(),
+    artifacts=("index.html",),
+)
+
+
 SANDBOX_TASKS: dict[str, SandboxTask] = {
     t.id: t
     for t in (
@@ -667,6 +725,7 @@ SANDBOX_TASKS: dict[str, SandboxTask] = {
         WEB_SEARCH_TASK,
         DEEP_RESEARCH_TASK,
         DEEP_RESEARCH_REPORT_TASK,
+        DEEP_RESEARCH_ONLINE_TASK,
         CREATIVE_3D_TASK,
         MINECRAFT_WORLD_TASK,
     )
@@ -1047,6 +1106,12 @@ def score_attempt(
             except Exception:
                 ok = False
                 detail = "invalid json"
+        elif check.kind == "distinct_citations":
+            combined = "\n".join(files.values())
+            ids = set(re.findall(r"\[S(\d+)\]", combined))
+            target = int(check.value or 1)
+            ok = len(ids) >= target
+            detail = f"{len(ids)} distinct source(s) cited (min {target})"
         elif check.kind == "min_words":
             combined = "\n".join(files.values())
             text = re.sub(
@@ -1099,6 +1164,8 @@ class SandboxResult:
     artifacts: list[str] = field(default_factory=list)
     critical_failures: list[str] = field(default_factory=list)
     error: str = ""
+    #: Absolute path to a collected .blend file, when the task produced one.
+    blend_file: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -1115,10 +1182,12 @@ class SandboxResult:
                     "score": round(a.score, 4),
                     "error": a.error,
                     "duration_s": round(a.duration_s, 1),
+                    "failing_checks": list(a.failing_checks),
                 }
                 for a in self.attempts
             ],
             "artifacts": list(self.artifacts),
             "critical_failures": list(self.critical_failures),
             "error": self.error,
+            "blend_file": self.blend_file,
         }

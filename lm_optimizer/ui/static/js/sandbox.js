@@ -169,102 +169,233 @@
             out('<p class="text-red-600 text-sm">Error: ' + esc((e && e.message) || e) + '</p>');
         }
     });
-    // Recent single-model sandbox task runs (CLI `lab sandbox` history).
+    // --- Sandbox history, grouped per model -------------------------------
+    var historyRuns = [];
+
+    function badge(ok, text) {
+        return '<span class="badge ' + (ok ? 'badge-success' : 'badge-error') + '">' + text + '</span>';
+    }
+
+    function scoreText(x) {
+        return x.final_score == null ? '-' : Number(x.final_score).toFixed(2);
+    }
+
+    function groupRuns(runs) {
+        var models = {};
+        runs.forEach(function (x, idx) {
+            var name = x.model || 'unknown';
+            if (!models[name]) {
+                models[name] = { model: name, runs: [], last: '', best: null, bestTask: '' };
+            }
+            var group = models[name];
+            group.runs.push({ index: idx, run: x });
+            if ((x.ts || '') > group.last) group.last = x.ts || '';
+            if (x.final_score != null && (group.best == null || x.final_score > group.best)) {
+                group.best = x.final_score;
+                group.bestTask = x.task || '';
+            }
+        });
+        return Object.keys(models).map(function (k) { return models[k]; }).sort(function (a, b) {
+            return (b.last || '').localeCompare(a.last || '');
+        });
+    }
+
+    function renderHistory() {
+        var box = el('sb-runs');
+        if (!historyRuns.length) {
+            box.innerHTML = '<p class="text-sm text-gray-500">No sandbox task runs yet. Run one with '
+                + '<code>python -m lm_optimizer.cli.main lab sandbox --task company_website --model &lt;model&gt;</code></p>';
+            return;
+        }
+        var groups = groupRuns(historyRuns);
+        box.innerHTML = '<p class="text-xs text-gray-500 mb-2">' + historyRuns.length + ' run(s), '
+            + groups.length + ' model(s). Click a model to see its tests.</p>'
+            + '<div class="table-container"><table class="table"><thead><tr>'
+            + '<th>Model</th><th>Runs</th><th>Tasks</th><th>Best</th><th>Last run</th><th></th>'
+            + '</tr></thead><tbody>'
+            + groups.map(function (g) {
+                var tasks = {};
+                g.runs.forEach(function (r) { tasks[r.run.task] = true; });
+                var taskCount = Object.keys(tasks).length;
+                return '<tr class="history-model" data-model="' + esc(g.model) + '">'
+                    + '<td class="font-mono text-xs">' + esc(g.model) + '</td>'
+                    + '<td class="font-mono">' + g.runs.length + '</td>'
+                    + '<td class="font-mono">' + taskCount + '</td>'
+                    + '<td>' + (g.best == null ? '-' : scoreText({ final_score: g.best }) + ' <span class="text-xs text-gray-500">' + esc(g.bestTask) + '</span>') + '</td>'
+                    + '<td class="font-mono text-xs">' + esc(g.last || '') + '</td>'
+                    + '<td><button class="btn btn-outline btn-sm view-model-runs" data-model="' + esc(g.model) + '">View</button></td>'
+                    + '</tr>';
+            }).join('')
+            + '</tbody></table></div><div id="sb-model-detail" class="mt-4"></div>';
+
+        Array.prototype.forEach.call(box.querySelectorAll('.view-model-runs'), function (button) {
+            button.addEventListener('click', function (event) {
+                event.stopPropagation();
+                showModelRuns(button.dataset.model);
+            });
+        });
+        Array.prototype.forEach.call(box.querySelectorAll('tr.history-model'), function (row) {
+            row.addEventListener('click', function () { showModelRuns(row.dataset.model); });
+        });
+    }
+
+    function showModelRuns(model) {
+        var panel = el('sb-model-detail');
+        var runs = historyRuns.map(function (x, idx) { return { index: idx, run: x }; })
+            .filter(function (r) { return (r.run.model || 'unknown') === model; });
+        if (!runs.length) return;
+
+        var tasks = {};
+        runs.forEach(function (r) {
+            var t = r.run.task || 'unknown';
+            if (!tasks[t]) tasks[t] = [];
+            tasks[t].push(r);
+        });
+        var taskNames = Object.keys(tasks).sort();
+
+        var html = '<div class="card"><div class="card-header"><div class="flex items-center justify-between">'
+            + '<h3 class="font-bold">' + esc(model) + '</h3>'
+            + '<button class="btn btn-outline btn-sm" id="sb-model-close">Close</button>'
+            + '</div><p class="text-xs text-gray-500 mt-1">' + runs.length + ' run(s) across '
+            + taskNames.length + ' test(s), newest first.</p></div><div class="card-body space-y-4">';
+
+        taskNames.forEach(function (task) {
+            var list = tasks[task].slice().sort(function (a, b) {
+                return (b.run.ts || '').localeCompare(a.run.ts || '');
+            });
+            var best = null;
+            list.forEach(function (r) {
+                if (r.run.final_score != null && (best == null || r.run.final_score > best)) {
+                    best = r.run.final_score;
+                }
+            });
+            html += '<div><div class="flex items-center justify-between mb-1">'
+                + '<h4 class="font-semibold">' + esc(task) + '</h4>'
+                + '<span class="text-xs text-gray-500">' + list.length + ' run(s), best '
+                + (best == null ? '-' : best.toFixed(2)) + '</span></div>'
+                + '<div class="table-container"><table class="table"><tbody>'
+                + list.map(function (r) {
+                    var x = r.run;
+                    return '<tr>'
+                        + '<td class="font-mono text-xs">' + esc(x.ts || '') + '</td>'
+                        + '<td>' + (x.final_success ? badge(true, 'PASS') : badge(false, 'FAIL')) + '</td>'
+                        + '<td class="font-mono">' + scoreText(x) + '</td>'
+                        + '<td class="font-mono text-xs">' + (x.duration_s ? Number(x.duration_s).toFixed(0) + 's' : '-') + '</td>'
+                        + '<td class="text-right"><button class="btn btn-outline btn-sm open-run" data-index="' + r.index + '">Open</button></td>'
+                        + '</tr>';
+                }).join('')
+                + '</tbody></table></div></div>';
+        });
+        html += '</div></div>';
+        panel.innerHTML = html;
+
+        el('sb-model-close').addEventListener('click', function () {
+            panel.innerHTML = '';
+        });
+        Array.prototype.forEach.call(panel.querySelectorAll('.open-run'), function (button) {
+            button.addEventListener('click', function () {
+                showSandboxRunDetail(button.dataset.index, model);
+            });
+        });
+    }
+
+    async function showSandboxRunDetail(index, model) {
+        var panel = el('sb-model-detail');
+        try {
+            var r = await fetch('/api/sandbox/run/' + encodeURIComponent(index));
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            var x = await r.json();
+            var crit = (x.critical_failures || []).length
+                ? '<ul class="text-xs text-red-600 mt-1">'
+                    + (x.critical_failures || []).map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('')
+                    + '</ul>'
+                : '';
+            var failing = [];
+            (x.attempts || []).forEach(function (a) {
+                (a.failing_checks || []).forEach(function (f) { failing.push(f); });
+            });
+            failing = failing.filter(function (v, i, arr) { return arr.indexOf(v) === i; });
+            var failingHtml = failing.length
+                ? '<ul class="text-xs text-red-600 mt-1">'
+                    + failing.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('')
+                    + '</ul>'
+                : '<span class="text-xs text-gray-500">none</span>';
+            var artifacts = (x.artifacts || []).length
+                ? '<ul class="text-xs text-gray-600 mt-1">'
+                    + (x.artifacts || []).map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('')
+                    + '</ul>'
+                : '';
+            var blend = x.blend_file
+                ? '<tr><td class="font-bold">Blend file</td><td class="font-mono text-xs">' + esc(x.blend_file)
+                    + '<div class="text-gray-500">Open it directly in Blender.</div></td></tr>'
+                : '';
+
+            panel.innerHTML = '<div class="card"><div class="card-body">'
+                + '<div class="flex items-center justify-between mb-2">'
+                + '<h3 class="font-bold text-lg">Run detail</h3>'
+                + '<button class="btn btn-outline btn-sm" id="sb-run-back">Back</button>'
+                + '</div>'
+                + '<table class="table text-sm"><tbody>'
+                + '<tr><td class="font-bold">Time</td><td>' + esc(x.ts || '') + '</td></tr>'
+                + '<tr><td class="font-bold">Model</td><td class="font-mono">' + esc(x.model || '') + '</td></tr>'
+                + '<tr><td class="font-bold">Task</td><td>' + esc(x.task || '') + '</td></tr>'
+                + '<tr><td class="font-bold">Score</td><td class="font-mono">' + scoreText(x) + '</td></tr>'
+                + '<tr><td class="font-bold">Result</td><td>' + (x.final_success ? badge(true, 'PASS') : badge(false, 'FAIL')) + '</td></tr>'
+                + '<tr><td class="font-bold">Repairs</td><td>' + (x.repair_count || 0) + '</td></tr>'
+                + '<tr><td class="font-bold">Duration</td><td class="font-mono">' + (x.duration_s ? Number(x.duration_s).toFixed(0) + 's' : '-') + '</td></tr>'
+                + '<tr><td class="font-bold">Workdir</td><td class="font-mono text-xs truncate" title="' + esc(x.workdir || '') + '">' + esc(x.workdir || '') + '</td></tr>'
+                + blend
+                + '<tr><td class="font-bold">Failing checks</td><td>' + failingHtml + '</td></tr>'
+                + (crit ? '<tr><td class="font-bold">Critical failures</td><td>' + crit + '</td></tr>' : '')
+                + (artifacts ? '<tr><td class="font-bold">Artifacts</td><td>' + artifacts + '</td></tr>' : '')
+                + (x.error ? '<tr><td class="font-bold">Error</td><td class="text-red-600 text-xs">' + esc(x.error) + '</td></tr>' : '')
+                + '</tbody></table>'
+                + '<div class="mt-4"><h4 class="font-bold">Preview</h4>'
+                + (x.artifacts || []).map(function (a) {
+                    var rel = x.workdir ? x.workdir.replace(/^results[\\/]sandbox[\\/]/, '') + '/' + a : a;
+                    var safeRel = rel.replace(/\\/g, '/');
+                    if (/[.](html|htm)$/i.test(a)) {
+                        return '<div class="mt-2 border rounded bg-black p-1">'
+                            + '<iframe sandbox="" src="/sandbox/files?path=' + encodeURIComponent(safeRel) + '"'
+                            + ' class="w-full border rounded" style="height:520px" title="' + esc(a) + ' preview"></iframe>'
+                            + '</div>';
+                    }
+                    if (/[.](py|js|txt|json|md)$/i.test(a)) {
+                        return '<details class="mt-2"><summary class="text-sm font-semibold cursor-pointer">'
+                            + esc(a) + '</summary>'
+                            + '<iframe src="/sandbox/files?path=' + encodeURIComponent(safeRel) + '"'
+                            + ' class="w-full border rounded" style="height:320px" title="' + esc(a) + ' preview"></iframe>'
+                            + '</details>';
+                    }
+                    return '<p class="text-xs text-gray-500 mt-2">' + esc(a) + '</p>';
+                }).join('')
+                + '</div></div></div>';
+
+            el('sb-run-back').addEventListener('click', function () {
+                if (model) showModelRuns(model); else renderHistory();
+            });
+        } catch (e) {
+            panel.innerHTML = '<p class="text-sm text-red-600">Failed to load run detail: '
+                + esc((e && e.message) || e) + '</p>';
+        }
+    }
+
     async function loadTaskRuns() {
         var box = el('sb-runs');
         try {
-            var r = await fetch('/api/sandbox/runs?limit=200');
+            box.innerHTML = '<p class="text-sm text-gray-500">Loading history...</p>';
+            var r = await fetch('/api/sandbox/runs?limit=1000');
             if (!r.ok) throw new Error('HTTP ' + r.status);
             var j = await r.json();
-            var runs = j.runs || [];
-            if (!runs.length) {
-                box.innerHTML = '<p class="text-sm text-gray-500">No sandbox task runs yet. Run one with '
-                    + '<code>python -m lm_optimizer.cli.main lab sandbox --task email_write --model &lt;model&gt;</code></p>';
-                return;
-            }
-            box.innerHTML = '<div class="table-container"><table class="table"><thead><tr>'
-                + '<th>Time</th><th>Model</th><th>Task</th><th>Score</th><th>Result</th><th>Duration</th><th>Actions</th>'
-                + '</tr></thead><tbody>'
-                + runs.map(function (x, idx) {
-                    var ok = x.final_success
-                        ? '<span class="badge badge-success">PASS</span>'
-                        : '<span class="badge badge-error">FAIL</span>';
-                    var score = (x.final_score == null) ? '-' : Number(x.final_score).toFixed(3);
-                    return '<tr><td class="font-mono text-xs">' + esc(x.ts || '') + '</td>'
-                        + '<td class="font-mono text-xs">' + esc(x.model || '') + '</td>'
-                        + '<td>' + esc(x.task || '') + '</td>'
-                        + '<td class="font-mono">' + score + '</td>'
-                        + '<td>' + ok + '</td>'
-                        + '<td class="font-mono">' + (x.duration_s ? Number(x.duration_s).toFixed(0) + 's' : '-') + '</td>'
-                        + '<td><button class="btn btn-outline btn-sm view-sandbox-run" data-index="' + idx + '">View</button></td>'
-                        + '</tr>';
-                }).join('') + '</tbody></table></div>';
-            document.querySelectorAll('.view-sandbox-run').forEach(function (btn) {
-                btn.addEventListener('click', function (e) {
-                    e.stopPropagation();
-                    var idx = btn.dataset.index;
-                    showSandboxRunDetail(idx);
-                });
-            });
+            historyRuns = j.runs || [];
+            renderHistory();
         } catch (e) {
             box.innerHTML = '<p class="text-sm text-red-600">Failed to load sandbox runs: '
                 + esc((e && e.message) || e) + '</p>';
         }
     }
-    el('sb-refresh-runs').addEventListener('click', loadTaskRuns);
+
+    var refreshRuns = el('sb-refresh-runs');
+    if (refreshRuns) refreshRuns.addEventListener('click', loadTaskRuns);
     loadTaskRuns();
 })();
-
-async function showSandboxRunDetail(index) {
-    var box = el('sb-runs');
-    try {
-        var r = await fetch('/api/sandbox/run/' + encodeURIComponent(index));
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        var x = await r.json();
-        var crit = (x.critical_failures || []).length ? '<ul class="text-xs text-red-600 mt-1">'
-            + (x.critical_failures || []).map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('')
-            + '</ul>' : '';
-        var artifacts = (x.artifacts || []).length ? '<ul class="text-xs text-gray-600 mt-1">'
-            + (x.artifacts || []).map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('')
-            + '</ul>' : '';
-        box.innerHTML = '<div class="card mt-4"><div class="card-body">'
-            + '<div class="flex items-center justify-between mb-2">'
-            + '<h3 class="font-bold text-lg">Sandbox Run Detail</h3>'
-            + '<button class="btn btn-outline btn-sm" onclick="location.reload()">Back to list</button>'
-            + '</div>'
-            + '<table class="table text-sm"><tbody>'
-            + '<tr><td class="font-bold">Time</td><td>' + esc(x.ts || '') + '</td></tr>'
-            + '<tr><td class="font-bold">Model</td><td class="font-mono">' + esc(x.model || '') + '</td></tr>'
-            + '<tr><td class="font-bold">Task</td><td>' + esc(x.task || '') + '</td></tr>'
-            + '<tr><td class="font-bold">Score</td><td class="font-mono">' + (x.final_score == null ? '-' : Number(x.final_score).toFixed(3)) + '</td></tr>'
-            + '<tr><td class="font-bold">Result</td><td>' + (x.final_success ? '<span class="badge badge-success">PASS</span>' : '<span class="badge badge-error">FAIL</span>') + '</td></tr>'
-            + '<tr><td class="font-bold">Repairs</td><td>' + (x.repair_count || 0) + '</td></tr>'
-            + '<tr><td class="font-bold">Duration</td><td class="font-mono">' + (x.duration_s ? Number(x.duration_s).toFixed(0) + 's' : '-') + '</td></tr>'
-            + '<tr><td class="font-bold">Workdir</td><td class="font-mono text-xs truncate" title="' + esc(x.workdir || '') + '">' + esc(x.workdir || '') + '</td></tr>'
-            + (crit ? '<tr><td class="font-bold">Critical failures</td><td>' + crit + '</td></tr>' : '')
-            + (artifacts ? '<tr><td class="font-bold">Artifacts</td><td>' + artifacts + '</td></tr>' : '')
-            + (x.error ? '<tr><td class="font-bold">Error</td><td class="text-red-600 text-xs">' + esc(x.error) + '</td></tr>' : '')
-            + '</tbody></table>'
-            + '<div class="mt-4"><h4 class="font-bold">Preview</h4>'
-            + (x.artifacts || []).map(function (a) {
-                var rel = x.workdir ? x.workdir.replace(/^results[\\/]sandbox[\\/]/, '') + '/' + a : a;
-                var safeRel = rel.replace(/\\/g, '/');
-                if (a.toLowerCase().endsWith('.html')) {
-                    return '<div class="mt-2 border rounded bg-black p-1">'
-                        + '<iframe src="/sandbox/files?path=' + encodeURIComponent(safeRel) + '"'
-                        + ' class="w-full border rounded" style="height:520px" title="' + esc(a) + ' preview"></iframe>'
-                        + '</div>';
-                } else {
-                    return '<div class="mt-2 border rounded bg-black p-2">'
-                        + '<h5 class="font-bold text-xs mb-1">' + esc(a) + '</h5>'
-                        + '<iframe src="/sandbox/files?path=' + encodeURIComponent(safeRel) + '"'
-                        + ' class="w-full border rounded" style="height:320px" title="' + esc(a) + ' preview"></iframe>'
-                        + '</div>';
-                }
-            }).join('')
-            + '</div></div></div>';
-    } catch (e) {
-        box.innerHTML = '<p class="text-sm text-red-600">Failed to load run detail: '
-            + esc((e && e.message) || e) + '</p>';
-    }
-}

@@ -43,6 +43,11 @@ def main() -> int:
     parser.add_argument("--list", action="store_true", help="show what would be deleted")
     parser.add_argument("--yes", action="store_true", help="actually delete")
     parser.add_argument("--include-bakeoff", action="store_true")
+    parser.add_argument(
+        "--prune-history",
+        action="store_true",
+        help="drop sandbox history records whose workdir no longer exists",
+    )
     args = parser.parse_args()
 
     targets = [RESULTS / rel for rel in SCRATCH]
@@ -66,7 +71,37 @@ def main() -> int:
         if path.exists():
             shutil.rmtree(path, ignore_errors=True)
     print("deleted")
+
+    if args.prune_history:
+        removed = _prune_history()
+        print(f"history records removed: {removed}")
     return 0
+
+
+def _prune_history() -> int:
+    """Keep only history records whose artifact directory still exists."""
+    import json
+
+    history = RESULTS / "sandbox_runs.jsonl"
+    if not history.exists():
+        return 0
+    kept: list[str] = []
+    removed = 0
+    for line in history.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            removed += 1
+            continue
+        workdir = str(record.get("workdir") or "")
+        if workdir and not Path(workdir).exists():
+            removed += 1
+            continue
+        kept.append(line)
+    history.write_text("\n".join(kept) + ("\n" if kept else ""), encoding="utf-8")
+    return removed
 
 
 if __name__ == "__main__":

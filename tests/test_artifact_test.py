@@ -58,7 +58,7 @@ def _best():
 # --- validation -------------------------------------------------------------
 
 def test_builtin_ids_accepted():
-    assert validate_artifact_test_id("web_dashboard") == "web_dashboard"
+    assert validate_artifact_test_id("company_website") == "company_website"
     assert validate_artifact_test_id("blender_skyblock") == "blender_skyblock"
     assert validate_artifact_test_id(None) is None
 
@@ -95,9 +95,9 @@ def test_custom_invalid_json_fails(tmp_path):
 # --- freeze / resume --------------------------------------------------------
 
 def test_artifact_selector_is_in_resolved_settings():
-    run = _run(artifact_test_id="web_dashboard")
+    run = _run(artifact_test_id="company_website")
     snap = build_resolved_settings(run)
-    assert snap["artifact_test_id"] == "web_dashboard"
+    assert snap["artifact_test_id"] == "company_website"
 
 
 # --- execution --------------------------------------------------------------
@@ -146,14 +146,14 @@ def test_finalize_runs_selected_artifact_test(monkeypatch):
 
     monkeypatch.setattr(sandbox_runner, "run_sandbox_task", fake_run)
     best = _best()
-    run = _run(artifact_test_id="web_dashboard", benchmark_params={"fingerprint": "fp"})
+    run = _run(artifact_test_id="company_website", benchmark_params={"fingerprint": "fp"})
     opt = _optimizer(run, best)
 
     asyncio.run(opt._finalize())
 
-    assert calls["task"] == "web_dashboard"
+    assert calls["task"] == "company_website"
     payload = run.benchmark_params["artifact_test"]
-    assert payload["task_id"] == "web_dashboard"
+    assert payload["task_id"] == "company_website"
     assert payload["config_id"] == str(best.id)
     assert payload["success"] is True
     assert payload["score"] == pytest.approx(0.86)
@@ -216,20 +216,20 @@ def test_api_run_exposes_artifact_summary():
         benchmark_params={
             "phase_ab": {"phase": "final_validation"},
             "artifact_test": {
-                "task_id": "web_dashboard",
+                "task_id": "company_website",
                 "success": True,
                 "score": 0.86,
             },
         }
     )
     resp = _convert_run(run)
-    assert resp.artifact_test["task_id"] == "web_dashboard"
+    assert resp.artifact_test["task_id"] == "company_website"
     assert resp.artifact_test["score"] == pytest.approx(0.86)
 
 
 def test_api_schema_accepts_artifact_selector():
     from lm_optimizer.api.schemas import AdvancedSettingsSchema
 
-    s = AdvancedSettingsSchema(artifact_test_id="web_dashboard")
-    assert s.artifact_test_id == "web_dashboard"
+    s = AdvancedSettingsSchema(artifact_test_id="company_website")
+    assert s.artifact_test_id == "company_website"
     assert AdvancedSettingsSchema().artifact_test_id is None
