@@ -99,6 +99,7 @@ WEB_TASK = SandboxTask(
         SandboxCheck("no_external_scripts", "regex", r"<script[^>]+src=[\"']https?://", weight=1.5, negate=True),
         SandboxCheck("no_external_styles", "regex", r"<link[^>]+href=[\"']https?://", weight=1.5, negate=True),
         SandboxCheck("has_table_or_grid", "regex", r"(<table|role=[\"']grid|class=[\"'][^\"']*grid)", weight=1.0),
+        SandboxCheck("js_parses", "custom", None, weight=1.5, critical=True),
     ],
     max_repair_attempts=2,
     timeout_s=300.0,
@@ -165,6 +166,7 @@ MINECRAFT_WORLD_TASK = SandboxTask(
         SandboxCheck("has_camera", "regex", r"(PerspectiveCamera|\.lookAt\s*\()", weight=1.5),
         SandboxCheck("has_render_loop", "regex", r"(requestAnimationFrame\s*\(|function\s+animate\s*\()", weight=1.5),
         SandboxCheck("no_external_assets", "regex", r"\.(png|jpg|jpeg|gif|zip)\b", weight=1.0, negate=True),
+        SandboxCheck("js_parses", "custom", None, weight=1.5, critical=True),
     ],
     max_repair_attempts=2,
     timeout_s=300.0,
@@ -953,6 +955,38 @@ def score_attempt(
                     **(custom_results or {}),
                     "is_python_code": (False, f"syntax error: {exc.msg}"),
                 }
+
+    if any(c.name == "js_parses" for c in task.checks):
+        html_text = "\n".join(
+            _strip_md_fences(text)
+            for name, text in files.items()
+            if name.endswith((".html", ".htm"))
+        )
+        scripts: list[str] = []
+        for match in re.finditer(
+            r"<script\b([^>]*)>(.*?)</script>", html_text, re.IGNORECASE | re.DOTALL
+        ):
+            attrs, body = match.group(1), match.group(2)
+            if not body.strip():
+                continue
+            type_match = re.search(r'type\s*=\s*["\']?([^"\'\s>]+)', attrs, re.IGNORECASE)
+            script_type = (type_match.group(1) if type_match else "").lower()
+            # Import maps and data blocks are JSON, not JavaScript.
+            if script_type and script_type not in (
+                "module",
+                "text/javascript",
+                "application/javascript",
+            ):
+                continue
+            scripts.append(body)
+        if not scripts:
+            verdict = (True, "no inline scripts")
+        else:
+            from lm_optimizer.services.web_validator import js_syntax_errors
+
+            errors = js_syntax_errors(scripts)
+            verdict = (not errors, ("; ".join(errors)[:200] or "ok") if errors else "ok")
+        custom_results = {**(custom_results or {}), "js_parses": verdict}
 
     for check in task.checks:
         ok = False

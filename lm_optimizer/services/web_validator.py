@@ -184,7 +184,10 @@ def js_syntax_errors(scripts: list[str]) -> list[str]:
                 errors="replace",
             )
             if proc.returncode != 0:
-                errors.append(f"script {index}: {proc.stderr.strip()[:200]}")
+                message = proc.stderr.strip()
+                for ugly in (path, path.replace("\\", "/")):
+                    message = message.replace(ugly, "inline.js")
+                errors.append(f"script {index}: {message[:200]}")
             Path(path).unlink(missing_ok=True)
         except FileNotFoundError:
             return []  # Node not installed: cannot check, do not fail the task

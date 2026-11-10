@@ -306,3 +306,45 @@ def test_deep_research_report_task_is_html_with_citations():
     names = {check.name for check in task.checks}
     assert {"cites_primary", "cites_technical", "cites_conflicting", "min_words"} <= names
     assert task.artifacts == ("index.html",)
+
+import pytest
+
+from lm_optimizer.services.sandbox_lab import SANDBOX_TASKS, score_attempt
+
+
+def _task():
+    return SANDBOX_TASKS["web_dashboard"]
+
+
+def test_js_parses_flags_syntax_error():
+    html = (
+        "<!DOCTYPE html><html><head><meta name=\"viewport\"></head><body>"
+        "<table></table><script>function f(){ document.getElementById('a') ).x = 1; }"
+        "</script></body></html>"
+    )
+    score, failing, critical = score_attempt(_task(), {"index.html": html})
+    assert score == 0.0
+    assert any("js_parses" in name for name in critical)
+
+
+def test_js_parses_accepts_valid_script():
+    html = (
+        "<!DOCTYPE html><html><head><meta name=\"viewport\"></head><body>"
+        "<table></table><script>function f(){ return 1; } f();</script>"
+        "</body></html>"
+    )
+    score, failing, critical = score_attempt(_task(), {"index.html": html})
+    assert not any("js_parses" in name for name in failing)
+    assert score > 0.5
+
+
+def test_js_parses_ignores_import_map_json():
+    html = (
+        "<!DOCTYPE html><html><head><meta name=\"viewport\"></head><body>"
+        "<script type=\"importmap\">{\"imports\": {\"three\": \"https://x/three.js\"}}</script>"
+        "<table></table><script type=\"module\">import * as THREE from 'three';</script>"
+        "</body></html>"
+    )
+    score, failing, critical = score_attempt(_task(), {"index.html": html})
+    assert not any("js_parses" in name for name in failing)
+    assert not critical

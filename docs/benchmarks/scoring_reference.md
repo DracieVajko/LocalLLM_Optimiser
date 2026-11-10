@@ -19,8 +19,10 @@ python -m pytest tests/test_scoring_reference.py -v
 | `minecraft_world` empty file | **0.000** | no | `html_not_empty`, `single_file_html` |
 | `minecraft_world` wrong content (no Three.js) | **0.320** | no | — |
 | `minecraft_world` external asset (`.png`) | **<1.0** | no | negative check fails |
+| `minecraft_world` JS syntax error (duplicate function) | **0.000** | no | `js_parses` |
 | `web_dashboard` good artifact | **1.000** | yes | — |
 | `web_dashboard` empty file | **0.000** | no | `html_not_empty` |
+| `web_dashboard` JS syntax error (unbalanced paren) | **0.000** | no | `js_parses` |
 | `email_write` good artifact | **1.000** | yes | — |
 | `email_write` without Subject | **0.000** | no | `has_subject` |
 | `blender_skyblock` valid artifacts | **1.000** | yes | — |
@@ -50,10 +52,23 @@ python -m pytest tests/test_scoring_reference.py -v
 6. **Prompt/scoring mismatch.** The prompt asked for first-person controls and
    block editing while the intended output is an automatic orbit scene. The
    prompt now asks for an orbiting camera and the check is `has_camera`.
+7. **A page with broken JavaScript scored 1.0.** `minecraft_world` and
+   `web_dashboard` were checked only by regexes, so an HTML file whose inline
+   script does not parse still earned full marks while rendering nothing. Both
+   tasks now run every inline script through `node --check` (`js_parses`,
+   critical). Import maps and JSON script blocks are skipped. Real examples
+   caught this way: a duplicate `generateWorld` function (Nemotron 74B
+   minecraft), an unbalanced parenthesis (gpt-oss web dashboard), a Python-style
+   keyword argument `getTerrainHeight(x, y: 0, z)` (Bonsai minecraft) and a
+   stray `...` spread (Swift web dashboard).
 
 ## What the reference does not prove
 
 Static regex checks cannot prove that the page is visually correct or that the
-3D scene matches the prompt. The committed example is additionally verified by
-a headless Chromium screenshot (`minecraft_world_preview.png`) and a real
-Blender run (120 frames + `scene.blend`), which cover the visual side.
+3D scene matches the prompt. `js_parses` proves the script is syntactically
+valid, not that it runs without a runtime error. The committed example is
+additionally verified by a headless Chromium screenshot
+(`minecraft_world_preview.png`, captured through
+`tools/html_shot.py` so asynchronous scene building finishes first) and a real
+Blender run (120 frames + `scene.blend`), which cover the visual side. Use
+`tools/compare_models.py` to put those visuals side by side.
