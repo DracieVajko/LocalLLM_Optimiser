@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voxelcraft — Floating Skyblock</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(180deg, #8ecdf5 0%, #bfe6ff 50%, #eaf6ff 100%);
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    }
+    #scene { display: block; width: 100vw; height: 100vh; }
+    .hero {
+      position: fixed;
+      top: 26px;
+      left: 28px;
+      max-width: 360px;
+      padding: 18px 20px;
+      border-radius: 14px;
+      background: rgba(12, 26, 40, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #f7fbff;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+      pointer-events: none;
+    }
+    .hero h1 { margin: 0 0 8px; font-size: 27px; letter-spacing: 0.4px; }
+    .hero p { margin: 0; color: #c9d8e8; font-size: 13px; line-height: 1.55; }
+    .hero .tag {
+      display: inline-block;
+      margin-bottom: 9px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: rgba(255, 212, 77, 0.18);
+      color: #ffd44d;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .hud {
+      position: fixed;
+      left: 50%;
+      bottom: 20px;
+      transform: translateX(-50%);
+      padding: 9px 15px;
+      border-radius: 999px;
+      background: rgba(12, 26, 40, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: #c9d8e8;
+      font-size: 12px;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .hud b { color: #ffffff; }
+    .credit {
+      position: fixed;
+      right: 14px;
+      bottom: 14px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: rgba(12, 26, 40, 0.55);
+      color: #dbe9f7;
+      font-size: 11px;
+      pointer-events: auto;
+    }
+    .credit a { color: #ffd44d; }
+    @media (max-width: 700px) {
+      .hero { top: 12px; left: 12px; max-width: 280px; padding: 13px 15px; }
+      .hero h1 { font-size: 20px; }
+      .hud { font-size: 11px; max-width: 92vw; white-space: nowrap; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="scene" aria-label="Floating voxel skyblock island"></canvas>
+
+  <div class="hero">
+    <span class="tag">Tiny world, block by block</span>
+    <h1>Voxelcraft</h1>
+    <p>A floating skyblock island in the void: textured grass, dirt and stone,
+       a pond with a waterfall, trees, a cabin, a campfire and a slowly
+       orbiting camera.</p>
+  </div>
+
+  <div class="hud"><b>Camera</b> orbits the island automatically</div>
+
+  <div class="credit">
+    Textures: Pixel Perfection by XSSheep · CC BY-SA 4.0
+    <a href="https://creativecommons.org/licenses/by-sa/4.0/">license</a>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script>
+    // Voxelcraft — a floating voxel skyblock with a procedural texture atlas.
+    // One HTML file; only Three.js comes from a CDN.
+
+    const canvas = document.getElementById("scene");
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: false,
+      preserveDrawingBuffer: true
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x9fd7ff);
+    scene.fog = new THREE.Fog(0xc3e6ff, 55, 150);
+
+    const camera = new THREE.PerspectiveCamera(
+      58, window.innerWidth / window.innerHeight, 0.1, 400
+    );
+    camera.position.set(26, 15, 26);
+    camera.lookAt(0, 3, 0);
+
+    const sun = new THREE.DirectionalLight(0xfff3d0, 1.4);
+    sun.position.set(24, 38, 16);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 120;
+    sun.shadow.camera.left = -38;
+    sun.shadow.camera.right = 38;
+    sun.shadow.camera.top = 38;
+    sun.shadow.camera.bottom = -38;
+    scene.add(sun);
+    scene.add(new THREE.HemisphereLight(0xcfe9ff, 0x4a6b3a, 0.85));
+
+    const sunDisc = new THREE.Mesh(
+      new THREE.SphereGeometry(2.6, 20, 20),
+      new THREE.MeshBasicMaterial({ color: 0xfff2a8 })
+    );
+    sunDisc.position.set(24, 38, 16);
+    scene.add(sunDisc);
+
+    // ---------------------------------------------------------------------
+    // Procedural 16x16 pixel-art texture atlas (16 tiles in a 4x4 grid).
+    // ---------------------------------------------------------------------
+    const TILE = 16;
+    const COLS = 5;
+    const ROWS = 4;
+    const atlasCanvas = document.createElement("canvas");
+    atlasCanvas.width = TILE * COLS;
+    atlasCanvas.height = TILE * ROWS;
+    const ctx = atlasCanvas.getContext("2d");
+
+    function noise(x, y, seed) {
+      const n = Math.sin(x * 127.1 + y * 311.7 + seed * 74.7) * 43758.5453;
+      return n - Math.floor(n);
+    }
+
+    function px(col, row, x, y, color) {
+      ctx.fillStyle = color;
+      ctx.fillRect(col * TILE + x, row * TILE + y, 1, 1);
+    }
+
+    function fill(col, row, colors, seed) {
+      for (let y = 0; y < TILE; y += 1) {
+        for (let x = 0; x < TILE; x += 1) {
+          px(col, row, x, y, colors[Math.floor(noise(x, y, seed) * colors.length)]);
+        }
+      }
+    }
+
+    // Row 0: grass top, grass side, dirt, stone.
+    fill(0, 0, ["#4caf50", "#57b85a", "#3f8f43", "#66c26a"], 1);
+    for (let y = 0; y < TILE; y += 1) {
+      for (let x = 0; x < TILE; x += 1) {
+        const edge = 4 + Math.floor(noise(x, y, 2) * 2);
+        const color = y < edge
+          ? ["#4caf50", "#3f8f43", "#57b85a"][Math.floor(noise(x, y, 3) * 3)]
+          : ["#8d5a3b", "#7a4a2f", "#9b6644"][Math.floor(noise(x, y, 4) * 3)];
+        px(1, 0, x, y, color);
+      }
+    }
+    fill(2, 0, ["#8d5a3b", "#7a4a2f", "#9b6644", "#6b3f28"], 5);
+    fill(3, 0, ["#8b939b", "#7d858d", "#9aa2aa", "#6f777f"], 6);
+
+    // Row 1: wood side, wood top, leaves, water.
+    for (let y = 0; y < TILE; y += 1) {
+      for (let x = 0; x < TILE; x += 1) {
+        const stripe = x % 4 === 0 || (x % 7 === 0 && y % 3 === 0);
+        px(0, 1, x, y, stripe ? "#5a341c" : "#7a4a2a");
+      }
+    }
+    for (let y = 0; y < TILE; y += 1) {
+      for (let x = 0; x < TILE; x += 1) {
+        const d = Math.abs(x - 8) + Math.abs(y - 8);
+        px(1, 1, x, y, d % 5 === 0 ? "#5a341c" : "#8a5731");
+      }
+    }
+    fill(2, 1, ["#2f8f3a", "#257a30", "#3aa347", "#1f6b28"], 7);
+    fill(3, 1, ["#2f7fd4", "#3a8fe0", "#266bb8", "#55a6ef"], 8);
+
+    // Row 2: chest, planks, roof, path.
+    fill(0, 2, ["#b5722f", "#9d5f24", "#c98443"], 9);
+    for (let y = 0; y < TILE; y += 1) {
+      for (let x = 0; x < TILE; x += 1) {
+        px(1, 2, x, y, y % 5 === 0 ? "#8a5731" : "#b98a52");
+      }
+    }
+    fill(2, 2, ["#a33a2f", "#8f2f26", "#bb4a3d", "#7c241c"], 10);
+    fill(3, 2, ["#b9a98f", "#a8977d", "#c7b79c", "#94846c"], 11);
+
+    // Row 3: furnace, crafting table, bed, glass.
+    for (let y = 0; y < TILE; y += 1) {
+      for (let x = 0; x < TILE; x += 1) {
+        const mouth = x >= 4 && x <= 11 && y >= 6 && y <= 12;
+        const color = mouth
+          ? (y < 9 ? "#ffb23e" : "#ff7a1a")
+          : (noise(x, y, 12) > 0.5 ? "#5d646c" : "#4a5057");
+        px(0, 3, x, y, color);
+      }
+    }
+    for (let y = 0; y < TILE; y += 1) {
+      for (let x = 0; x < TILE; x += 1) {
+        const grid = x % 5 === 0 || y % 5 === 0;
+        px(1, 3, x, y, grid ? "#7a4a2a" : "#b98a52");
+      }
+    }
+    for (let y = 0; y < TILE; y += 1) {
+      for (let x = 0; x < TILE; x += 1) {
+        const pillow = x < 5 && y >= 4 && y <= 11;
+        px(2, 3, x, y, pillow ? "#f2f2f2" : (y % 4 === 0 ? "#b32a2a" : "#d63a3a"));
+      }
+    }
+    for (let y = 0; y < TILE; y += 1) {
+      for (let x = 0; x < TILE; x += 1) {
+        const border = x === 0 || y === 0 || x === 15 || y === 15;
+        px(3, 3, x, y, border ? "#d7f0ff" : "#bfe6ff");
+      }
+    }
+
+    // Pixel Perfection texture atlas (CC BY-SA 4.0), embedded as a data URI.
+    const ATLAS_BASE64 = "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";
+    const atlas = new THREE.TextureLoader().load(
+      "data:image/png;base64," + ATLAS_BASE64
+    );
+    atlas.magFilter = THREE.NearestFilter;
+    atlas.minFilter = THREE.NearestFilter;
+    atlas.encoding = THREE.sRGBEncoding;
+    atlas.needsUpdate = true;
+
+    const tile = {
+      grassTop: [0, 0], grassSide: [1, 0], dirt: [2, 0], stone: [3, 0],
+      path: [4, 0],
+      woodSide: [0, 1], woodTop: [1, 1], leaves: [2, 1], water: [3, 1],
+      sand: [4, 1],
+      chest: [0, 2], chestSide: [1, 2], chestTop: [2, 2], planks: [3, 2],
+      roof: [4, 2],
+      furnace: [0, 3], furnaceSide: [1, 3], furnaceTop: [2, 3], glass: [3, 3]
+    };
+
+    // Remap the six box faces into the selected atlas tiles.
+    function blockGeometry(top, side, bottom) {
+      const geo = new THREE.BoxGeometry(1, 1, 1);
+      const uv = geo.attributes.uv;
+      const faces = [side, side, top, bottom, side, side];
+      const du = 1 / COLS;
+      const dv = 1 / ROWS;
+      for (let f = 0; f < 6; f += 1) {
+        const t = faces[f];
+        const u0 = t[0] * du;
+        const v0 = 1 - (t[1] + 1) * dv;
+        for (let i = 0; i < 4; i += 1) {
+          const index = f * 4 + i;
+          uv.setXY(index, u0 + uv.getX(index) * du, v0 + uv.getY(index) * dv);
+        }
+      }
+      uv.needsUpdate = true;
+      return geo;
+    }
+
+    const opaqueMat = new THREE.MeshLambertMaterial({ map: atlas });
+    const waterMat = new THREE.MeshLambertMaterial({
+      map: atlas,
+      transparent: true,
+      opacity: 0.82
+    });
+    const glassMat = new THREE.MeshLambertMaterial({
+      map: atlas,
+      transparent: true,
+      opacity: 0.55
+    });
+    const leavesMat = new THREE.MeshLambertMaterial({
+      map: atlas,
+      alphaTest: 0.5,
+      side: THREE.DoubleSide
+    });
+    const fireMat = new THREE.MeshBasicMaterial({ color: 0xff8a2a });
+    const lampMat = new THREE.MeshBasicMaterial({ color: 0xffe08a });
+
+    function same(t) {
+      return blockGeometry(t, t, t);
+    }
+
+    const geoms = {
+      grass: blockGeometry(tile.grassTop, tile.grassSide, tile.dirt),
+      dirt: same(tile.dirt),
+      stone: same(tile.stone),
+      wood: blockGeometry(tile.woodTop, tile.woodSide, tile.woodTop),
+      leaves: same(tile.leaves),
+      chest: blockGeometry(tile.chestTop, tile.chestSide, tile.chestTop),
+      planks: same(tile.planks),
+      roof: same(tile.roof),
+      path: same(tile.path),
+      furnace: blockGeometry(tile.furnaceTop, tile.furnaceSide, tile.furnaceTop),
+      crafting: same(tile.planks),
+      bed: same(tile.roof),
+      pillow: same(tile.sand),
+      glass: same(tile.glass),
+      water: same(tile.water),
+      fire: new THREE.BoxGeometry(1, 1, 1),
+      lamp: new THREE.BoxGeometry(1, 1, 1)
+    };
+
+    // ---------------------------------------------------------------------
+    // Island generation.
+    // ---------------------------------------------------------------------
+    const groups = {
+      grass: [], dirt: [], stone: [], wood: [], leaves: [],
+      chest: [], planks: [], roof: [], path: [], water: [],
+      furnace: [], crafting: [], bed: [], pillow: [], glass: [], fire: [], lamp: []
+    };
+    const add = (group, x, y, z) => groups[group].push([x, y, z]);
+
+    const SIZE = 10;
+    const CABIN = { x: 4, z: -1, h: 5 };
+    const POND = { x: -4, z: 4, r: 3 };
+
+    // Smooth rolling terrain with a flat plateau for the cabin.
+    function heightAt(x, z) {
+      if (Math.abs(x - CABIN.x) <= 5 && Math.abs(z - CABIN.z) <= 4) {
+        return CABIN.h;
+      }
+      const wave =
+        Math.sin(x * 0.25) * 1.3 +
+        Math.cos(z * 0.22) * 1.1 +
+        Math.sin((x + z) * 0.16) * 0.8;
+      return Math.max(2, Math.round(4 + wave));
+    }
+
+    // Cells that should not get a grass top (path / cabin floor).
+    const pathCells = new Set();
+    for (let z = -9; z <= 3; z += 1) pathCells.add("0," + z);
+    const floorCells = new Set();
+    for (let dx = -3; dx <= 3; dx += 1) {
+      for (let dz = -2; dz <= 2; dz += 1) {
+        floorCells.add((CABIN.x + dx) + "," + (CABIN.z + dz));
+      }
+    }
+    for (let dx = -1; dx <= 1; dx += 1) {
+      floorCells.add((CABIN.x + dx) + "," + (CABIN.z + 3));
+    }
+
+    const occupied = new Set();
+    const key = (x, y, z) => x + "," + y + "," + z;
+
+    for (let x = -SIZE; x <= SIZE; x += 1) {
+      for (let z = -SIZE; z <= SIZE; z += 1) {
+        if (x * x + z * z > SIZE * SIZE + 18) continue;
+
+        // A notch for the waterfall on the western edge.
+        if (x === -8 && z >= 2 && z <= 4) {
+          add("water", x, 3, z);
+          add("water", x, 2, z);
+          add("stone", x, 1, z);
+          add("stone", x, 0, z);
+          continue;
+        }
+
+        const dx = x - POND.x;
+        const dz = z - POND.z;
+        if (dx * dx + dz * dz <= POND.r * POND.r) {
+          const h = heightAt(x, z);
+          add("water", x, h, z);
+          add("water", x, h - 1, z);
+          add("stone", x, h - 2, z);
+          continue;
+        }
+
+        const h = heightAt(x, z);
+        const cell = x + "," + z;
+        for (let y = -2; y <= h; y += 1) {
+          if (occupied.has(key(x, y, z))) continue;
+          if (y === h) {
+            if (floorCells.has(cell)) continue;
+            add(pathCells.has(cell) ? "path" : "grass", x, y, z);
+          } else if (y >= h - 2) {
+            add("dirt", x, y, z);
+          } else {
+            add("stone", x, y, z);
+          }
+          occupied.add(key(x, y, z));
+        }
+      }
+    }
+
+    // Trees: trunk plus a layered leaf canopy.
+    const treeSpots = [[-7, -3], [6, -6], [8, 4], [-3, 7], [-2, -2]];
+    for (const [tx, tz] of treeSpots) {
+      const base = heightAt(tx, tz) + 1;
+      const trunk = 3 + (Math.abs(tx + tz) % 2);
+      for (let y = base; y < base + trunk; y += 1) {
+        add("wood", tx, y, tz);
+      }
+      const top = base + trunk;
+      for (let dx = -2; dx <= 2; dx += 1) {
+        for (let dz = -2; dz <= 2; dz += 1) {
+          if (Math.abs(dx) === 2 && Math.abs(dz) === 2) continue;
+          add("leaves", tx + dx, top, tz + dz);
+        }
+      }
+      for (let dx = -1; dx <= 1; dx += 1) {
+        for (let dz = -1; dz <= 1; dz += 1) {
+          add("leaves", tx + dx, top + 1, tz + dz);
+        }
+      }
+      add("leaves", tx, top + 2, tz);
+    }
+
+    // Cabin: plank floor, log corners, windows, a door, a pitched roof and a chimney.
+    (function buildCabin() {
+      const cx = CABIN.x;
+      const cz = CABIN.z;
+      const base = CABIN.h + 1;
+
+      for (let dx = -3; dx <= 3; dx += 1) {
+        for (let dz = -2; dz <= 2; dz += 1) {
+          add("planks", cx + dx, base - 1, cz + dz);
+        }
+      }
+
+      for (let dx = -3; dx <= 3; dx += 1) {
+        for (let dz = -2; dz <= 2; dz += 1) {
+          const edge = Math.abs(dx) === 3 || Math.abs(dz) === 2;
+          if (!edge) continue;
+          const corner = Math.abs(dx) === 3 && Math.abs(dz) === 2;
+          for (let y = 0; y < 3; y += 1) {
+            if (dz === 2 && dx === 0 && y < 2) continue; // door
+            const isWindow =
+              Math.abs(dx) === 3 && Math.abs(dz) === 1 && y === 1;
+            add(
+              isWindow ? "glass" : (corner ? "wood" : "planks"),
+              cx + dx, base + y, cz + dz
+            );
+          }
+        }
+      }
+
+      // Pitched roof: three shrinking layers.
+      for (let layer = 0; layer < 3; layer += 1) {
+        const rx = 4 - layer;
+        const rz = 3 - layer;
+        for (let dx = -rx; dx <= rx; dx += 1) {
+          for (let dz = -rz; dz <= rz; dz += 1) {
+            add("roof", cx + dx, base + 3 + layer, cz + dz);
+          }
+        }
+      }
+
+      // Chimney.
+      for (let y = 0; y < 3; y += 1) {
+        add("stone", cx + 2, base + 3 + y, cz - 1);
+      }
+
+      // Porch with a post and a lantern.
+      for (let dx = -1; dx <= 1; dx += 1) {
+        add("planks", cx + dx, base - 1, cz + 3);
+      }
+      add("wood", cx + 2, base, cz + 3);
+      add("lamp", cx + 2, base + 1, cz + 3);
+    })();
+
+    // Furniture inside the cabin.
+    add("bed", CABIN.x - 1, CABIN.h + 1, CABIN.z - 1);
+    add("bed", CABIN.x, CABIN.h + 1, CABIN.z - 1);
+    add("pillow", CABIN.x - 1, CABIN.h + 2, CABIN.z - 1);
+    add("furnace", CABIN.x - 2, CABIN.h + 1, CABIN.z + 1);
+    add("crafting", CABIN.x + 3, heightAt(CABIN.x + 3, CABIN.z + 3) + 1, CABIN.z + 3);
+
+    // Campfire: stone ring, crossed logs, flames and a warm light.
+    const fireX = -2;
+    const fireZ = 2;
+    const fireY = heightAt(fireX, fireZ) + 1;
+    [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(([dx, dz]) => {
+      add("stone", fireX + dx, fireY, fireZ + dz);
+    });
+    add("wood", fireX, fireY + 1, fireZ);
+    add("wood", fireX, fireY + 1, fireZ + 1);
+    add("fire", fireX, fireY + 2, fireZ);
+    add("fire", fireX, fireY + 2, fireZ + 1);
+    add("fire", fireX, fireY + 3, fireZ);
+    const fireLight = new THREE.PointLight(0xff8a3a, 1.5, 10);
+    fireLight.position.set(fireX + 0.5, fireY + 2.6, fireZ + 0.5);
+    scene.add(fireLight);
+
+    const lampLight = new THREE.PointLight(0xffd77a, 0.7, 8);
+    lampLight.position.set(CABIN.x + 2.5, CABIN.h + 2.5, CABIN.z + 3.5);
+    scene.add(lampLight);
+
+    // Flowers, rocks and a chest.
+    const flowers = [[-2, -5], [1, 5], [-6, 1], [4, 6], [-8, -1], [3, 8]];
+    flowers.forEach(([fx, fz], index) => {
+      add(index % 2 === 0 ? "roof" : "chest", fx, heightAt(fx, fz) + 1, fz);
+    });
+    [[-9, 5], [8, 7], [-5, -8]].forEach(([rx, rz]) => {
+      add("stone", rx, heightAt(rx, rz) + 1, rz);
+    });
+    add("chest", -1, heightAt(-1, 2) + 1, 2);
+
+    // Waterfall: a wide stream from the pond over the western edge.
+    for (let x = -8; x <= -5; x += 1) {
+      for (let z = 2; z <= 4; z += 1) {
+        add("water", x, 3, z);
+      }
+    }
+    for (let z = 2; z <= 4; z += 1) {
+      for (let y = 2; y >= -5; y -= 1) {
+        add("water", -8, y, z);
+      }
+    }
+
+    // Build one InstancedMesh per block group.
+    const materials = {
+      water: waterMat,
+      glass: glassMat,
+      leaves: leavesMat,
+      fire: fireMat,
+      lamp: lampMat
+    };
+    const dummy = new THREE.Object3D();
+    Object.keys(groups).forEach((name) => {
+      const cells = groups[name];
+      if (!cells.length) return;
+      const mesh = new THREE.InstancedMesh(
+        geoms[name],
+        materials[name] || opaqueMat,
+        cells.length
+      );
+      cells.forEach((cell, index) => {
+        dummy.position.set(cell[0] + 0.5, cell[1] + 0.5, cell[2] + 0.5);
+        if (name === "fire" || name === "lamp") {
+          dummy.scale.set(0.45, 0.45, 0.45);
+        } else {
+          dummy.scale.set(1, 1, 1);
+        }
+        dummy.updateMatrix();
+        mesh.setMatrixAt(index, dummy.matrix);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.castShadow = name !== "water" && name !== "fire" && name !== "lamp";
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+    });
+
+    // Clouds.
+    const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const clouds = new THREE.Group();
+    const cloudGeo = new THREE.BoxGeometry(1, 1, 1);
+    for (let i = 0; i < 10; i += 1) {
+      const cloud = new THREE.Mesh(cloudGeo, cloudMat);
+      cloud.position.set(
+        Math.cos(i * 1.3) * (18 + (i % 4) * 4),
+        20 + (i % 3) * 2.5,
+        Math.sin(i * 1.3) * (18 + (i % 4) * 4)
+      );
+      cloud.scale.set(4 + (i % 3) * 2, 1.2, 2.8);
+      clouds.add(cloud);
+    }
+    scene.add(clouds);
+
+    // Camera orbit.
+    const clock = new THREE.Clock();
+    const radius = 26;
+    let angle = Math.PI / 4;
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+      angle += dt * 0.18;
+      camera.position.set(
+        Math.cos(angle) * radius,
+        13 + Math.sin(angle * 0.8) * 1.5,
+        Math.sin(angle) * radius
+      );
+      camera.lookAt(0, 3, 0);
+      clouds.rotation.y += dt * 0.015;
+      renderer.render(scene, camera);
+    }
+
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Debug hook used by the benchmark harness to confirm real rendering.
+    window.__voxel = { renderer, scene, camera };
+
+    animate();
+  </script>
+</body>
+</html>
