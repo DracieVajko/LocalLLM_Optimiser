@@ -24,14 +24,12 @@ LM Studio could not load or generate at all, so no artifact exists.
 | `swift-qwen3.8-27b` | email | 1.0 | — |
 | `swift-qwen3.8-27b` | web | **1.0** | Fixed by `--no-thinking`: 1128 s, 3.6 tok/s, no reasoning in the file. |
 | `swift-qwen3.8-27b` | blender | 0.0 | Model bug with thinking on: reasoning prose is written *into* `build_scene.py` (`line 66: SyntaxError: unterminated string literal`). Retried with `--no-thinking`. |
-| `qwen3.8-9b-distill` | web | 0.0 | Model bug: `index.html` contains ten lines of reasoning that *describe* the page instead of the page. Caught by `html_document`. |
-| `qwen3.8-9b-distill` | email | 0.0 | Model bug: output is a "Thinking Process" dump, so it has no leading `Subject:` and contains bracketed placeholders in prose. |
+| `qwen3.8-9b-distill` | web | 0.84 | Model weakness: no `@media` query and no table/grid layout. The retry with `--no-thinking` produces real HTML now (it scored 0.0 before because the file was prose). |
+| `qwen3.8-9b-distill` | email | 0.73 | Model weakness: attempt 0 lacked a closing (`has_closing`), repair attempt 1 introduced a bracketed placeholder. |
 | `prism-ml/bonsai-27b` | web | **1.0** | — |
-| `prism-ml/bonsai-27b` | minecraft | 0.0 | Model bug: `getTerrainHeight(x, y: 0, z)` — a Python keyword argument inside JavaScript, so the scene never builds and the page stays on "Generating terrain…". |
-| `prism-ml/bonsai-27b` | email | 0.0 | Model bug: "Here's a thinking process:" is emitted before the email, so the subject check fails and the prose trips the placeholder check. |
+| `prism-ml/bonsai-27b` | minecraft, email | **1.0** | Fixed by `--no-thinking`: minecraft 140 s at 22 tok/s, email 3 s at 25 tok/s. The first run's failures were reasoning leakage, not capability. |
+| `google/gemma-4-26b-a4b-qat` | email | **1.0** | Fixed by `--no-thinking` (161 s at 0.4 tok/s). The earlier "engine 500" was the reasoning path, not a dead engine. |
 | `google/gemma-4-26b-a4b-qat` | blender_skyblock | 0.0 | Model bug: the script starts mid-file with an indented `def create_material(...)` → `IndentationError` at line 1. |
-| `google/gemma-4-26b-a4b-qat` | email | 0.0 | Model bug: reasoning dump instead of an email. |
-| `google/gemma-4-26b-a4b-qat` | web | host issue | Loads, then chat returns 500 "Engine protocol startup was aborted". |
 | `qwen/qwen3.6-35b-a3b` | email | host issue | Engine 500 on chat after a successful load. |
 | `qwen3.8-27b-twin-turbo-...` | email, web, minecraft | host issue | Minimal config loads, chat returns 500. |
 | `openai-gpt-oss-20b-...-heretic` | minecraft | **1.0** | — |
@@ -44,12 +42,14 @@ LM Studio could not load or generate at all, so no artifact exists.
 1. **Reasoning leakage.** Bonsai, qwen 9B, gemma and gpt-oss write their thinking
    into the artifact. LM Studio advertises only `off`/`on` for reasoning, and
    even `reasoning: "off"` does not strip the template's thinking block for
-   these models. The retry therefore runs with `--no-thinking`; if the model
-   still emits reasoning prose the failure is the model's, not the harness's.
-2. **Engine crash on this host.** Gemma, qwen 3.6 35B and twin-turbo accept the
-   load request and then return `500 Engine protocol startup was aborted` on the
-   first chat. Nothing is generated, so those models cannot be scored on this
-   machine regardless of prompt quality.
+   these models. Retries run with `--no-thinking`, which fixed Bonsai (3/3
+   tasks to 1.0), Gemma (email to 1.0) and Swift (dashboard to 1.0). Where a
+   model still fails after that, the remaining cause is ordinary generation
+   quality (qwen 9B misses a media query; Swift writes `location=(0.5, -1, 0.6])`).
+2. **Engine crash on this host.** qwen 3.6 35B and twin-turbo accept the load
+   request and then return `500 Engine protocol startup was aborted` on the
+   first chat. Gemma was suspected of the same, but with `--no-thinking` it
+   generated normally, so that diagnosis was wrong.
 
 ## Fixed scoring bugs found during this audit
 
