@@ -385,6 +385,8 @@ the committed DeepSeek V4.1 Flash artifacts/results live in
 [`docs/benchmarks/README.md`](docs/benchmarks/README.md). Local model scores are
 intentionally not committed.
 
+![Minecraft-style skyblock benchmark](docs/benchmarks/minecraft_world_preview.png)
+
 ## Blender / 3D sandbox requirements
 
 The `blender_skyblock` and `blender_city_bridge` sandbox tasks (and duel type `blender`) need **Blender installed on the host** — they run the model-generated Python script through `blender --background --python build_scene.py`, then validate that a real `scene.blend` binary was produced and frames were rendered.

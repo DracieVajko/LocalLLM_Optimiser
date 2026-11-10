@@ -80,6 +80,11 @@ The Minecraft page was verified in a real browser: Three.js loaded, the canvas
 rendered 11 draw calls / 8,172 triangles, the centre pixel was grass green, and
 the console had no errors.
 
+![Minecraft-style skyblock preview](minecraft_world_preview.png)
+
+The preview above is a headless Chromium screenshot of the committed
+`minecraft_world/index.html` (1280x720), not an illustration.
+
 ## Reproduce
 
 Score the committed artifacts with the same harness:
