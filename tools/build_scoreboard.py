@@ -40,7 +40,7 @@ from statistics import mean
 
 #: Why a task cannot contribute to the capability score. Empty = valid.
 TASK_STATUS: dict[str, str] = {
-    "blender_skyblock": "BROKEN: artifact is text renamed to scene.blend; "
+
     "blender is never executed (sandbox_runner.py:294, lab.py:789)",
     "research_synthesis": "BROKEN: source documents are never injected into the "
     "prompt (sandbox_lab.py:143); also no_irrelevant_source lacks negate=True",
@@ -59,7 +59,6 @@ TASK_ORDER = [
     "company_website",
     "email_and_calendar",
     "research_synthesis",
-    "blender_skyblock",
 ]
 
 #: A harness-level timeout, not a model failure.

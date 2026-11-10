@@ -29,11 +29,13 @@ Two tables, two different questions:
 | provider | email | company_website | minecraft_world | blender_city |
 |---|---:|---:|---:|---:|
 | DeepSeek V4.1 Flash | 1.00 | 1.00 | 1.00 | 1.00 |
-| Gemini | 1.00 | 1.00 | 1.00 | 1.00 |
-| ChatGPT | **0.00** | 1.00 | 1.00 | 1.00 |
+| Gemini | 1.00 | 1.00 | 1.00 | not run (new prompt) |
+| ChatGPT | **0.00** | 1.00 | 1.00 | not run (new prompt) |
 
 ChatGPT's email has no `Subject:` line, so it fails `has_subject` exactly like
-the local models that leak reasoning. Everything else renders `ok` on pixels.
+the local models that leak reasoning. The Blender task was redefined on
+2026-11-10 (dense city, `.blend` only, no renders), so the earlier frontier city
+scripts no longer apply; regenerate them with the current prompt.
 
 ## Tier-A text tasks (reviewer audit, 2026-11-10)
 
@@ -69,26 +71,21 @@ Notes:
   `--no-thinking` fixes it for Bonsai, Gemma and Swift (verified: Bonsai 3/3
   tasks to 1.00, Gemma email 1.00, Swift dashboard 1.00).
 
-## Rendered artifacts (measured 2026-11-10, this machine)
+## Rendered artifacts (pixel verdict)
 
 | provider | task | mean | sd | dark | tones | verdict |
 |---|---|---:|---:|---:|---:|---|
-| chatgpt | blender_city | 128.0 | 22.6 | 0% | 108 | **ok** |
 | chatgpt | company_website | 236.3 | 35.5 | 0% | 57 | **ok** |
-| chatgpt | minecraft_world | 62.8 | 51.0 | 0% | 150 | **ok** |
-| deepseek | blender_city | 113.4 | 34.0 | 0% | 76 | **ok** |
-| deepseek | blender_skyblock | 86.4 | 35.7 | 0% | 67 | **ok** |
+| chatgpt | minecraft_world | 62.7 | 51.0 | 0% | 151 | **ok** |
 | deepseek | company_website | 243.9 | 37.9 | 0% | 70 | **ok** |
 | deepseek | deep_research_report | 246.3 | 37.3 | 0% | 51 | **ok** |
-| deepseek | minecraft_world | 136.9 | 81.1 | 7% | 132 | **ok** |
-| gemini | blender_city | 71.6 | 58.2 | 34% | 74 | **ok** |
+| deepseek | minecraft_world | 137.1 | 81.0 | 7% | 128 | **ok** |
 | gemini | company_website | 246.1 | 28.9 | 0% | 35 | **ok** |
-| gemini | minecraft_world | 161.3 | 43.7 | 0% | 106 | **ok** |
-| nemotron-74b | minecraft_world | 181.6 | 22.1 | 0% | 17 | **ok** |
-| nemotron-e4b | minecraft_world | 164.5 | 20.3 | 0% | 51 | **ok** |
-| gpt-oss-20b heretic | minecraft_world | 188.0 | 0.0 | 0% | 1 | **flat** |
-| bonsai-27b | minecraft_world | 2.3 | 23.0 | 99% | 21 | **blank** |
-
+| gemini | minecraft_world | 161.3 | 43.8 | 0% | 102 | **ok** |
+| nvidia_nemotron_3_5_bolt_74b_a9b | minecraft_world | 181.6 | 22.1 | 0% | 17 | **ok** |
+| nvidia_nemotron_3_5_bolt_e4b | minecraft_world | 164.4 | 20.3 | 0% | 46 | **ok** |
+| openai_gpt_oss_20b_claude_4_5_opus_heretic_uncensored_i1 | minecraft_world | 188.0 | 0.0 | 0% | 1 | **flat** |
+| prism_ml_bonsai_27b | minecraft_world | 2.3 | 23.0 | 99% | 21 | **blank** |
 Before the pixel check, `bonsai` and `gpt-oss` both scored **1.00** for these
 artifacts. They now score **0.00** with `renders_content (… verdict=blank)` and
 `renders_content (… verdict=flat)`.

@@ -42,7 +42,6 @@ VISUAL_TASKS = (
     "company_website",
     "deep_research_report",
     "blender_city",
-    "blender_skyblock",
 )
 
 

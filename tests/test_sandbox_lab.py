@@ -2,7 +2,6 @@
 import pytest
 
 from lm_optimizer.services.sandbox_lab import (
-    BLENDER_TASK,
     RESEARCH_PACKAGE,
     SANDBOX_TASKS,
     WEB_TASK,
@@ -23,8 +22,6 @@ def test_all_sandbox_tasks_exist():
     assert set(SANDBOX_TASKS) == {
         "company_website",
         "research_synthesis",
-        "blender_skyblock",
-        "blender_city_bridge",
         "creative_3d_voxel_island",
         "email_write",
         "calendar_event",
@@ -36,6 +33,7 @@ def test_all_sandbox_tasks_exist():
         "blender_city",
         "deep_research_report",
         "deep_research_online",
+        "deep_research_agent",
     }
     kinds = {t.kind for t in SANDBOX_TASKS.values()}
     assert kinds == {
@@ -135,16 +133,18 @@ def test_research_package_has_all_source_kinds():
 
 
 def test_blender_task_checks_all_spec_elements():
-    names = {c.name for c in BLENDER_TASK.checks}
+    names = {c.name for c in SANDBOX_TASKS["blender_city"].checks}
     for required in (
         "has_camera",
         "has_light",
-        "has_keyframes",
-        "has_frame_range",
         "saves_blend",
-        "renders",
+        "no_render",
+        "blend_runs",
+        "city_mesh_count",
     ):
         assert required in names
+    assert "has_keyframes" not in names
+    assert "renders" not in names
 
 
 # --- scoring ---
@@ -308,12 +308,15 @@ def test_minecraft_prompt_accepts_scene_variation():
     assert "floating skyblock" in varied
     assert build_minecraft_prompt("   ") == base
 
-def test_blender_city_task_requires_preview_and_no_animation():
+def test_blender_city_task_is_blend_only_and_forbids_renders():
     task = SANDBOX_TASKS["blender_city"]
     names = {check.name for check in task.checks}
-    assert "preview_rendered" in names
-    assert "no_animation" in names
-    assert "preview.png" in task.artifacts
+    assert "no_render" in names
+    assert "city_mesh_count" in names
+    assert "preview_rendered" not in names
+    assert "frames_rendered" not in names
+    assert "scene.blend" in task.artifacts
+    assert "preview.png" not in task.artifacts
 
 
 def test_deep_research_report_task_is_html_with_citations():
@@ -424,7 +427,7 @@ def test_email_subject_rejects_reasoning_dump():
 
 
 def test_blender_task_checks_python_syntax_before_running():
-    names = {check.name for check in SANDBOX_TASKS["blender_skyblock"].checks}
+    names = {check.name for check in SANDBOX_TASKS["blender_city"].checks}
     assert "is_python_code" in names
 
 def test_deep_research_online_requires_scraped_citations():

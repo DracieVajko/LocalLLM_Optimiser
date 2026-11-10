@@ -37,13 +37,31 @@ which needs `OPENROUTER_API_KEY` or `OPENAI_API_KEY`.
 
 ## 3. `lab research` — online, multi-query, scraped
 
-This is the actual "go and read the web" agent:
+This is the actual "go and read the web" command:
 
 ```powershell
 python -m lm_optimizer.cli.main lab research "Do 70B MoE models fit on 24 GB?" --model <model> --queries 4 --sources 6
 ```
 
-Pipeline (`lm_optimizer/services/web_research.py`):
+Two modes:
+
+- `--mode agent` (default) — the model is given real tools and drives the loop
+  itself (`lm_optimizer/services/research_agent.py`):
+
+  ```
+  {"action": "search", "query": "..."}   -> DuckDuckGo results
+  {"action": "fetch",  "url": "https://..."} -> page text
+  {"action": "finish"}
+  ```
+
+  It may only fetch URLs that search returned, every call is recorded in
+  `trace.json`, and only fetched pages become citable sources. The report is
+  written after the loop from those sources.
+- `--mode pipeline` — the fixed plan → search → scrape → write pipeline
+  (`lm_optimizer/services/web_research.py`): the model plans N queries, the
+  harness scrapes the top pages, then the model writes the report.
+
+Pipeline steps (both modes use the same tools):
 
 1. **plan** — the model splits the question into N focused search queries.
    If it answers with prose instead of a JSON array, the planner falls back to

@@ -47,7 +47,7 @@ DUEL_TASKS: dict[DuelType, tuple[str, ...]] = {
     DuelType.MICRO_QUALITY: ("instruction_list_three", "reasoning_arithmetic"),
     DuelType.WEB: ("company_website",),
     DuelType.RESEARCH: ("research_synthesis",),
-    DuelType.BLENDER: ("blender_skyblock",),
+    DuelType.BLENDER: ("blender_city",),
     DuelType.AGENTIC: (
         "email_write",
         "calendar_event",
@@ -59,7 +59,7 @@ DUEL_TASKS: dict[DuelType, tuple[str, ...]] = {
     DuelType.COMPLETE_SANDBOX: (
         "company_website",
         "research_synthesis",
-        "blender_skyblock",
+        "blender_city",
         "email_write",
         "calendar_event",
         "email_and_calendar",

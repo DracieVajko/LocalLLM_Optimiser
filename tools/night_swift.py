@@ -28,7 +28,6 @@ DEFAULT_MODELS = MODELS
 SANDBOX_TASKS = [
     "company_website",
     "research_synthesis",
-    "blender_skyblock",
     "email_write",
     "calendar_event",
     "email_and_calendar",

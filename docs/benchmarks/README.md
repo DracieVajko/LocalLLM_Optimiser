@@ -87,14 +87,14 @@ inputs and no external scripts/styles.
 | `minecraft_world` | **1.0** | yes | [index.html](deepseek_agent/minecraft_world/index.html) |
 | `company_website` | **1.0** | yes | [index.html](deepseek_agent/company_website/index.html) |
 | `email_write` | **1.0** | yes | [email.txt](deepseek_agent/email_write/email.txt) |
-| `blender_skyblock` | **1.0** | yes | [build_scene.py](deepseek_agent/blender_skyblock/build_scene.py) |
+| `blender_city` | **1.0** | yes | [build_scene.py](deepseek_agent/blender_city/build_scene.py) |
 
 Full table: [frontier_comparison.md](frontier_comparison.md) and
 [frontier_comparison.csv](frontier_comparison.csv).
 
-The Blender artifact was rendered headless with Blender 5.2: `scene.blend`
-(2.53 MB, uncompressed) plus 120 PNG frames at 640x360. The first frame is
-[blender_skyblock_deepseek_frame_0001.png](blender_skyblock_deepseek_frame_0001.png).
+The Blender artifact builds the full 12x12 city grid and saves `scene.blend`
+with no renders; the file is opened in background Blender and structurally
+validated (60+ meshes, height variety, footprint, camera, light).
 
 The Minecraft page was verified in a real browser: Three.js loaded, the canvas
 rendered 21 draw calls / 35,844 triangles, the centre pixel was grass green, and
@@ -110,7 +110,7 @@ The preview above is a headless Chromium screenshot of the committed
 Score the committed artifacts with the same harness:
 
 ```powershell
-python tools/agent_benchmark.py --tasks minecraft_world,company_website,email_write,blender_skyblock
+python tools/agent_benchmark.py --tasks minecraft_world,company_website,email_write,blender_city
 ```
 
 Run the same task against a local model:

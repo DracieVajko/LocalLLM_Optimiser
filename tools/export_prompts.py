@@ -30,7 +30,6 @@ TASKS = (
     "company_website",
     "deep_research_report",
     "blender_city",
-    "blender_skyblock",
 )
 
 DESKTOP = Path.home() / "Desktop" / "frontier_bench"
@@ -142,7 +141,6 @@ No extra instructions, no follow-up messages.
 | `company_website` | one HTML file |
 | `deep_research_report` | one HTML report |
 | `blender_city` | a Python script in a ```python fence |
-| `blender_skyblock` | a Python script in a ```python fence |
 
 ## 2. Import the answer
 

@@ -383,6 +383,22 @@ class SandboxRunner:
     #: Write debug.json with per-attempt timings and raw command output.
     debug: bool = True
 
+    def _scoring_files(self, files: dict[str, str]) -> dict[str, str]:
+        """Keep only the task's declared artifacts for the text checks.
+
+        Without this, ``blender.log`` and ``debug.json`` (which contains the
+        previous failing-check list) end up in the regex haystack and can make a
+        check pass or fail for text the model never wrote.
+        """
+        wanted = [artifact.rstrip("/") for artifact in self.task.artifacts]
+        if not wanted:
+            return files
+        selected: dict[str, str] = {}
+        for name, content in files.items():
+            if any(name == item or name.startswith(item + "/") for item in wanted):
+                selected[name] = content
+        return selected or files
+
     def run(self, generate) -> SandboxResult:
         """Synchronous wrapper around `run_async` (used by the tests)."""
         import asyncio
@@ -483,7 +499,7 @@ class SandboxRunner:
                     command, self.workdir, self.policy, self.task.timeout_s
                 )
 
-            files = read_workdir_files(self.workdir)
+            files = self._scoring_files(read_workdir_files(self.workdir))
             # Web tasks get the static HTML/JS validation automatically
             # (spec 13.1 criteria achievable without a browser engine).
             custom = dict(self.custom_checks or {})
@@ -555,6 +571,41 @@ class SandboxRunner:
                         len(data) > 16_384,
                         f"size={len(data)} (>16KB)",
                     )
+                    needs_stats = any(
+                        check.name
+                        in (
+                            "blend_has_camera",
+                            "blend_has_light",
+                            "city_mesh_count",
+                            "city_height_variety",
+                            "city_footprint",
+                        )
+                        for check in self.task.checks
+                    )
+                    if needs_stats and looks_like_blend(data):
+                        from lm_optimizer.services.blend_inspect import inspect_blend
+
+                        stats = inspect_blend(blend_path)
+                        custom["blend_has_camera"] = (
+                            stats.cameras >= 1,
+                            f"cameras={stats.cameras}",
+                        )
+                        custom["blend_has_light"] = (
+                            stats.lights >= 1,
+                            f"lights={stats.lights}",
+                        )
+                        custom["city_mesh_count"] = (
+                            stats.meshes >= 60,
+                            f"meshes={stats.meshes} (min 60), vertices={stats.vertices}",
+                        )
+                        custom["city_height_variety"] = (
+                            stats.tall_objects >= 3 and stats.height_max >= 15,
+                            f"tall(>=15m)={stats.tall_objects}, max={stats.height_max}m",
+                        )
+                        custom["city_footprint"] = (
+                            max(stats.size) >= 40,
+                            f"size={stats.size}",
+                        )
                 else:
                     custom["blend_is_binary"] = (
                         False,

@@ -28,7 +28,6 @@ from lm_optimizer.services.sandbox_runner import SandboxRunner, build_command_fo
 
 TASKS = {
     "blender_city": "build_scene.py",
-    "blender_skyblock": "build_scene.py",
     "deep_research_report": "index.html",
     "email_write": "email.txt",
     "minecraft_world": "index.html",
@@ -236,19 +235,9 @@ def visual(row: dict) -> str | None:
     workdir = Path(row["workdir"])
     provider = _slug(row["provider"])
     if task == "blender_city":
-        src = workdir / "preview.png"
-        if src.exists():
-            dst = OUT / "visuals" / f"{provider}_blender_city.png"
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(src, dst)
-            return dst.relative_to(OUT).as_posix()
-    if task == "blender_skyblock":
-        src = workdir / "frames" / "frame_0001.png"
-        if src.exists():
-            dst = OUT / "visuals" / f"{provider}_blender_skyblock.png"
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(src, dst)
-            return dst.relative_to(OUT).as_posix()
+        # The city task deliberately renders nothing; the .blend path is the
+        # artifact and the gallery prints it instead of a placeholder image.
+        return None
     if task in HTML_TASKS:
         src = workdir / TASKS[task]
         if src.exists():

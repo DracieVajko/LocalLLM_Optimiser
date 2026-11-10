@@ -59,7 +59,7 @@ def _best():
 
 def test_builtin_ids_accepted():
     assert validate_artifact_test_id("company_website") == "company_website"
-    assert validate_artifact_test_id("blender_skyblock") == "blender_skyblock"
+    assert validate_artifact_test_id("blender_city") == "blender_city"
     assert validate_artifact_test_id(None) is None
 
 

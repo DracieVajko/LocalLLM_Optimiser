@@ -273,46 +273,77 @@ RESEARCH_TASK = SandboxTask(
 )
 
 
-# --- 13.3 Blender task ----------------------------------------------------
+# --- 13.3 Blender task: dense city, .blend only, no renders ----------------
 
-BLENDER_TASK = SandboxTask(
-    id="blender_skyblock",
+CITY_MAP_LAYOUT = """##..##..##..
+##..##..##..
+............
+##..##..##..
+##..##..##..
+~~~~~~~~~~~~
+PP..##..##..
+##..##..##..
+............
+##..##..##..
+##..##..##..
+............"""
+
+BLENDER_CITY_TASK = SandboxTask(
+    id="blender_city",
     kind=SandboxTaskKind.BLENDER,
-    title="Minecraft-inspired Skyblock scene",
+    title="Dense low-poly city from a map excerpt",
     prompt=(
-        "Write a Blender Python script named build_scene.py that builds a "
-        "floating block island scene: a grass/dirt/stone block island, a "
-        "tree, a chest, a block avatar, a sun light, and a camera that "
-        "orbits the island. Save the .blend file as scene.blend first, then "
-        "render frames 1-120 into the frames/ directory with a path relative "
-        "to the saved file (scene.render.filepath = '//frames/frame_') and "
-        "call bpy.ops.render.render(animation=True). Output ONLY the complete "
-        "Python script in a markdown code fence, starting with ```python "
-        "and ending with ```. Do not include any other text."
+        "Build a dense low-poly city in Blender from the map excerpt below. "
+        "Each character is one 4 m cell and the grid is 12 x 12 cells.\n\n"
+        "MAP (rows top to bottom):\n"
+        + CITY_MAP_LAYOUT
+        + "\n\n"
+        "Legend: '#' is a city block that must contain 2-4 separate buildings, "
+        "'.' is a street (keep it clear of buildings, 2 cells wide), '~' is a "
+        "river running across the city, 'P' is a park with trees.\n\n"
+        "Requirements:\n"
+        "- Build the entire grid, not a subset: at least 60 buildings total, "
+        "spread over every '#' block.\n"
+        "- Vary the heights: ordinary buildings 2-8 floors, at least 3 landmark "
+        "towers of 20 m or more, so the skyline is not flat.\n"
+        "- The park needs at least 4 trees (trunk plus foliage).\n"
+        "- The river must be a separate flat mesh, not a hole in the ground.\n"
+        "- One ground plane under everything, streets visible as lighter strips.\n"
+        "- A sun light and one camera framing the city from above at an angle.\n"
+        "- Give the scene and the main collections clear names.\n"
+        "- Save the scene as scene.blend. Do NOT render anything: no "
+        "preview.png, no frames directory, no images of any kind, and do not "
+        "call bpy.ops.render.\n\n"
+        "Output ONLY the complete Python script in a markdown code fence "
+        "starting with ```python and ending with ```. Do not include any other "
+        "text."
     ),
     checks=[
         SandboxCheck("script_defines_scene", "regex", r"(bpy\.ops\.mesh|primitive_cube|primitive_plane)", weight=2.0, critical=True),
-        SandboxCheck("has_grass_material", "regex", r"(grass|meadow|green)", weight=1.5),
-        SandboxCheck("has_tree", "regex", r"(tree|trunk|leaves|foliage)", weight=1.5),
-        SandboxCheck("has_chest", "regex", r"chest", weight=1.0),
+        SandboxCheck("has_buildings", "regex", r"(building|tower|block)", weight=1.5),
+        SandboxCheck("has_streets", "regex", r"(street|road|avenue)", weight=1.0),
+        SandboxCheck("has_park", "regex", r"(park|tree|foliage)", weight=1.0),
+        SandboxCheck("has_river", "regex", r"(river|water)", weight=1.0),
         SandboxCheck("has_camera", "regex", r"(Camera|camera)", weight=1.0),
         SandboxCheck("has_light", "regex", r"(Light|SUN|sun)", weight=1.0),
-        SandboxCheck("has_keyframes", "regex", r"keyframe_insert", weight=1.5),
-        SandboxCheck("has_frame_range", "regex", r"frame_(start|end)", weight=1.0),
         SandboxCheck("is_python_code", "custom", None, weight=2.0, critical=True),
         SandboxCheck("saves_blend", "regex", r"save_as_mainfile", weight=1.0, critical=True),
-        SandboxCheck("renders", "regex", r"bpy\.ops\.render", weight=1.0),
+        SandboxCheck("no_render", "regex", r"bpy\.ops\.render", weight=1.5, negate=True, critical=True),
         SandboxCheck("blend_runs", "custom", None, weight=1.0, critical=True),
         SandboxCheck("blend_is_binary", "custom", None, weight=2.0, critical=True),
         SandboxCheck("blend_min_size", "custom", None, weight=1.0, critical=True),
-        SandboxCheck("frames_rendered", "custom", None, weight=1.0),
+        SandboxCheck("blend_has_camera", "custom", None, weight=1.0),
+        SandboxCheck("blend_has_light", "custom", None, weight=1.0),
+        SandboxCheck("city_mesh_count", "custom", None, weight=2.0, critical=True),
+        SandboxCheck("city_height_variety", "custom", None, weight=1.5),
+        SandboxCheck("city_footprint", "custom", None, weight=1.0),
     ],
-    max_repair_attempts=2,
-    timeout_s=900.0,
-    max_output_tokens=6144,
+    max_repair_attempts=1,
+    timeout_s=300.0,
+    max_output_tokens=8192,
     network_allowed=False,
     allowed_executables=("blender",),
-    artifacts=("build_scene.py", "scene.blend", "frames/"),
+    artifacts=("build_scene.py", "scene.blend"),
 )
 
 
@@ -553,83 +584,6 @@ CREATIVE_3D_TASK = SandboxTask(
     artifacts=("scene.js",),
 )
 
-BLENDER_CITY_TASK = SandboxTask(
-    id="blender_city_bridge",
-    kind=SandboxTaskKind.BLENDER,
-    title="Small city with bridge",
-    prompt=(
-        "Write a Blender Python script that builds a small city of 4-6 cubic buildings of "
-        "varying heights connected by a bridge across a gap, with a sun light and a camera that "
-        "orbits the city. Set frame range 1-120, save scene.blend first, render the frames "
-        "into frames/ using a path relative to the saved file "
-        "(scene.render.filepath = '//frames/frame_'), and call "
-        "bpy.ops.render.render(animation=True). "
-        "Use primitive cubes for buildings and the bridge. Place buildings at varied locations "
-        "and heights. The bridge should connect two building clusters."
-    ),
-    checks=[
-        SandboxCheck("script_defines_scene", "regex", r"(bpy\.ops\.mesh|primitive_cube|primitive_plane)", weight=2.0, critical=True),
-        SandboxCheck("has_buildings", "regex", r"(cube|building|block)", weight=1.5),
-        SandboxCheck("has_bridge", "regex", r"(bridge|span|connect)", weight=1.5),
-        SandboxCheck("has_camera", "regex", r"(Camera|camera)", weight=1.0),
-        SandboxCheck("has_light", "regex", r"(Light|SUN|sun)", weight=1.0),
-        SandboxCheck("has_keyframes", "regex", r"keyframe_insert", weight=1.5),
-        SandboxCheck("has_frame_range", "regex", r"frame_(start|end)", weight=1.0),
-        SandboxCheck("is_python_code", "custom", None, weight=2.0, critical=True),
-        SandboxCheck("saves_blend", "regex", r"save_as_mainfile", weight=1.0, critical=True),
-        SandboxCheck("renders", "regex", r"bpy\.ops\.render", weight=1.0),
-        SandboxCheck("blend_runs", "custom", None, weight=1.0, critical=True),
-        SandboxCheck("blend_is_binary", "custom", None, weight=2.0, critical=True),
-        SandboxCheck("blend_min_size", "custom", None, weight=1.0, critical=True),
-        SandboxCheck("frames_rendered", "custom", None, weight=1.0),
-    ],
-    max_repair_attempts=2,
-    timeout_s=900.0,
-    max_output_tokens=6144,
-    network_allowed=False,
-    allowed_executables=("blender",),
-    artifacts=("build_scene.py", "scene.blend", "frames/"),
-)
-
-BLENDER_CITY_PREVIEW_TASK = SandboxTask(
-    id="blender_city",
-    kind=SandboxTaskKind.BLENDER,
-    title="Low-poly city with one preview",
-    prompt=(
-        "Write a Blender Python script that builds a simple low-poly city: "
-        "4-8 cubic buildings of varied heights on a ground plane, a road, "
-        "a sun light and a camera looking at the city. Save the scene first "
-        "as scene.blend, then render exactly ONE preview image named "
-        "preview.png (PNG, at least 640x480) using "
-        "bpy.ops.render.render(write_still=True). Do NOT render an animation "
-        "and do not create a frames/ directory. Output ONLY the complete "
-        "Python script in a markdown code fence starting with ```python and "
-        "ending with ```."
-    ),
-    checks=[
-        SandboxCheck("script_defines_scene", "regex", r"(bpy\.ops\.mesh|primitive_cube|primitive_plane)", weight=2.0, critical=True),
-        SandboxCheck("has_buildings", "regex", r"(building|cube|block)", weight=1.5),
-        SandboxCheck("has_ground", "regex", r"(ground|road|plane|floor)", weight=1.0),
-        SandboxCheck("has_camera", "regex", r"(Camera|camera)", weight=1.0),
-        SandboxCheck("has_light", "regex", r"(Light|SUN|sun)", weight=1.0),
-        SandboxCheck("is_python_code", "custom", None, weight=2.0, critical=True),
-        SandboxCheck("saves_blend", "regex", r"save_as_mainfile", weight=1.0, critical=True),
-        SandboxCheck("renders_still", "regex", r"write_still\s*=\s*True", weight=1.5),
-        SandboxCheck("no_animation", "regex", r"(animation\s*=\s*True|frame_end\s*=\s*[2-9])", weight=1.0, negate=True),
-        SandboxCheck("blend_runs", "custom", None, weight=1.0, critical=True),
-        SandboxCheck("blend_is_binary", "custom", None, weight=2.0, critical=True),
-        SandboxCheck("blend_min_size", "custom", None, weight=1.0, critical=True),
-        SandboxCheck("preview_rendered", "custom", None, weight=1.5, critical=True),
-    ],
-    max_repair_attempts=2,
-    timeout_s=300.0,
-    max_output_tokens=6144,
-    network_allowed=False,
-    allowed_executables=("blender",),
-    artifacts=("build_scene.py", "scene.blend", "preview.png"),
-)
-
-
 DEEP_RESEARCH_REPORT_TASK = SandboxTask(
     id="deep_research_report",
     kind=SandboxTaskKind.WEB,
@@ -714,14 +668,48 @@ DEEP_RESEARCH_ONLINE_TASK = SandboxTask(
 )
 
 
+DEEP_RESEARCH_AGENT_TASK = SandboxTask(
+    id="deep_research_agent",
+    kind=SandboxTaskKind.WEB,
+    title="Tool-using research agent (search + fetch trace)",
+    prompt=(
+        "You are a research agent with two tools, search(query) and fetch(url). "
+        "Use them repeatedly: search for sub-questions, fetch the most relevant "
+        "pages, and only then write the report. Answer the question 'What are "
+        "the real limits of running a 70B MoE model on consumer hardware with "
+        "24 GB VRAM?' Cite every factual claim with the id of a page you "
+        "actually fetched, for example [S1], and list those URLs in a "
+        "References section. Say explicitly what the sources do not answer.\n\n"
+        "Produce one self-contained HTML file (inline CSS, no external assets) "
+        "plus trace.json with the tool calls you made. Generate it with "
+        "python -m lm_optimizer.cli.main lab research \"<question>\" --model <model>."
+    ),
+    checks=[
+        SandboxCheck("index_html_exists", "files", ["index.html"], weight=1.0, critical=True),
+        SandboxCheck("html_document", "custom", None, weight=2.0, critical=True),
+        SandboxCheck("html_not_empty", "regex", r"<html[\s\S]{1000,}", weight=1.0, critical=True),
+        SandboxCheck("has_report_headings", "regex", r"(<h2|<h3)", weight=1.5),
+        SandboxCheck("min_words", "min_words", 600, weight=1.5),
+        SandboxCheck("cites_scraped_source", "regex", r"\[S[1-9]\d*\]", weight=2.0, critical=True),
+        SandboxCheck("distinct_citations", "distinct_citations", 3, weight=1.5),
+        SandboxCheck("has_references", "regex", r"(references|bibliography|sources)", weight=1.0),
+        SandboxCheck("traces_tools_used", "tools_used", None, weight=2.0, critical=True),
+    ],
+    max_repair_attempts=1,
+    timeout_s=300.0,
+    max_output_tokens=8192,
+    network_allowed=False,
+    allowed_executables=(),
+    artifacts=("index.html", "trace.json"),
+)
+
+
 SANDBOX_TASKS: dict[str, SandboxTask] = {
     t.id: t
     for t in (
         WEB_TASK,
         RESEARCH_TASK,
-        BLENDER_TASK,
         BLENDER_CITY_TASK,
-        BLENDER_CITY_PREVIEW_TASK,
         EMAIL_TASK,
         CALENDAR_TASK,
         EMAIL_CALENDAR_TASK,
@@ -730,6 +718,7 @@ SANDBOX_TASKS: dict[str, SandboxTask] = {
         DEEP_RESEARCH_TASK,
         DEEP_RESEARCH_REPORT_TASK,
         DEEP_RESEARCH_ONLINE_TASK,
+        DEEP_RESEARCH_AGENT_TASK,
         CREATIVE_3D_TASK,
         MINECRAFT_WORLD_TASK,
     )
@@ -1113,6 +1102,28 @@ def score_attempt(
             except Exception:
                 ok = False
                 detail = "invalid json"
+        elif check.kind == "tools_used":
+            raw = files.get("trace.json", "")
+            try:
+                trace = json.loads(_strip_md_fences(raw)) if raw else []
+            except json.JSONDecodeError:
+                trace = []
+            calls = [
+                item
+                for item in trace
+                if isinstance(item, dict) and item.get("tool") in ("search", "fetch")
+            ]
+            fetches = [
+                item
+                for item in calls
+                if item.get("tool") == "fetch" and item.get("ok") is not False
+            ]
+            urls = {str(item.get("argument") or "") for item in fetches}
+            ok = len(calls) >= 3 and len(fetches) >= 2 and len(urls) >= 2
+            detail = (
+                f"{len(calls)} tool call(s), {len(fetches)} fetch(es), "
+                f"{len(urls)} distinct URL(s)"
+            )
         elif check.kind == "distinct_citations":
             combined = "\n".join(files.values())
             ids = set(re.findall(r"\[S(\d+)\]", combined))

@@ -2578,7 +2578,7 @@ def optimize(
 
         help="Scheduled artifact test run last on the winner: company_website, "
 
-        "blender_skyblock, research_synthesis, or custom:<path.json>",
+        "blender_city, research_synthesis, or custom:<path.json>",
 
     ),
 

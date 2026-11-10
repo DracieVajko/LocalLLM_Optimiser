@@ -26,7 +26,6 @@ TASKS = {
     "minecraft_world": "index.html",
     "company_website": "index.html",
     "email_write": "email.txt",
-    "blender_skyblock": "build_scene.py",
     "blender_city": "build_scene.py",
     "deep_research_report": "index.html",
 }

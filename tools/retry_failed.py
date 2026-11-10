@@ -58,13 +58,12 @@ PLAN: list[tuple[str, str, list[str], str]] = [
     ),
     (
         "openai-gpt-oss-20b-claude-4.5-opus-heretic-uncensored-i1",
-        "email_write,company_website,blender_skyblock",
+        "email_write,company_website,blender_city",
         ["--safe", "--no-thinking"],
         "syntax errors and reasoning dump",
     ),
     (
         "nvidia-nemotron-3.5-bolt-e4b",
-        "blender_skyblock",
         ["--safe", "--no-thinking"],
         "bpy.ops.scene.clear does not exist",
     ),

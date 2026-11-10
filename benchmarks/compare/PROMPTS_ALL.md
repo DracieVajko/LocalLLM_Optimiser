@@ -113,19 +113,33 @@ python tools/compare_models.py --provider chatgpt --task blender_city --clipboar
 Prompt:
 
 ```text
-Write a Blender Python script that builds a simple low-poly city: 4-8 cubic buildings of varied heights on a ground plane, a road, a sun light and a camera looking at the city. Save the scene first as scene.blend, then render exactly ONE preview image named preview.png (PNG, at least 640x480) using bpy.ops.render.render(write_still=True). Do NOT render an animation and do not create a frames/ directory. Output ONLY the complete Python script in a markdown code fence starting with ```python and ending with ```.
-```
+Build a dense low-poly city in Blender from the map excerpt below. Each character is one 4 m cell and the grid is 12 x 12 cells.
 
-## blender_skyblock
+MAP (rows top to bottom):
+##..##..##..
+##..##..##..
+............
+##..##..##..
+##..##..##..
+~~~~~~~~~~~~
+PP..##..##..
+##..##..##..
+............
+##..##..##..
+##..##..##..
+............
 
-Save the answer as `build_scene.py` via:
+Legend: '#' is a city block that must contain 2-4 separate buildings, '.' is a street (keep it clear of buildings, 2 cells wide), '~' is a river running across the city, 'P' is a park with trees.
 
-```powershell
-python tools/compare_models.py --provider chatgpt --task blender_skyblock --clipboard
-```
+Requirements:
+- Build the entire grid, not a subset: at least 60 buildings total, spread over every '#' block.
+- Vary the heights: ordinary buildings 2-8 floors, at least 3 landmark towers of 20 m or more, so the skyline is not flat.
+- The park needs at least 4 trees (trunk plus foliage).
+- The river must be a separate flat mesh, not a hole in the ground.
+- One ground plane under everything, streets visible as lighter strips.
+- A sun light and one camera framing the city from above at an angle.
+- Give the scene and the main collections clear names.
+- Save the scene as scene.blend. Do NOT render anything: no preview.png, no frames directory, no images of any kind, and do not call bpy.ops.render.
 
-Prompt:
-
-```text
-Write a Blender Python script named build_scene.py that builds a floating block island scene: a grass/dirt/stone block island, a tree, a chest, a block avatar, a sun light, and a camera that orbits the island. Save the .blend file as scene.blend first, then render frames 1-120 into the frames/ directory with a path relative to the saved file (scene.render.filepath = '//frames/frame_') and call bpy.ops.render.render(animation=True). Output ONLY the complete Python script in a markdown code fence, starting with ```python and ending with ```. Do not include any other text.
+Output ONLY the complete Python script in a markdown code fence starting with ```python and ending with ```. Do not include any other text.
 ```

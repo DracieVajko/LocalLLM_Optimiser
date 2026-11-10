@@ -377,8 +377,9 @@ that are NOT the runtime optimizer:
 - `web_fetch_brief` - JSON with tool=web_fetch, url, title, facts or error; never invents facts.
 - `minecraft_world` - single self-contained HTML file with a Minecraft-style voxel world (Three.js from a CDN, procedural island, camera orbit). `--scene "..."` customises the scene (fewer trees, a lighthouse, more flowers) while keeping the skyblock base.
 - `company_website` - single-file marketing website for a fictional consultancy: sticky nav, hero, services, about, testimonial, contact form, footer, responsive with a real media query. No external assets.
-- `blender_city` - static low-poly city: saves `scene.blend` and renders one `preview.png` (no animation). See [`docs/benchmarks/blender_city.md`](docs/benchmarks/blender_city.md).
+- `blender_city` - dense low-poly city built from a fixed 12x12 map excerpt (60+ buildings, park, river, landmarks), saved as an openable `scene.blend`. **No renders, no PNGs.** See [`docs/benchmarks/blender_city.md`](docs/benchmarks/blender_city.md).
 - `deep_research_report` - offline deep-research HTML report scored with a deterministic RACE/FACT-style rubric. See [`docs/benchmarks/deep_research.md`](docs/benchmarks/deep_research.md).
+- `deep_research_agent` - report produced by the tool-calling agent (`lab research --mode agent`); requires `trace.json` with real search/fetch calls, not just citations.
 
 All agentic tasks run offline (`network_allowed=false`) with an evidence-only repair loop: on failure the model gets the failing checks, not the solution.
 
@@ -424,38 +425,42 @@ $env:MODEL_GATE_MAX_LOADED_MODELS="2"
 
 ## Blender / 3D sandbox requirements
 
-The `blender_skyblock`, `blender_city` and `blender_city_bridge` sandbox tasks (and duel type `blender`) need **Blender installed on the host** - they run the model-generated Python script through `blender --background --python build_scene.py`, then validate that a real `scene.blend` binary was produced and (for skyblock/city_bridge) frames were rendered. `blender_city` renders one `preview.png` instead of an animation.
+The `blender_city` sandbox task (and duel type `blender`) needs **Blender
+installed on the host**. It runs the model-generated Python script through
+`blender --background --python build_scene.py`, opens the saved `scene.blend`,
+and validates structure (mesh count, height variety, footprint, camera, light).
+Nothing is rendered: the task forbids `bpy.ops.render`, so no PNGs are produced.
 
-- The sandbox runner and duel execute `blender` from `PATH`. Add the Blender install directory to `PATH` for the process that runs the CLI.
-- `BLENDER_PATH` is honoured by `tools/preview_blender.py` (preview/launch helper), **not** by the sandbox runner.
-- On Windows the default install is typically `C:\Program Files\Blender Foundation\Blender <version>\blender.exe` — if you installed via the Windows Store or elsewhere, add that directory to `PATH`.
-- Without Blender the task still runs but fails on `blend_is_binary` / `frames_rendered` - that is **expected behavior, not a code bug**. The text-generation tasks (`company_website`, `email_write`, etc.) work without Blender.
+- The sandbox runner and duel execute `blender` from `PATH`. Add the Blender
+  install directory to `PATH` for the process that runs the CLI.
+- `BLENDER_PATH` is honoured by `tools/preview_blender.py` (a viewer helper),
+  **not** by the sandbox runner.
+- On Windows the default install is typically `C:\Program Files\Blender
+  Foundation\Blender <version>\blender.exe`.
+- Without Blender the task fails on `blend_runs` / `blend_is_binary` - that is
+  **expected behavior, not a code bug**. The text-generation tasks
+  (`company_website`, `email_write`, etc.) work without Blender.
 
 Per-call (Windows PowerShell):
 
 ```powershell
-$env:PATH += ";C:\Program Files\Blender Foundation\Blender 4.2"
-python -m lm_optimizer.cli.main lab sandbox --task blender_skyblock --model <model-id>
+$env:PATH += ";C:\Program Files\Blender Foundation\Blender 5.3"
+python -m lm_optimizer.cli.main lab sandbox --task blender_city --model <model-id>
 ```
 
-Permanent (Windows): add the Blender install directory to the user `Path` environment variable, then open a new terminal. `tools/preview_blender.py` additionally accepts `BLENDER_PATH` or `--blender`.
+Permanent (Windows): add the Blender install directory to the user `Path`
+environment variable, then open a new terminal.
 
-Model scripts must save `scene.blend` **before** rendering and use a path
-relative to the saved file (`scene.render.filepath = '//frames/frame_'`).
-In Blender a bare `frames/` path resolves against the drive root (`C:\frames`),
-not against the process working directory.
+The script must save `scene.blend` with `bpy.ops.wm.save_as_mainfile`. The
+produced file is copied to `results/blends/<model>/blender_city/<stamp>.blend`,
+so it survives cleaning of the scratch workdir and can be opened in Blender.
 
-### Verified 3D output (2026-11-09)
+### Verified 3D output (2026-11-10)
 
-![Minecraft-style skyblock frame rendered by nvidia-nemotron-3.5-bolt-e4b](docs/benchmarks/blender_skyblock_e4b_frame_0001.png)
-
-`nvidia-nemotron-3.5-bolt-e4b` generated `build_scene.py` for `blender_skyblock`;
-the harness ran it with Blender 5.2 and validated the real artifacts:
-
-- 120 PNG frames in `frames/` at 1920x1080 (source frame shown above, downscaled to 1280x720)
-- `scene.blend` (123,586 bytes), zstd-compressed by Blender 3.0+
-- final score 0.9091; the only miss was `keyframe_insert` (the camera used a `TRACK_TO` constraint instead of keyframes)
-- run directory: `results/sandbox/blender_skyblock/20261109_134002/` (gitignored)
+`benchmarks/deepseek_agent/blender_city/build_scene.py` builds the full 12x12
+map grid (60+ buildings, park, river, landmarks), saves `scene.blend` and
+scores **1.0** with Blender 5.3 in about 35 seconds. The file is collected under
+`results/blends/` and is the artifact to inspect - there is no rendered image.
 
 This is an actual render, not a mock. The harness accepts uncompressed,
 zstd-compressed and gzip-compressed `.blend` files, runs Blender once per

@@ -62,8 +62,7 @@ def test_lab_sandbox_tasks_endpoint(client):
     assert {
         "company_website",
         "research_synthesis",
-        "blender_skyblock",
-        "blender_city_bridge",
+        "blender_city",
         "creative_3d_voxel_island",
         "email_write",
         "calendar_event",
@@ -75,6 +74,7 @@ def test_lab_sandbox_tasks_endpoint(client):
         "blender_city",
         "deep_research_report",
         "deep_research_online",
+        "deep_research_agent",
     } == ids
     for task in tasks:
         assert task["checks"]

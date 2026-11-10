@@ -7,7 +7,7 @@ it is measured around the single chat call and thinking is enabled explicitly.
 
 Examples:
     python tools/model_bakeoff.py --models qwen9b,e4b --tasks email_write,company_website
-    python tools/model_bakeoff.py --models all --tasks company_website,blender_skyblock
+    python tools/model_bakeoff.py --models all --tasks company_website,blender_city
     python tools/model_bakeoff.py --models bonsai --tasks email_write,company_website --vram-only
 """
 
@@ -44,7 +44,7 @@ CANDIDATES = {
     "gptoss": "openai-gpt-oss-20b-claude-4.5-opus-heretic-uncensored-i1",
 }
 
-DEFAULT_TASKS = "email_write,company_website,blender_skyblock"
+DEFAULT_TASKS = "email_write,company_website,blender_city"
 DEFAULT_ROOT = Path("results") / "bakeoff"
 
 

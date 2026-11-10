@@ -145,13 +145,17 @@ def test_email_without_subject_vetoes_on_critical_check(tmp_path):
 
 
 def test_blender_scoring_accepts_valid_artifacts():
-    task = SANDBOX_TASKS["blender_skyblock"]
-    files = {"build_scene.py": _read("blender_skyblock", "build_scene.py")}
+    task = SANDBOX_TASKS["blender_city"]
+    files = {"build_scene.py": _read("blender_city", "build_scene.py")}
     custom = {
         "blend_runs": (True, "exit=0"),
-        "blend_is_binary": (True, "size=2530753"),
-        "blend_min_size": (True, "size=2530753"),
-        "frames_rendered": (True, "120 frame(s) rendered"),
+        "blend_is_binary": (True, "size=900000"),
+        "blend_min_size": (True, "size=900000"),
+        "blend_has_camera": (True, "cameras=1"),
+        "blend_has_light": (True, "lights=1"),
+        "city_mesh_count": (True, "meshes=80 (min 60), vertices=900"),
+        "city_height_variety": (True, "tall(>=15m)=6, max=31.2m"),
+        "city_footprint": (True, "size=[48.0, 48.0, 32.0]"),
     }
     score, failing, critical = score_attempt(
         task, files, custom_results=custom, exit_code=0
@@ -162,13 +166,13 @@ def test_blender_scoring_accepts_valid_artifacts():
 
 
 def test_blender_scoring_vetoes_when_command_or_artifacts_fail():
-    task = SANDBOX_TASKS["blender_skyblock"]
-    files = {"build_scene.py": _read("blender_skyblock", "build_scene.py")}
+    task = SANDBOX_TASKS["blender_city"]
+    files = {"build_scene.py": _read("blender_city", "build_scene.py")}
     custom = {
         "blend_runs": (False, "exit=1"),
         "blend_is_binary": (False, "scene.blend not created"),
         "blend_min_size": (False, "no .blend file"),
-        "frames_rendered": (False, "no frames directory"),
+        "city_mesh_count": (False, "meshes=0"),
     }
     score, failing, critical = score_attempt(
         task, files, custom_results=custom, exit_code=1

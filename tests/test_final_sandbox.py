@@ -85,7 +85,7 @@ def test_builtin_registry_is_single_source_of_truth():
     assert set(BUILTIN_TASKS) >= {
         "company_website",
         "research_synthesis",
-        "blender_skyblock",
+        "blender_city",
     }
 
 

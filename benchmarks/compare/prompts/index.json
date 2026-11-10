@@ -22,11 +22,6 @@
   "blender_city": {
     "artifact": "build_scene.py",
     "prompt_file": "blender_city.txt",
-    "title": "Low-poly city with one preview"
-  },
-  "blender_skyblock": {
-    "artifact": "build_scene.py",
-    "prompt_file": "blender_skyblock.txt",
-    "title": "Minecraft-inspired Skyblock scene"
+    "title": "Dense low-poly city from a map excerpt"
   }
 }

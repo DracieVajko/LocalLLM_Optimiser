@@ -1665,8 +1665,14 @@ def score_report(
 def research(
     question: str = typer.Argument(..., help="Research question"),
     model: str = typer.Option(..., "--model", help="Model id to use"),
-    queries: int = typer.Option(4, "--queries", help="How many sub-queries to plan"),
+    mode: str = typer.Option(
+        "agent",
+        "--mode",
+        help="agent: the model calls search/fetch itself; pipeline: plan, scrape, write",
+    ),
+    queries: int = typer.Option(4, "--queries", help="Sub-queries (pipeline) or step budget hint"),
     sources: int = typer.Option(6, "--sources", help="Maximum scraped sources"),
+    steps: int = typer.Option(8, "--steps", help="Maximum agent tool calls"),
     context: int = typer.Option(8192, "--context", help="Context length for the model"),
     out: Path = typer.Option(
         Path("results") / "research", "--out", help="Directory for the report"
@@ -1674,18 +1680,17 @@ def research(
     safe: bool = typer.Option(True, "--safe/--no-safe", help="Conservative load config"),
     thinking: bool = typer.Option(False, "--thinking/--no-thinking"),
 ):
-    """Run an online deep-research pass: plan, search, scrape, write a report."""
+    """Online deep research: the model calls real search/fetch tools and writes a report."""
     from datetime import datetime
 
     from lm_optimizer.services.model_gate import ModelGate, ModelGateTimeout
     from lm_optimizer.services.web_research import (
-        ResearchResult,
         WebResearcher,
         build_report_prompt,
         plan_queries,
     )
 
-    async def _run() -> ResearchResult:
+    async def _run() -> dict:
         from lm_optimizer.cli.main import get_client
         from lm_optimizer.services.bakeoff import _load_config
 
@@ -1711,57 +1716,86 @@ def research(
             return (response.get("choices") or [{}])[0].get("message", {}).get("content", "")
 
         try:
-            planned = await plan_queries(question, ask, count=queries)
-            console.print(f"[cyan]Queries:[/cyan] {planned}")
             researcher = WebResearcher(queries=queries, max_sources=sources)
             try:
-                collected, warnings = await researcher.collect(planned)
+                if mode == "pipeline":
+                    planned = await plan_queries(question, ask, count=queries)
+                    console.print(f"[cyan]Queries:[/cyan] {planned}")
+                    collected, warnings = await researcher.collect(planned)
+                    if not collected:
+                        raise RuntimeError("no sources could be scraped; check the network")
+                    console.print(f"[cyan]Sources:[/cyan] {len(collected)} scraped")
+                    report = await ask(
+                        build_report_prompt(question, collected), max_tokens=8192
+                    )
+                    from lm_optimizer.services.research_agent import extract_html
+
+                    return {
+                        "report_html": extract_html(report),
+                        "sources": collected,
+                        "queries": planned,
+                        "trace": [],
+                        "warnings": warnings,
+                    }
+
+                from lm_optimizer.services.research_agent import ResearchAgent
+
+                agent = ResearchAgent(ask, researcher, max_steps=steps)
+                result = await agent.run(question)
+                console.print(
+                    f"[cyan]Tool calls:[/cyan] {result.tool_calls} "
+                    f"(fetch {result.fetches})"
+                )
+                if not result.sources:
+                    raise RuntimeError(
+                        "the model fetched no pages; try --mode pipeline or another model"
+                    )
+                return {
+                    "report_html": result.report_html,
+                    "sources": result.sources,
+                    "queries": [],
+                    "trace": result.trace_payload(),
+                    "warnings": result.warnings,
+                }
             finally:
                 await researcher.close()
-            if not collected:
-                raise RuntimeError("no sources could be scraped; check the network")
-            console.print(f"[cyan]Sources:[/cyan] {len(collected)} scraped")
-            report = await ask(build_report_prompt(question, collected), max_tokens=8192)
         finally:
             await gate.release(lease)
             await client.close()
 
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        slug = "".join(c if c.isalnum() else "_" for c in question)[:48] or "research"
-        out_dir = out / f"{slug}_{stamp}"
-        (out_dir / "raw").mkdir(parents=True, exist_ok=True)
-        for source in collected:
-            (out_dir / "raw" / f"{source.id}.txt").write_text(
-                f"{source.title}\n{source.url}\n\n{source.text}", encoding="utf-8"
-            )
-        return ResearchResult(
-            question=question,
-            queries=planned,
-            sources=collected,
-            report_html=report,
-            out_dir=out_dir,
-            warnings=warnings,
+    payload = asyncio.run(_run())
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    slug = "".join(c if c.isalnum() else "_" for c in question)[:48] or "research"
+    out_dir = out / f"{slug}_{stamp}"
+    (out_dir / "raw").mkdir(parents=True, exist_ok=True)
+    for source in payload["sources"]:
+        (out_dir / "raw" / f"{source.id}.txt").write_text(
+            f"{source.title}\n{source.url}\n\n{source.text}", encoding="utf-8"
         )
-
-    result = asyncio.run(_run())
-    result.out_dir.mkdir(parents=True, exist_ok=True)
-    (result.out_dir / "report.html").write_text(result.report_html, encoding="utf-8")
-    (result.out_dir / "sources.json").write_text(
+    (out_dir / "report.html").write_text(payload["report_html"], encoding="utf-8")
+    (out_dir / "sources.json").write_text(
         json.dumps(
             {
-                "question": result.question,
-                "queries": result.queries,
-                "warnings": result.warnings,
-                "sources": result.sources_payload(),
+                "question": question,
+                "queries": payload["queries"],
+                "warnings": payload["warnings"],
+                "sources": [
+                    {"id": s.id, "title": s.title, "url": s.url, "query": s.query}
+                    for s in payload["sources"]
+                ],
             },
             indent=2,
             ensure_ascii=False,
         ),
         encoding="utf-8",
     )
-    console.print(f"[green]Report:[/green] {result.out_dir / 'report.html'}")
-    console.print(f"[green]Sources:[/green] {result.out_dir / 'sources.json'}")
-    for warning in result.warnings:
+    (out_dir / "trace.json").write_text(
+        json.dumps(payload["trace"], indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    console.print(f"[green]Report:[/green] {out_dir / 'report.html'}")
+    console.print(f"[green]Sources:[/green] {out_dir / 'sources.json'}")
+    console.print(f"[green]Trace:[/green] {out_dir / 'trace.json'}")
+    for warning in payload["warnings"]:
         console.print(f"[yellow]{warning}[/yellow]")
 
 

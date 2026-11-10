@@ -20,7 +20,6 @@ Task → artifact:
 | Task | Artifact |
 |---|---|
 | `blender_city` | `build_scene.py` |
-| `blender_skyblock` | `build_scene.py` |
 | `deep_research_report` | `index.html` |
 | `email_write` | `email.txt` |
 | `minecraft_world` | `index.html` |

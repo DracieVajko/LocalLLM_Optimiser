@@ -1,98 +1,175 @@
-"""Low-poly city: save scene.blend and render exactly one preview image."""
+"""Dense low-poly city built from the benchmark map excerpt.
 
-import math
-import os
+Layout: 12 x 12 cells, one cell is 4 m. '#' blocks hold three buildings each,
+'P' is a park with trees, '~' is a river, '.' are streets. The scene is saved
+as scene.blend and nothing is rendered.
+"""
+
+import random
 
 import bpy
 from mathutils import Vector
 
+CELL = 4.0
+MAP = [
+    "##..##..##..",
+    "##..##..##..",
+    "............",
+    "##..##..##..",
+    "##..##..##..",
+    "~~~~~~~~~~~~",
+    "PP..##..##..",
+    "##..##..##..",
+    "............",
+    "##..##..##..",
+    "##..##..##..",
+    "............",
+]
 
-def material(name, color):
+random.seed(7)
+
+
+def material(name, color, roughness=0.85):
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
     bsdf = mat.node_tree.nodes.get("Principled BSDF")
     if bsdf is not None:
         bsdf.inputs["Base Color"].default_value = (*color, 1.0)
-        bsdf.inputs["Roughness"].default_value = 0.9
+        bsdf.inputs["Roughness"].default_value = roughness
     return mat
 
 
-def cube(name, location, scale, mat):
-    bpy.ops.mesh.primitive_cube_add(size=1, location=location)
+def box(name, location, size, mat, collection):
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=location)
     obj = bpy.context.object
     obj.name = name
-    obj.scale = scale
+    obj.scale = size
     obj.data.materials.append(mat)
+    for coll in list(obj.users_collection):
+        coll.objects.unlink(obj)
+    collection.objects.link(obj)
     return obj
 
 
-def build_city():
-    bpy.ops.object.select_all(action="SELECT")
-    bpy.ops.object.delete(use_global=False)
+def plane(name, location, size, mat, collection):
+    bpy.ops.mesh.primitive_plane_add(size=1.0, location=location)
+    obj = bpy.context.object
+    obj.name = name
+    obj.scale = (size[0], size[1], 1.0)
+    obj.data.materials.append(mat)
+    for coll in list(obj.users_collection):
+        coll.objects.unlink(obj)
+    collection.objects.link(obj)
+    return obj
 
-    road = material("Road", (0.16, 0.17, 0.19))
-    wall = material("Wall", (0.62, 0.62, 0.66))
-    wall_blue = material("WallBlue", (0.30, 0.42, 0.62))
-    wall_warm = material("WallWarm", (0.72, 0.58, 0.40))
-    roof = material("Roof", (0.45, 0.16, 0.14))
-    green = material("Green", (0.16, 0.48, 0.20))
 
-    # Ground and a simple road strip.
-    bpy.ops.mesh.primitive_plane_add(size=60, location=(0, 0, 0))
-    ground = bpy.context.object
-    ground.name = "Ground"
-    ground.data.materials.append(green)
+def new_collection(name):
+    coll = bpy.data.collections.new(name)
+    bpy.context.scene.collection.children.link(coll)
+    return coll
 
-    cube("Road", (0, 0, 0.02), (30, 4, 0.04), road)
 
-    # Six low-poly buildings with varied heights, all on the ground plane.
-    specs = [
-        ("BuildingA", (-9, -3, 3.0), (4, 4, 6.0), wall),
-        ("BuildingB", (-3, -3, 4.5), (4, 4, 9.0), wall_blue),
-        ("BuildingC", (3, -3, 2.5), (4, 4, 5.0), wall_warm),
-        ("BuildingD", (9, -3, 3.5), (4, 4, 7.0), wall),
-        ("BuildingE", (-6, 5, 2.0), (4, 4, 4.0), wall_warm),
-        ("BuildingF", (6, 5, 4.0), (4, 4, 8.0), wall_blue),
+def main():
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    scene = bpy.context.scene
+
+    ground_mat = material("Ground", (0.16, 0.17, 0.16))
+    street_mat = material("Street", (0.36, 0.36, 0.38))
+    park_mat = material("Park", (0.13, 0.42, 0.18))
+    water_mat = material("River", (0.09, 0.30, 0.55), roughness=0.15)
+    trunk_mat = material("Trunk", (0.29, 0.19, 0.11))
+    leaf_mat = material("Leaves", (0.10, 0.35, 0.14))
+    facade = [
+        material("FacadeWarm", (0.66, 0.55, 0.42)),
+        material("FacadeStone", (0.55, 0.56, 0.58)),
+        material("FacadeBlue", (0.32, 0.42, 0.55)),
+        material("FacadeSand", (0.72, 0.66, 0.54)),
+        material("FacadeSlate", (0.30, 0.32, 0.36)),
     ]
-    for name, location, scale, mat in specs:
-        cube(name, location, scale, mat)
-        # Flat roof cap.
-        cube(name + "Roof", (location[0], location[1], location[2] + scale[2] / 2 + 0.15),
-             (scale[0] + 0.4, scale[1] + 0.4, 0.3), roof)
+    roof_mat = material("Roof", (0.22, 0.14, 0.12))
 
-    # Street lamps: thin poles with a warm block on top.
-    for x in (-12, 0, 12):
-        cube("LampPole", (x, 2.5, 1.0), (0.15, 0.15, 2.0), road)
-        cube("Lamp", (x, 2.5, 2.1), (0.5, 0.5, 0.3), roof)
+    city = new_collection("City")
+    terrain = new_collection("Terrain")
+    water = new_collection("River")
+    trees = new_collection("Trees")
+    streets = new_collection("Streets")
 
-    # Sun and camera.
-    bpy.ops.object.light_add(type="SUN", location=(15, -12, 20))
+    size = len(MAP) * CELL
+    half = size / 2.0
+    plane("Ground", (0, 0, 0), (size, size), ground_mat, terrain)
+
+    # Street strips: every cell that is '.', one thin plane per run.
+    for row, line in enumerate(MAP):
+        for col, cell in enumerate(line):
+            if cell != ".":
+                continue
+            x = (col + 0.5) * CELL - half
+            y = half - (row + 0.5) * CELL
+            plane(f"Street_{row}_{col}", (x, y, 0.02), (CELL, CELL), street_mat, streets)
+
+    buildings = 0
+    landmarks = 0
+    for row, line in enumerate(MAP):
+        for col, cell in enumerate(line):
+            x = (col + 0.5) * CELL - half
+            y = half - (row + 0.5) * CELL
+            if cell == "P":
+                plane(f"Park_{row}_{col}", (x, y, 0.03), (CELL, CELL), park_mat, terrain)
+                for index in range(3):
+                    tx = x + random.uniform(-1.2, 1.2)
+                    ty = y + random.uniform(-1.2, 1.2)
+                    box(f"TreeTrunk_{row}_{col}_{index}", (tx, ty, 0.9),
+                        (0.28, 0.28, 1.8), trunk_mat, trees)
+                    box(f"TreeLeaves_{row}_{col}_{index}", (tx, ty, 2.4),
+                        (1.5, 1.5, 1.3), leaf_mat, trees)
+            elif cell == "#":
+                spots = [(-1.9, -1.9), (1.9, -1.9), (0.0, 1.9)]
+                for index, (dx, dy) in enumerate(spots):
+                    if landmarks < 4 and random.random() < 0.12:
+                        height = random.uniform(21.0, 32.0)
+                        landmarks += 1
+                    else:
+                        height = random.uniform(6.0, 17.0)
+                    name = f"Building_{row}_{col}_{index}"
+                    box(name, (x + dx, y + dy, height / 2.0),
+                        (3.4, 3.4, height), random.choice(facade), city)
+                    box(name + "_Roof", (x + dx, y + dy, height + 0.2),
+                        (3.6, 3.6, 0.4), roof_mat, city)
+                    buildings += 1
+            elif cell == "~":
+                plane(f"Water_{row}_{col}", (x, y, 0.04), (CELL, CELL), water_mat, water)
+
+    # Landmark towers on the central avenue if randomness produced too few.
+    while landmarks < 4:
+        x = random.uniform(-half + 6, half - 6)
+        y = random.uniform(-half + 6, half - 6)
+        height = random.uniform(24.0, 34.0)
+        box(f"Landmark_{landmarks}", (x, y, height / 2.0), (5.0, 5.0, height),
+            facade[-1], city)
+        landmarks += 1
+        buildings += 1
+
+    bpy.ops.object.light_add(type="SUN", location=(30, -35, 60))
     sun = bpy.context.object
     sun.name = "SunLight"
-    sun.data.energy = 3.0
-    sun.rotation_euler = (math.radians(45), 0, math.radians(30))
+    sun.data.energy = 3.5
+    sun.rotation_euler = (0.7, 0.15, 0.9)
 
-    bpy.ops.object.camera_add(location=(26, -26, 20))
+    bpy.ops.object.camera_add(location=(half + 16, -half - 16, 42))
     camera = bpy.context.object
     camera.name = "CityCamera"
-    target = Vector((0, 0, 3))
+    target = Vector((0.0, 0.0, 6.0))
     direction = target - camera.location
     camera.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
-    bpy.context.scene.camera = camera
+    scene.camera = camera
+    camera.data.lens = 38
 
-    scene = bpy.context.scene
-    scene.render.resolution_x = 800
-    scene.render.resolution_y = 600
-    scene.render.image_settings.file_format = "PNG"
+    scene.render.resolution_x = 1280
+    scene.render.resolution_y = 720
 
-    # Save the .blend first; the preview is relative to the saved file.
-    bpy.ops.wm.save_as_mainfile(
-        filepath=os.path.abspath("scene.blend"), compress=False
-    )
-    scene.render.filepath = "//preview.png"
-    bpy.ops.render.render(write_still=True)
-    print("Saved scene.blend and preview.png")
+    bpy.ops.wm.save_as_mainfile(filepath="scene.blend", compress=True)
+    print(f"City saved: {buildings} buildings, {landmarks} landmarks")
 
 
 if __name__ == "__main__":
-    build_city()
+    main()
