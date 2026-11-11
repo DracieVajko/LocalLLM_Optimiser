@@ -26,10 +26,26 @@ LM Studio could not load or generate at all, so no artifact exists.
 | `swift-qwen3.8-27b` | blender | 0.0 | Model bug with thinking on: reasoning prose is written *into* `build_scene.py` (`line 66: SyntaxError: unterminated string literal`). Retried with `--no-thinking`. |
 | `qwen3.8-9b-distill` | web | 0.84 | Model weakness: no `@media` query and no table/grid layout. The retry with `--no-thinking` produces real HTML now (it scored 0.0 before because the file was prose). |
 | `qwen3.8-9b-distill` | email | 0.73 | Model weakness: attempt 0 lacked a closing (`has_closing`), repair attempt 1 introduced a bracketed placeholder. |
-| `prism-ml/bonsai-27b` | web | **1.0** | — |
-| `prism-ml/bonsai-27b` | minecraft, email | **1.0** | Fixed by `--no-thinking`: minecraft 140 s at 22 tok/s, email 3 s at 25 tok/s. The first run's failures were reasoning leakage, not capability. |
-| `google/gemma-4-26b-a4b-qat` | email | **1.0** | Fixed by `--no-thinking` (161 s at 0.4 tok/s). The earlier "engine 500" was the reasoning path, not a dead engine. |
-| `google/gemma-4-26b-a4b-qat` | blender_skyblock | 0.0 | Model bug: the script starts mid-file with an indented `def create_material(...)` → `IndentationError` at line 1. |
+| `prism-ml/bonsai-27b` | minecraft | 0.0 | Retried with `--no-thinking` (183020 run): still a blank page (dark 99 %, sd 23). The model produces a dark scene even without reasoning. |
+| `prism-ml/bonsai-27b` | web/email | 1.0 | Fixed by `--no-thinking` (minecraft is the only remaining failure). |
+| `swift-qwen3.8-27b` | company/web | 1.0 | Fixed by `--no-thinking`. |
+| `swift-qwen3.8-27b` | blender_city | 0.0 | Still fails: `location=(0.5, -1, 0.6])` bracket mismatch in all three attempts. |
+| `qwen3.8-9b-distill` | company_website | 0.85 | Real HTML now, but no `@media` and no table/grid layout. |
+| `qwen3.8-9b-distill` | email | 0.73 | Attempt 0 lacked a closing; attempt 1 introduced a bracketed placeholder. |
+| `google/gemma-4-26b-a4b-qat` | email | 1.0 | Fixed by `--no-thinking` (161 s at 0.4 tok/s). |
+| `google/gemma-4-26b-a4b-qat` | web | timeout | Timed out after 45 min during web_dashboard on the retry. |
+| `qwen/qwen3.6-35b-a3b` | email | not measured | Engine 500 on chat (timeout during the retry). |
+| `qwen3.8-27b-twin-turbo-...` | email | not measured | Engine 500 on chat. |
+| `openai-gpt-oss-20b-...-heretic` | company_website | 1.0 | Fixed. |
+| `openai-gpt-oss-20b-...-heretic` | email | 0.0 | Reasoning dump instead of an email. |
+| `openai-gpt-oss-20b-...-heretic` | minecraft | 0.0 | Flat render (single tone, sd 0). |
+| `openai-gpt-oss-20b-...-heretic` | blender_city | 0.0 | Bracket mismatch in `verts = [...]`. |
+| `nvidia-nemotron-3.5-bolt-74b-a9b` | company_website | 1.0 | 25.7 min at 0.4 tok/s. |
+| `nvidia-nemotron-3.5-bolt-74b-a9b` | minecraft | 0.0 | Duplicate `generateWorld` + no Three.js CDN script. |
+| `nvidia-nemotron-3.5-bolt-e4b` | company_website | 1.0 | — |
+| `nvidia-nemotron-3.5-bolt-e4b` | blender_city | 1.0 | — |
+| `nvidia-nemotron-3.5-bolt-e4b` | minecraft | 1.0 | — |
+| `nvidia-nemotron-3.5-bolt-e4b` | email | 1.0 | — |
 | `qwen/qwen3.6-35b-a3b` | email | host issue | Engine 500 on chat after a successful load. |
 | `qwen3.8-27b-twin-turbo-...` | email, web, minecraft | host issue | Minimal config loads, chat returns 500. |
 | `openai-gpt-oss-20b-...-heretic` | minecraft | **1.0** | — |
