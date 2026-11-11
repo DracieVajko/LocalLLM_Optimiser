@@ -22,6 +22,13 @@ import uuid
 from dataclasses import dataclass
 
 import httpx
+
+from lm_optimizer.services.host.lmstudio_errors import (
+    error_message as _error_message,
+    is_no_reasoning_error as _is_no_reasoning_error,
+    is_reasoning_error as _is_reasoning_error,
+    is_unrecognized_key_error as _is_unrecognized_key_error,
+)
 from tenacity import (
     AsyncRetrying,
     retry_if_exception_type,
@@ -96,60 +103,6 @@ class LoadModelResult:
     #: False when the load response was lost and we confirmed via polling, so
     #: the elapsed "load time" is a timeout, not a measurement.
     response_received: bool = True
-
-
-def _error_message(exc: httpx.HTTPStatusError) -> str:
-    """Extract server error message from an HTTP error response."""
-    try:
-        data = exc.response.json()
-        err = data.get("error", data)
-        if isinstance(err, dict):
-            return str(err.get("message", err))
-        return str(err)
-    except Exception:
-        return f"HTTP {exc.response.status_code}"
-
-
-def _is_unrecognized_key_error(exc: httpx.HTTPStatusError, key: str) -> bool:
-    """True when the server 400s on an unrecognized key naming `key`."""
-    if exc.response.status_code != 400:
-        return False
-    try:
-        err = exc.response.json().get("error", {})
-        return err.get("code") == "unrecognized_keys" and key in str(err.get("message", ""))
-    except Exception:
-        return False
-
-
-def _is_no_reasoning_error(exc: httpx.HTTPStatusError) -> bool:
-    """True when the model exposes no reasoning config at all.
-
-    Only this shape poisons the remember-set; bad reasoning VALUES on
-    supporting models (allowed sets vary: off/on vs full range) retry
-    without remembering.
-    """
-    if exc.response.status_code != 400:
-        return False
-    try:
-        err = exc.response.json().get("error", {})
-        return err.get("code") == "invalid_value" and "does not expose reasoning" in str(
-            err.get("message", "")
-        )
-    except Exception:
-        return False
-
-
-def _is_reasoning_error(exc: httpx.HTTPStatusError) -> bool:
-    """True for any reasoning-key 400 (no-config AND bad-value shapes)."""
-    if exc.response.status_code != 400:
-        return False
-    try:
-        err = exc.response.json().get("error", {})
-        return err.get("code") == "invalid_value" and "reasoning" in str(
-            err.get("message", "")
-        ).lower()
-    except Exception:
-        return False
 
 
 def _is_model_unloaded_error(exc: httpx.HTTPStatusError) -> bool:
