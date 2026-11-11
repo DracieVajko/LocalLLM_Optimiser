@@ -3,6 +3,14 @@
 import { API } from './api.js?v=17';
 import { UI } from './ui.js?v=17';
 
+function esc(value) {
+    return String(value === null || value === undefined ? "" : value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+
 const HistoryPage = {
     state: {
         runs: [],
@@ -37,7 +45,7 @@ const HistoryPage = {
 
     async loadSandboxTaskRuns() {
         try {
-            const response = await fetch('/api/sandbox/runs?limit=200');
+            const response = await fetch('/api/sandbox/runs?limit=1000');
             if (!response.ok) throw new Error('HTTP ' + response.status);
             const j = await response.json();
             this.state.sandboxTaskRuns = j.runs || [];
@@ -615,8 +623,6 @@ const HistoryPage = {
             const artifacts = (x.artifacts || []).length ? '<ul class="text-xs text-gray-600 mt-1">'
                 + (x.artifacts || []).map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('')
                 + '</ul>' : '';
-            const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => (
-                { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
             const detailHtml = `
                 <div class="card mt-4"><div class="card-body p-4">
                     <div class="flex items-center justify-between mb-3">
