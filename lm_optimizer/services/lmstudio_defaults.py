@@ -727,6 +727,47 @@ def expected_echo_fields(config: LoadConfiguration) -> dict[str, Any]:
     }
 
 
+def _checked_value(value: Any) -> Any:
+    """Unwrap LM Studio's {"checked": bool, "value": ...} field values."""
+    if isinstance(value, dict) and "value" in value:
+        if value.get("checked") is False:
+            return None
+        return value.get("value")
+    return value
+
+
+def read_load_defaults(model_id: str, *, home: Path | None = None) -> dict[str, Any]:
+    """Read the model's declared KV-cache quantization and CPU threads.
+
+    LM Studio refuses both settings over REST, so a run records what the app
+    will apply at load time. Returns {} when the model has no defaults file.
+    """
+    home = home or default_home()
+    try:
+        path = resolve_defaults_path(model_id, home=home)
+        if not path.exists():
+            return {}
+        document, _ = _read_document(path)
+        fields = _field_list(document)
+    except (DefaultsError, OSError):
+        return {}
+    values: dict[str, Any] = {}
+    for field in fields:
+        if isinstance(field, dict) and field.get("key"):
+            values[str(field["key"])] = field.get("value")
+    result: dict[str, Any] = {}
+    k_cache = _checked_value(values.get("llm.load.llama.kCacheQuantizationType"))
+    v_cache = _checked_value(values.get("llm.load.llama.vCacheQuantizationType"))
+    if k_cache or v_cache:
+        result["kv_quant"] = (
+            str(k_cache) if k_cache == v_cache else f"k:{k_cache or '-'}/v:{v_cache or '-'}"
+        )
+    threads = _checked_value(values.get("llm.load.llama.cpuThreadPoolSize"))
+    if threads not in (None, ""):
+        result["threads"] = threads
+    return result
+
+
 def _normalize_backup_fields(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return {}

@@ -381,9 +381,11 @@
             ? '<select class="run-picker form-select text-xs" aria-label="Choose a run of this test">'
                 + list.map(function (r) {
                     var key = (r.run.run_key || 'legacy').slice(0, 10);
+                    var settings = r.run.settings || {};
+                    var kv = settings.kv_quant ? 'kv ' + settings.kv_quant + ' · ' : '';
                     return '<option value="' + esc(r.id) + '"'
                         + (r.id === selected.id ? ' selected' : '') + '>'
-                        + esc((r.run.ts || '') + ' · ' + scoreText(r.run) + ' · ' + key) + '</option>';
+                        + esc((r.run.ts || '') + ' · ' + scoreText(r.run) + ' · ' + kv + key) + '</option>';
                 }).join('')
                 + '</select>'
             : '';
@@ -462,6 +464,15 @@
     }
 
     function runDetailHtml(x) {
+        var settings = x.settings || {};
+        var loadBits = [];
+        if (settings.kv_quant) loadBits.push('KV ' + settings.kv_quant);
+        if (settings.threads) loadBits.push('threads ' + settings.threads);
+        if (settings.context_length) loadBits.push('ctx ' + settings.context_length);
+        var loadRow = loadBits.length
+            ? '<tr><td class="font-bold">Load</td><td class="font-mono text-xs">'
+                + esc(loadBits.join(' · ')) + '</td></tr>'
+            : '';
         var crit = (x.critical_failures || []).length
             ? '<ul class="text-xs text-red-600 mt-1">'
                 + (x.critical_failures || []).map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('')
@@ -497,6 +508,7 @@
             + '<tr><td class="font-bold">Repairs</td><td>' + (x.repair_count || 0) + '</td></tr>'
             + '<tr><td class="font-bold">Duration</td><td class="font-mono">'
             + (x.duration_s ? Number(x.duration_s).toFixed(0) + 's' : '-') + '</td></tr>'
+            + loadRow
             + '<tr><td class="font-bold">Workdir</td><td class="font-mono text-xs truncate" title="'
             + esc(x.workdir || '') + '">' + esc(x.workdir || '') + '</td></tr>'
             + blend

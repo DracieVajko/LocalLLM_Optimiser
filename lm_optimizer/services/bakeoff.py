@@ -68,6 +68,8 @@ def task_settings(
     max_output_tokens: int,
     kv_ram: bool,
     safe: bool,
+    kv_quant: str | None = None,
+    threads: str | int | None = None,
 ) -> dict:
     """Settings that decide whether two bakeoff runs are the same test.
 
@@ -90,6 +92,8 @@ def task_settings(
         context_length=context,
         kv_ram=kv_ram,
         safe=safe,
+        kv_quant=kv_quant,
+        threads=threads,
     )
 
 
@@ -165,6 +169,8 @@ async def _run_task(
     kv_ram: bool = False,
     safe: bool = False,
     origin: str = "local",
+    kv_quant: str | None = None,
+    threads: str | int | None = None,
 ) -> dict:
     definition = SANDBOX_TASKS[task_id]
     settings = task_settings(
@@ -174,6 +180,8 @@ async def _run_task(
         max_output_tokens=definition.max_output_tokens,
         kv_ram=kv_ram,
         safe=safe,
+        kv_quant=kv_quant,
+        threads=threads,
     )
     run_key = fingerprint(model, task_id, definition.prompt, settings, origin)
     # The model must receive exactly the reasoning value the fingerprint assumes.
@@ -298,8 +306,15 @@ async def _run_model(
     kv_ram: bool = False,
     safe: bool = False,
     origin: str = "local",
+    kv_quant: str | None = None,
+    threads: str | int | None = None,
 ) -> list[dict]:
     from lm_optimizer.cli.main import get_client
+    from lm_optimizer.services.lmstudio_defaults import read_load_defaults
+
+    declared = read_load_defaults(model)
+    kv_quant = kv_quant or declared.get("kv_quant")
+    threads = threads if threads not in (None, "") else declared.get("threads")
 
     client = get_client()
     rows: list[dict] = []
@@ -345,6 +360,8 @@ async def _run_model(
                     kv_ram=kv_ram,
                     safe=safe,
                     origin=origin,
+                    kv_quant=kv_quant,
+                    threads=threads,
                 )
                 row["context"] = context
                 rows.append(row)
@@ -418,6 +435,8 @@ async def run_bakeoff(
     kv_ram: bool = False,
     safe: bool = False,
     origin: str = "local",
+    kv_quant: str | None = None,
+    threads: str | int | None = None,
 ) -> int:
     unknown = [t for t in tasks if t not in SANDBOX_TASKS]
     if unknown:
@@ -439,6 +458,8 @@ async def run_bakeoff(
                 kv_ram=kv_ram,
                 safe=safe,
                 origin=origin,
+                kv_quant=kv_quant,
+                threads=threads,
             )
         except Exception as exc:  # one bad model must not stop the sweep
             print(f"[model] {model} crashed: {type(exc).__name__}: {exc}", flush=True)
@@ -478,6 +499,8 @@ async def main_async(args) -> int:
         kv_ram=args.kv_ram,
         safe=args.safe,
         origin=args.origin,
+        kv_quant=args.kv_quant,
+        threads=args.threads,
     )
 
 
@@ -508,6 +531,17 @@ def main() -> int:
         default="local",
         choices=("local", "frontier"),
         help="local (this hardware) or frontier (an API provider)",
+    )
+    parser.add_argument(
+        "--kv-quant",
+        default=None,
+        help="Declared KV-cache quantization set in LM Studio (q4|q5|q8|f16). "
+        "Not sent over REST; recorded so KV comparisons stay distinct.",
+    )
+    parser.add_argument(
+        "--threads",
+        default=None,
+        help="Declared CPU threads set in LM Studio (max or a number). Recorded only.",
     )
     return asyncio.run(main_async(parser.parse_args()))
 

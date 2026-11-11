@@ -1027,12 +1027,19 @@ def _run_sandbox_one(
     context_length: int | None = None,
     reasoning: str = "off",
     origin: str = "local",
+    kv_quant: str | None = None,
+    threads: str | int | None = None,
 ) -> dict:
     """Execute one sandbox task for one model and return the result dict."""
     from dataclasses import replace as _replace
 
+    from lm_optimizer.services.lmstudio_defaults import read_load_defaults
     from lm_optimizer.services.sandbox_lab import SANDBOX_TASKS, SandboxPolicy
     from lm_optimizer.services.sandbox_runner import SandboxRunner, build_command_for
+
+    declared = read_load_defaults(model) if model else {}
+    kv_quant = kv_quant or declared.get("kv_quant")
+    threads = threads if threads not in (None, "") else declared.get("threads")
 
     definition = SANDBOX_TASKS.get(task_id)
     if definition is None:
@@ -1092,6 +1099,8 @@ def _run_sandbox_one(
                 reasoning,
                 context_length=int(effective),
                 max_output_tokens=definition.max_output_tokens,
+                kv_quant=kv_quant,
+                threads=threads,
             )
 
             gate = ModelGate(client)
@@ -1187,6 +1196,16 @@ def sandbox(
         "--origin",
         help="local (this hardware) or frontier (an API provider)",
     ),
+    kv_quant: str = typer.Option(
+        "",
+        "--kv-quant",
+        help="KV-cache quantization you set in LM Studio (q4|q5|q8|f16). Label only.",
+    ),
+    threads: str = typer.Option(
+        "",
+        "--threads",
+        help="CPU threads you set in LM Studio (max or a number). Label only.",
+    ),
 ):
     """Run one sandbox task with the repair loop (P4).
 
@@ -1210,6 +1229,8 @@ def sandbox(
             context_length=context_length,
             reasoning=reasoning,
             origin=origin,
+            kv_quant=kv_quant or None,
+            threads=threads or None,
         )
     except ValueError as exc:
         console.print(f"[red]{exc}[/red]")
@@ -1678,6 +1699,16 @@ def bakeoff(
         "--origin",
         help="local (this hardware) or frontier (an API provider)",
     ),
+    kv_quant: str = typer.Option(
+        "",
+        "--kv-quant",
+        help="KV-cache quantization you set in LM Studio (q4|q5|q8|f16). Label only.",
+    ),
+    threads: str = typer.Option(
+        "",
+        "--threads",
+        help="CPU threads you set in LM Studio (max or a number). Label only.",
+    ),
 ):
     """Benchmark any backend model on sandbox tasks (load vs generation + score).
 
@@ -1711,6 +1742,8 @@ def bakeoff(
             kv_ram=kv_ram,
             safe=safe,
             origin=origin,
+            kv_quant=kv_quant or None,
+            threads=threads or None,
         )
     )
     if code != 0:

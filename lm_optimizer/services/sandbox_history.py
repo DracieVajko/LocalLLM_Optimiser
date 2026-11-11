@@ -38,6 +38,8 @@ SETTINGS_KEYS = (
     "context_length",
     "kv_ram",
     "safe",
+    "kv_quant",
+    "threads",
 )
 
 
@@ -54,11 +56,24 @@ def normalize_settings(
     context_length: int | None = None,
     kv_ram: bool = False,
     safe: bool = False,
+    kv_quant: str | None = None,
+    threads: str | int | None = None,
 ) -> dict[str, Any]:
-    """Normalize the settings that make two runs the same test or not."""
+    """Normalize the settings that make two runs the same test or not.
+
+    ``kv_quant`` and ``threads`` are load-time settings LM Studio refuses over
+    REST (400 unrecognized_keys); they are declared by the caller and recorded
+    so a q4/q5/q8 comparison stays distinguishable.
+    """
     effort = (reasoning_effort or "").strip().lower()
     if effort in ("", "off", "none", "false", "on", "true", "default"):
         effort = None
+    quant = (kv_quant or "").strip().lower()
+    if quant in ("", "none", "f16", "fp16"):
+        quant = None
+    threads_value: str | None = None
+    if threads not in (None, ""):
+        threads_value = str(threads).strip().lower()
     return {
         "temperature": float(temperature),
         "max_output_tokens": int(max_output_tokens),
@@ -67,6 +82,8 @@ def normalize_settings(
         "context_length": int(context_length) if context_length else None,
         "kv_ram": bool(kv_ram),
         "safe": bool(safe),
+        "kv_quant": quant,
+        "threads": threads_value,
     }
 
 
@@ -76,6 +93,8 @@ def settings_from_reasoning(
     context_length: int | None,
     max_output_tokens: int,
     temperature: float = 0.0,
+    kv_quant: str | None = None,
+    threads: str | int | None = None,
 ) -> dict[str, Any]:
     """Map the CLI's ``--reasoning`` value onto normalized settings."""
     level = (reasoning or "").strip().lower()
@@ -86,6 +105,8 @@ def settings_from_reasoning(
         thinking=thinking,
         reasoning_effort=level,
         context_length=context_length,
+        kv_quant=kv_quant,
+        threads=threads,
     )
 
 

@@ -103,3 +103,26 @@ def test_bakeoff_identity_follows_the_value_actually_sent():
     assert sh.fingerprint("m", "t", "p", settings(True, "high")) != sh.fingerprint(
         "m", "t", "p", settings(True, "on")
     )
+
+
+def test_kv_cache_quantization_is_part_of_the_test_identity():
+    from lm_optimizer.services import sandbox_history as sh
+
+    def settings(kv_quant):
+        return bakeoff.task_settings(
+            thinking=False,
+            reasoning_effort="on",
+            context=4096,
+            max_output_tokens=2048,
+            kv_ram=False,
+            safe=True,
+            kv_quant=kv_quant,
+        )
+
+    keys = {
+        sh.fingerprint("m", "t", "p", settings(value))
+        for value in (None, "q4", "q5", "q8")
+    }
+    assert len(keys) == 4
+    assert settings("q8")["kv_quant"] == "q8"
+    assert settings("F16")["kv_quant"] is None
