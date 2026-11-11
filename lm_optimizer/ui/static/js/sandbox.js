@@ -175,6 +175,7 @@
     var expandedModel = null;
     var openTask = null;
     var selectedRun = null;
+    var expandIds = {};
 
     function badge(ok, text) {
         return '<span class="badge ' + (ok ? 'badge-success' : 'badge-error') + '">' + text + '</span>';
@@ -237,7 +238,7 @@
     }
 
     function modelDomId(model) {
-        return 'sb-expand-' + String(model || '').replace(/[^a-z0-9]+/gi, '_');
+        return expandIds[model] || ('sb-expand-' + String(model || '').replace(/[^a-z0-9]+/gi, '_'));
     }
 
     function renderHistory() {
@@ -248,12 +249,14 @@
             return;
         }
         var groups = groupRuns(historyRuns);
+        expandIds = {};
         box.innerHTML = '<p class="text-xs text-gray-500 mb-2">' + historyRuns.length + ' run(s), '
             + groups.length + ' model(s). Click a model to expand its tests.</p>'
             + '<div class="table-container"><table class="table"><thead><tr>'
             + '<th>Model</th><th>Runs</th><th>Tests</th><th>Best</th><th>Last run</th><th></th>'
             + '</tr></thead><tbody>'
-            + groups.map(function (g) {
+            + groups.map(function (g, groupIndex) {
+                expandIds[g.model] = 'sb-expand-' + groupIndex;
                 var tasks = tasksOf(g.model);
                 var open = expandedModel === g.model;
                 return '<tr class="history-model' + (open ? ' is-open' : '') + '" data-model="' + esc(g.model) + '" style="cursor:pointer">'

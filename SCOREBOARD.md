@@ -23,6 +23,11 @@ Two tables, two different questions:
   longer score 1.00.
 - The `.blend` of a Blender run is copied to
   `results/blends/<model>/<task>/<stamp>.blend` for inspection.
+- A rerun of the **same test** — same model, task, prompt and model settings —
+  replaces its older history row; a different prompt or settings is a different
+  test and both rows stay. `lab prune-runs` applied that rule to the backfill
+  (sandbox 86 -> 45 rows, bakeoff 77 -> 44), so history holds one row per
+  measured configuration.
 
 ## Frontier providers (measured 2026-11-10)
 
