@@ -67,7 +67,9 @@ Records gain three fields: `run_key`, `settings`, `prompt_sha`. Legacy records k
 
 `record_run` still returns the stored record; the number of replaced rows is exposed to callers that want to log it.
 
-`bakeoff._run_task` builds the same fingerprint and passes it to `record_run`, then `run_bakeoff` applies the same rule to `results/bakeoff/runs.jsonl` (rows carry `run_key`, `settings`, `prompt_sha`). Both files therefore stay one-row-per-identical-test.
+`bakeoff._run_task` builds the same fingerprint and passes it to `record_run`, then `run_bakeoff` applies the same **on-write** rule to `results/bakeoff/runs.jsonl` through `dedupe_written_rows` (rows carry `run_key`, `settings`, `prompt_sha`). The migration-style collapse of legacy/unmeasured rows is *not* run during a sweep — that is only `lab prune-runs`, so a failing rerun keeps its evidence and no legacy row of another config disappears mid-measurement.
+
+History rows are read with a stable `run_id` (hash of model, task, ts, run_key, score, status). `/sandbox/runs` attaches it, `/sandbox/run-id/{id}` resolves it, so the UI never depends on a list position that a prune can shift.
 
 ## 5. One-off cleanup: `lab prune-runs`
 
@@ -100,7 +102,7 @@ Model                              Tests  Best           Last
     company_website  PASS      1.00   11-10 19:02    1     [View]
 ```
 
-- State: `expandedModel`, `openTask`, `selectedRun`, `pinnedRun`. Only the expansion container is re-rendered, so the row does not collapse on every click.
+- State: `expandedModel`, `openTask`, `selectedRun`, `pinnedRun` (both run ids). Only the expansion container is re-rendered, so the row does not collapse on every click. Model rows are focusable and expand on Enter/Space.
 - `View` swaps the test list for the run detail: task, status badge, score, duration, artifact links (existing `/api/sandbox/files` opener), critical failures, and `← Back to tests`.
 - When a test has more than one surviving config, a `<select>` lists them (`date · score · short run_key`) and switches the detail without leaving the view.
 - `Pin` marks a run; other runs then offer `Compare with pinned`, reusing the existing split view.
@@ -122,7 +124,8 @@ Model                              Tests  Best           Last
 
 - Key equivalence: CLI defaults vs bakeoff `--no-thinking` at the same context → same key; each of context/thinking/effort/kv/safe/custom-prompt → different key.
 - Replacement: second measured run with the same key leaves one row and removes the old workdir; `not_measured` leaves both rows; `(load)`/`(crash)` untouched.
-- Guard: a workdir outside `results/` is never deleted; a malformed JSONL line survives a rewrite.
+- Guard: a workdir outside `results/` is never deleted; the results root itself is never deleted; a malformed JSONL line survives a rewrite; a locked file is retried and never fails the run.
+- Stable ids: `run_id` survives a prune of other rows, and the files route serves both sandbox and bakeoff workdirs while rejecting traversal.
 - Prune: dry run writes nothing; `--apply` collapses real-shaped fixtures to one row per pair and deletes only in-scope directories.
 - Bakeoff: two rows with the same key collapse; different `--context` rows both stay.
 - Web job: a completed `/lab/sandbox-run` writes exactly one history record with `temperature=0.2`, and its key differs from the CLI run of the same task.
@@ -133,4 +136,4 @@ Model                              Tests  Best           Last
 
 - **Rewrite on every run** touches a file the web UI polls. Mitigation: atomic replace, keep the read path unchanged, rewrite only when a matching key exists (no duplicates → no write).
 - **Legacy collapse is lossy by definition**: those rows cannot prove a different config. The dry run prints exactly what would go, and `--apply` is explicit.
-- **Concurrent writers** (bakeoff + web job) could interleave read-modify-write. Existing `ModelGate` already serialises model loads; the rewrite is milliseconds and the file is small. Accepted for this scope.
+- **Concurrent writers** (bakeoff + web job) could interleave read-modify-write. Existing `ModelGate` already serialises model loads; the rewrite is milliseconds and the file is small, and a `PermissionError` from the atomic replace is retried before the maintenance is abandoned. Accepted for this scope.
