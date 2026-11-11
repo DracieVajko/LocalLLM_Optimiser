@@ -13,18 +13,18 @@ run is possible but impractical on this machine.
 
 ## Current status (2026-11-11)
 
-| Model | email | company_site | minecraft | blender_city |
-|---|---:|---:|---:|---:|
-| `nvidia-nemotron-3.5-bolt-e4b` | 1.00 | 1.00 | 1.00 | 1.00 |
-| `nvidia-nemotron-3.5-bolt-74b-a9b` | 1.00 | 1.00 | 0.00 | — (too slow) |
-| `swift-qwen3.8-27b` | 1.00 | 1.00 | — | 0.00 |
-| `prism-ml/bonsai-27b` | 1.00 | 1.00 | 0.00 | 0.00 |
-| `openai-gpt-oss-20b-…-heretic` | 0.00 | 1.00 | 1.00 | 0.00 |
-| `qwen3.8-9b-distill` | 0.73 | 0.85 | — | 0.00 |
-| `google/gemma-4-26b-a4b-qat` | 1.00 | — (timeout) | — | — |
-| `qwen/qwen3.6-35b-a3b` | — (engine 500) | — | — | — |
-| `qwen3.8-27b-twin-turbo-…` | — (engine 500) | — | — | — |
-| `mirothinker-v1.5-30b…` | **not tested** | **not tested** | **not tested** | **not tested** |
+| Model | email | company_site | minecraft | blender_city | deep_research |
+|---|---:|---:|---:|---:|---:|
+| `nvidia-nemotron-3.5-bolt-e4b` | 1.00 | 1.00 | 1.00 | 0.00 | 0.93 |
+| `nvidia-nemotron-3.5-bolt-74b-a9b` | 1.00 | 1.00 | 0.00 | — (too slow) | — |
+| `swift-qwen3.8-27b` | 1.00 | 1.00 | — | 0.00 | — |
+| `prism-ml/bonsai-27b` | 1.00 | 1.00 | 0.00 | 0.00 | — |
+| `openai-gpt-oss-20b-…-heretic` | 0.00 | 1.00 | 1.00 | 0.00 | — |
+| `qwen3.8-9b-distill` | 0.73 | 0.85 | — | 0.00 | — |
+| `google/gemma-4-26b-a4b-qat` | 1.00 | — (timeout) | — | — | — |
+| `qwen/qwen3.6-35b-a3b` | — (engine 500) | — | — | — | — |
+| `qwen3.8-27b-twin-turbo-…` | — (engine 500) | — | — | — | — |
+| `mirothinker-v1.5-30b…` | **not tested** | **not tested** | **not tested** | **not tested** | **not tested** |
 
 `—` means the task was never run for that model. `tiny` details below.
 
@@ -33,6 +33,8 @@ run is possible but impractical on this machine.
 | Model | Task | Result | Root cause |
 |---|---|---|---|
 | `e4b` | all | 1.0 | — |
+| `e4b` | blender_city | 0.0 | Model bug: the script dies on `is_python_code` (`did you forget parentheses around the comprehension target?`) and the repair attempt writes nothing, so no `.blend` is produced. |
+| `e4b` | deep_research_report | 0.93 | Wrote a valid report with citations, but only 370 words where the task requires 800. |
 | `74b` | minecraft | 0.0 | Model bug: no Three.js `<script src>` and a duplicate `function generateWorld()` → `SyntaxError: Identifier 'generateWorld' has already been declared`. Page renders a static splash. |
 | `74b` | web | not run | Host slowness: 0.4 tok/s; a 4096-token page needs ~3 hours. |
 | `swift` | blender_city | 0.0 | Model bug: `location=(0.5, -1, 0.6])` bracket mismatch in all attempts. |

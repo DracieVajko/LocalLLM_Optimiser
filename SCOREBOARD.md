@@ -39,18 +39,18 @@ scripts no longer apply; regenerate them with the current prompt.
 
 ## Local models (measured 2026-11-11)
 
-| model | email | company_website | minecraft_world | blender_city |
-|---|---:|---:|---:|---:|
-| nemotron-e4b | 1.00 | 1.00 | 1.00 | 1.00 |
-| nemotron-74b | 1.00 | 1.00 | 0.00 | — (too slow) |
-| swift-27b | 1.00 | 1.00 | — | 0.00 |
-| bonsai-27b | 1.00 | 1.00 | 0.00 | 0.00 |
-| gpt-oss-20b heretic | 0.00 | 1.00 | 1.00 | 0.00 |
-| qwen3.8-9b-distill | 0.73 | 0.85 | — | 0.00 |
-| gemma-4-26b | 1.00 | timeout | — | — |
-| qwen3.6-35b-a3b | engine 500 | — | — | — |
-| twin-turbo | engine 500 | — | — | — |
-| mirothinker-30b | not tested | not tested | not tested | not tested |
+| model | email | company_website | minecraft_world | blender_city | deep_research |
+|---|---:|---:|---:|---:|---:|
+| nemotron-e4b | 1.00 | 1.00 | 1.00 | 0.00 | 0.93 |
+| nemotron-74b | 1.00 | 1.00 | 0.00 | — (too slow) | — |
+| swift-27b | 1.00 | 1.00 | — | 0.00 | — |
+| bonsai-27b | 1.00 | 1.00 | 0.00 | 0.00 | — |
+| gpt-oss-20b heretic | 0.00 | 1.00 | 1.00 | 0.00 | — |
+| qwen3.8-9b-distill | 0.73 | 0.85 | — | 0.00 | — |
+| gemma-4-26b | 1.00 | timeout | — | — | — |
+| qwen3.6-35b-a3b | engine 500 | — | — | — | — |
+| twin-turbo | engine 500 | — | — | — | — |
+| mirothinker-30b | not tested | not tested | not tested | not tested | not tested |
 
 `—` = never run. Details and root causes: `docs/benchmarks/model_failures.md`.
 
