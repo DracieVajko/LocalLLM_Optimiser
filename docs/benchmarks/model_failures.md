@@ -1,81 +1,90 @@
 # Why each local model failed
 
-Evidence-based failure table. Every raw artifact lives in `results/bakeoff/`
-(gitignored); re-score them at any time with:
+Evidence-based status of every downloaded model. Raw artifacts live in
+`results/bakeoff/` (gitignored); re-score them at any time with:
 
 ```powershell
-python tools/explain_failures.py            # current scorer, newest artifact per model/task
+python tools/explain_failures.py      # newest artifact per model/task, current scorer
 ```
 
-A "model bug" means the generated file is genuinely wrong. A "host issue" means
-LM Studio could not load or generate at all, so no artifact exists.
+A **model bug** means the generated file is genuinely wrong. A **host issue**
+means LM Studio could not load or generate at all. A **host slowness** means the
+run is possible but impractical on this machine.
 
-## Status after the 2026-11-10 scoring fixes
+## Current status (2026-11-11)
+
+| Model | email | company_site | minecraft | blender_city |
+|---|---:|---:|---:|---:|
+| `nvidia-nemotron-3.5-bolt-e4b` | 1.00 | 1.00 | 1.00 | 1.00 |
+| `nvidia-nemotron-3.5-bolt-74b-a9b` | 1.00 | 1.00 | 0.00 | — (too slow) |
+| `swift-qwen3.8-27b` | 1.00 | 1.00 | — | 0.00 |
+| `prism-ml/bonsai-27b` | 1.00 | 1.00 | 0.00 | 0.00 |
+| `openai-gpt-oss-20b-…-heretic` | 0.00 | 1.00 | 1.00 | 0.00 |
+| `qwen3.8-9b-distill` | 0.73 | 0.85 | — | 0.00 |
+| `google/gemma-4-26b-a4b-qat` | 1.00 | — (timeout) | — | — |
+| `qwen/qwen3.6-35b-a3b` | — (engine 500) | — | — | — |
+| `qwen3.8-27b-twin-turbo-…` | — (engine 500) | — | — | — |
+| `mirothinker-v1.5-30b…` | **not tested** | **not tested** | **not tested** | **not tested** |
+
+`—` means the task was never run for that model. `tiny` details below.
+
+## Failure details
 
 | Model | Task | Result | Root cause |
 |---|---|---|---|
-| `nvidia-nemotron-3.5-bolt-e4b` | email, minecraft, web | **1.0** | — |
-| `nvidia-nemotron-3.5-bolt-e4b` | blender_skyblock | 0.0 | Model bug: the script creates a camera at line 70 but never assigns `scene.camera`, so the render aborts with `RuntimeError: Cannot render, no camera` and no frames are written. |
-| `nvidia-nemotron-3.5-bolt-74b-a9b` | email | **1.0** | — |
-| `nvidia-nemotron-3.5-bolt-74b-a9b` | minecraft | 0.0 | Model bug: no Three.js `<script src>` at all and a duplicate `function generateWorld()` — `SyntaxError: Identifier 'generateWorld' has already been declared`. Page renders a static splash. |
-| `nvidia-nemotron-3.5-bolt-74b-a9b` | web | not run | Host slowness: 0.4 tok/s, a 4096-token page needs ~3 hours. Run cancelled. |
-| `nvidia-nemotron-3.5-bolt-74b-a9b-24gb` | email | 1.0 | — |
-| `nvidia-nemotron-3.5-bolt-74b-a9b-24gb` | web, blender | 0.0 / load error | Host: needs 41.9 GB with a second model resident; HTTP 400 on load, HTTP 500 on chat. |
-| `swift-qwen3.8-27b` | email | 1.0 | — |
-| `swift-qwen3.8-27b` | web | **1.0** | Fixed by `--no-thinking`: 1128 s, 3.6 tok/s, no reasoning in the file. |
-| `swift-qwen3.8-27b` | blender | 0.0 | Model bug with thinking on: reasoning prose is written *into* `build_scene.py` (`line 66: SyntaxError: unterminated string literal`). Retried with `--no-thinking`. |
-| `qwen3.8-9b-distill` | web | 0.84 | Model weakness: no `@media` query and no table/grid layout. The retry with `--no-thinking` produces real HTML now (it scored 0.0 before because the file was prose). |
-| `qwen3.8-9b-distill` | email | 0.73 | Model weakness: attempt 0 lacked a closing (`has_closing`), repair attempt 1 introduced a bracketed placeholder. |
-| `prism-ml/bonsai-27b` | minecraft | 0.0 | Retried with `--no-thinking` (183020 run): still a blank page (dark 99 %, sd 23). The model produces a dark scene even without reasoning. |
-| `prism-ml/bonsai-27b` | web/email | 1.0 | Fixed by `--no-thinking` (minecraft is the only remaining failure). |
-| `swift-qwen3.8-27b` | company/web | 1.0 | Fixed by `--no-thinking`. |
-| `swift-qwen3.8-27b` | blender_city | 0.0 | Still fails: `location=(0.5, -1, 0.6])` bracket mismatch in all three attempts. |
-| `qwen3.8-9b-distill` | company_website | 0.85 | Real HTML now, but no `@media` and no table/grid layout. |
-| `qwen3.8-9b-distill` | email | 0.73 | Attempt 0 lacked a closing; attempt 1 introduced a bracketed placeholder. |
-| `google/gemma-4-26b-a4b-qat` | email | 1.0 | Fixed by `--no-thinking` (161 s at 0.4 tok/s). |
-| `google/gemma-4-26b-a4b-qat` | web | timeout | Timed out after 45 min during web_dashboard on the retry. |
-| `qwen/qwen3.6-35b-a3b` | email | not measured | Engine 500 on chat (timeout during the retry). |
-| `qwen3.8-27b-twin-turbo-...` | email | not measured | Engine 500 on chat. |
-| `openai-gpt-oss-20b-...-heretic` | company_website | 1.0 | Fixed. |
-| `openai-gpt-oss-20b-...-heretic` | email | 0.0 | Reasoning dump instead of an email. |
-| `openai-gpt-oss-20b-...-heretic` | minecraft | 0.0 | Flat render (single tone, sd 0). |
-| `openai-gpt-oss-20b-...-heretic` | blender_city | 0.0 | Bracket mismatch in `verts = [...]`. |
-| `nvidia-nemotron-3.5-bolt-74b-a9b` | company_website | 1.0 | 25.7 min at 0.4 tok/s. |
-| `nvidia-nemotron-3.5-bolt-74b-a9b` | minecraft | 0.0 | Duplicate `generateWorld` + no Three.js CDN script. |
-| `nvidia-nemotron-3.5-bolt-e4b` | company_website | 1.0 | — |
-| `nvidia-nemotron-3.5-bolt-e4b` | blender_city | 1.0 | — |
-| `nvidia-nemotron-3.5-bolt-e4b` | minecraft | 1.0 | — |
-| `nvidia-nemotron-3.5-bolt-e4b` | email | 1.0 | — |
-| `qwen/qwen3.6-35b-a3b` | email | host issue | Engine 500 on chat after a successful load. |
-| `qwen3.8-27b-twin-turbo-...` | email, web, minecraft | host issue | Minimal config loads, chat returns 500. |
-| `openai-gpt-oss-20b-...-heretic` | minecraft | **1.0** | — |
-| `openai-gpt-oss-20b-...-heretic` | web | 0.0 | Model bug: `document.getElementById("avgLatency")).innerText` — unbalanced parenthesis, also missing the viewport meta. |
-| `openai-gpt-oss-20b-...-heretic` | blender_skyblock | 0.0 | Model bug: `verts = [(x, y, 0) for x in range(-10, 11)) for y ...]` — mismatched brackets; no `save_as_mainfile`. |
-| `openai-gpt-oss-20b-...-heretic` | email | 0.0 | Model bug: reasoning dump instead of an email. |
+| `e4b` | all | 1.0 | — |
+| `74b` | minecraft | 0.0 | Model bug: no Three.js `<script src>` and a duplicate `function generateWorld()` → `SyntaxError: Identifier 'generateWorld' has already been declared`. Page renders a static splash. |
+| `74b` | web | not run | Host slowness: 0.4 tok/s; a 4096-token page needs ~3 hours. |
+| `swift` | blender_city | 0.0 | Model bug: `location=(0.5, -1, 0.6])` bracket mismatch in all attempts. |
+| `bonsai` | minecraft | 0.0 | Blank page (`mean=3.0 sd=25.2 dark=98%`) even with `--no-thinking`. |
+| `bonsai` | blender_city | 0.0 | Model bug: `from mathutils import Vector, Matrix4f` — `Matrix4f` does not exist. |
+| `gpt-oss` | email | 0.0 | Reasoning dump instead of an email (no `Subject:`). |
+| `gpt-oss` | blender_city | 0.0 | Model bug: `verts = [(x, y, 0) for x in range(-10, 11)) for y ...]` — mismatched brackets. |
+| `qwen9b` | email | 0.73 | Attempt 0 lacked a closing; repair attempt 1 introduced a bracketed placeholder. |
+| `qwen9b` | company_site | 0.85 | Real HTML now, but no `@media` query and no table/grid layout. |
+| `qwen9b` | blender_city | 0.0 | Model bug: `SyntaxError: invalid decimal literal`. |
+| `gemma` | web | timeout | Timed out after 45 min during `web_dashboard` (engine stall). |
+| `qwen35b` | all | host issue | Loads, then `500 Engine protocol startup was aborted` on the first chat. |
+| `twin` | all | host issue | Same engine 500. |
 
-## The two failure families
+## What is impossible to finish here
+
+1. **qwen3.6-35b and twin-turbo** — the engine aborts on this host's LM Studio
+   build. Every retry ends in 500; not a prompt or scoring problem.
+2. **74B web / minecraft at speed** — the model works (email and company site
+   pass) but 0.4 tok/s makes a 4096-token page a ~3-hour run. Possible, not
+   practical.
+3. **Blender `.blend` inspection without Blender** — `blend_runs` and the city
+   structural checks need `blender` on `PATH`. `tools/explain_failures.py` now
+   adds it automatically.
+
+## What is worth retrying
+
+1. **mirothinker-v1.5-30b** — never benchmarked. Start with `email_write` and
+   `company_website` (`--safe --no-thinking`).
+2. **gemma company_site / blender_city** — email passed after `--no-thinking`;
+   the web run timed out, so one fresh attempt is justified.
+3. **qwen35b / twin** — only if the LM Studio engine build changes; otherwise
+   mark as not runnable on this host.
+4. **bonsai minecraft** — unlikely to change (the page is dark by construction),
+   but a single retry is cheap.
+
+## Failure families
 
 1. **Reasoning leakage.** Bonsai, qwen 9B, gemma and gpt-oss write their thinking
-   into the artifact. LM Studio advertises only `off`/`on` for reasoning, and
-   even `reasoning: "off"` does not strip the template's thinking block for
-   these models. Retries run with `--no-thinking`, which fixed Bonsai (2/3
-   tasks to 1.0), Gemma (email to 1.0) and Swift (dashboard to 1.0). Where a
-   model still fails after that, the remaining cause is ordinary generation
-   quality (qwen 9B misses a media query; Swift writes `location=(0.5, -1, 0.6])`).
+   into the artifact. `--no-thinking` fixes the artifact (Bonsai 2/3, Gemma
+   email, Swift dashboard). Remaining failures are ordinary generation quality.
 2. **Engine crash on this host.** qwen 3.6 35B and twin-turbo accept the load
-   request and then return `500 Engine protocol startup was aborted` on the
-   first chat. Gemma was suspected of the same, but with `--no-thinking` it
-   generated normally, so that diagnosis was wrong.
+   and then return 500 on the first chat. Gemma was wrongly suspected; it
+   generates normally with `--no-thinking`.
 
-## Fixed scoring bugs found during this audit
+## Scoring bugs found during the audit (fixed)
 
-These made earlier scores wrong in both directions:
-
-- **Prose passed as HTML** (qwen 9B dashboard scored 0.81): now blocked by the
-  critical `html_document` check.
-- **Broken JavaScript scored 1.0** (bonsai, gpt-oss, 74B): now blocked by
-  `js_parses`.
-- **Blender syntax errors cost a full render** before being reported: now
-  `is_python_code` fails fast.
-- **`has_subject` rejected "Subject line:"** even though the prompt uses that
-  exact wording.
+- Prose passed as HTML → critical `html_document`.
+- Broken JavaScript scored 1.0 → `js_parses`.
+- Blank / flat canvas scored 1.0 → `renders_content` (pixel verdict).
+- Empty completion scored 0.00 → `not_measured`.
+- `load_s=30.0` was a response timeout → `null` + `load_measured=false`.
+- `research_synthesis` capped at 0.867 → broader gap wording.
+- ES-module Three.js and Blender 4.x engine names were rejected → accepted /
+  normalised.

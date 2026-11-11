@@ -66,6 +66,11 @@ Already applied this round:
 - `ui.js`: dashboard status/hardware grid centred (`max-w-4xl mx-auto`).
 - `sandbox.js`: View button fixed, history grouped per model, `NOT MEASURED`
   badge, `Status` row in the detail view, `blend_file` path shown.
+- `sandbox.js`: per-run **Pin** and **Compare** buttons; Compare opens a
+  two-column split view (metrics, failing checks, HTML/code preview) for two
+  runs side by side.
+- `history.js`: the sandbox section is now collapsible per model instead of a
+  flat table.
 - `theme.js`: moon/sun glyph restored (user's edit).
 
 Recommended next:

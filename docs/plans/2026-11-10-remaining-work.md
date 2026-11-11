@@ -21,6 +21,33 @@
 
 ---
 
+## Current status (2026-11-11)
+
+| Area | State |
+|---|---|
+| Scoring fixes (audit) | **done** — `html_document`, `js_parses`, `renders_content`, `not_measured`, `load_measured`, `research_synthesis` wording, ES-module Three.js, Blender engine aliases, `blend_min_size`, `min_words` |
+| Blender task | **done** — single `blender_city`, dense map grid, `.blend` only, no renders; structural checks from opening the file |
+| Deep research agent | **done** — `lab research --mode agent`, tool loop, `trace.json`, `deep_research_agent` task |
+| Frontier comparison | **done** — DeepSeek, Gemini, ChatGPT imported and scored; only `blender_city` for Gemini/ChatGPT is pending a fresh answer |
+| Local re-runs | **done for what is runnable** — see `docs/benchmarks/model_failures.md` |
+| Tests | **1721 passed** |
+| `deep_research_online` prompt | **open** (Task 4) |
+| minecraft hero/sky and creative-3D three/camera checks | **open** (Task 5) |
+| Document non-e2e tasks | **open** (Task 6) |
+| Per-model History page | **done** — collapsible per-model cards on both `/sandbox` and `/history` |
+| `lab research` hardening (429 retry) | **open** (Task 8) |
+| Model keep/delete | **blocked on user decision** (Task 9) |
+
+Blocked / impossible on this host:
+
+- `qwen/qwen3.6-35b-a3b` and `qwen3.8-27b-twin-turbo-…` — LM Studio engine aborts
+  on the first chat (HTTP 500), every retry included.
+- `nvidia-nemotron-3.5-bolt-74b-a9b` web/minecraft — 0.4 tok/s makes them
+  multi-hour runs.
+- `mirothinker-v1.5-30b` — downloaded but never benchmarked.
+
+---
+
 ## Audit results (2026-11-10, this round)
 
 Verified now, with `tools/audit_tasks.py` and `tools/audit_screenshots.py`:
