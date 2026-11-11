@@ -13,14 +13,25 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
-from datetime import datetime
 from dataclasses import replace
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tools"))
+
+# Make sure Blender (when installed) is reachable, since the blender task needs
+# it to open the produced .blend file.
+for candidate in (
+    Path(r"C:\Program Files\Blender Foundation\Blender 5.3"),
+    Path(r"C:\Program Files\Blender Foundation\Blender 5.2"),
+):
+    if (candidate / "blender.exe").exists():
+        os.environ["PATH"] = str(candidate) + os.pathsep + os.environ["PATH"]
+        break
 
 from lm_optimizer.services.sandbox_lab import SANDBOX_TASKS, SandboxPolicy  # noqa: E402
 from lm_optimizer.services.sandbox_runner import (  # noqa: E402

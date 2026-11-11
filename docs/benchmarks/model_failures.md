@@ -58,7 +58,7 @@ LM Studio could not load or generate at all, so no artifact exists.
 1. **Reasoning leakage.** Bonsai, qwen 9B, gemma and gpt-oss write their thinking
    into the artifact. LM Studio advertises only `off`/`on` for reasoning, and
    even `reasoning: "off"` does not strip the template's thinking block for
-   these models. Retries run with `--no-thinking`, which fixed Bonsai (3/3
+   these models. Retries run with `--no-thinking`, which fixed Bonsai (2/3
    tasks to 1.0), Gemma (email to 1.0) and Swift (dashboard to 1.0). Where a
    model still fails after that, the remaining cause is ordinary generation
    quality (qwen 9B misses a media query; Swift writes `location=(0.5, -1, 0.6])`).
