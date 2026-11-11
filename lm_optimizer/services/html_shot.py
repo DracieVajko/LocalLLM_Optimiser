@@ -34,6 +34,10 @@ class ScreenshotError(RuntimeError):
     """Chrome could not be launched or did not answer on the DevTools port."""
 
 
+class SelectorNotFound(ScreenshotError):
+    """The requested element (e.g. ``canvas``) is not in the document."""
+
+
 def find_browser() -> Path | None:
     for candidate in CHROME_CANDIDATES:
         if candidate.exists():
@@ -50,10 +54,16 @@ def capture(
     wait_s: float = 4.0,
     full_page: bool = True,
     debug: bool = False,
+    selector: str | None = None,
     browser: Path | None = None,
     launch_timeout_s: float = 20.0,
 ) -> Path:
-    """Screenshot ``url`` into ``out`` and return the path."""
+    """Screenshot ``url`` into ``out`` and return the path.
+
+    ``selector`` clips the screenshot to one element (e.g. ``"canvas"``), which
+    is how the voxel tasks check that the rendered scene exists instead of
+    measuring the page chrome around it.
+    """
     browser = browser or find_browser()
     if browser is None:
         raise ScreenshotError("no Chromium-based browser found")
@@ -91,6 +101,7 @@ def capture(
                     wait_s=wait_s,
                     full_page=full_page,
                     debug=debug,
+                    selector=selector,
                 )
             )
         finally:
@@ -146,6 +157,7 @@ async def _shoot(
     wait_s: float,
     full_page: bool,
     debug: bool = False,
+    selector: str | None = None,
 ) -> None:
     from websockets.asyncio.client import connect
 
@@ -202,13 +214,42 @@ async def _shoot(
             for line in notes:
                 print(f"[console] {line}")
 
+        element_rect = None
+        if selector:
+            await call("Runtime.enable")
+            result = await call(
+                "Runtime.evaluate",
+                expression=(
+                    "(function(){var el=document.querySelector("
+                    + json.dumps(selector)
+                    + ");if(!el)return null;var r=el.getBoundingClientRect();"
+                    "return JSON.stringify({x:r.x,y:r.y,w:r.width,h:r.height});})()"
+                ),
+                returnByValue=True,
+            )
+            value = (result.get("result") or {}).get("value")
+            if value:
+                element_rect = json.loads(value)
+            else:
+                raise SelectorNotFound(f"selector {selector!r} not found")
+
         metrics = await call("Page.getLayoutMetrics")
         css = metrics.get("cssContentSize") or metrics.get("contentSize") or {}
         content_height = min(int(css.get("height") or height), MAX_HEIGHT)
         content_width = int(css.get("width") or width)
 
+        capture_beyond = full_page
         clip = None
-        if full_page:
+        if element_rect and element_rect["w"] > 4 and element_rect["h"] > 4:
+            clip = {
+                "x": max(0.0, float(element_rect["x"])),
+                "y": max(0.0, float(element_rect["y"])),
+                "width": float(element_rect["w"]),
+                "height": float(element_rect["h"]),
+                "scale": 1,
+            }
+            capture_beyond = False
+        elif full_page:
             clip = {
                 "x": 0,
                 "y": 0,
@@ -219,7 +260,7 @@ async def _shoot(
         shot = await call(
             "Page.captureScreenshot",
             format="png",
-            captureBeyondViewport=full_page,
+            captureBeyondViewport=capture_beyond,
             **({"clip": clip} if clip else {}),
         )
         out.write_bytes(base64.b64decode(shot["data"]))

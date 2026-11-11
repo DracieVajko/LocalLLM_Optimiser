@@ -19,7 +19,7 @@ run is possible but impractical on this machine.
 | `nvidia-nemotron-3.5-bolt-74b-a9b` | 1.00 | 1.00 | 0.00 | — (too slow) | — |
 | `swift-qwen3.8-27b` | 1.00 | 1.00 | — | 0.00 | — |
 | `prism-ml/bonsai-27b` | 1.00 | 1.00 | 0.00 | 0.00 | — |
-| `openai-gpt-oss-20b-…-heretic` | 0.00 | 1.00 | 1.00 | 0.00 | — |
+| `openai-gpt-oss-20b-…-heretic` | 0.00 | 1.00 | 0.00 | 0.00 | — |
 | `qwen3.8-9b-distill` | 0.73 | 0.85 | — | 0.00 | — |
 | `google/gemma-4-26b-a4b-qat` | 1.00 | — (timeout) | — | — | — |
 | `qwen/qwen3.6-35b-a3b` | — (engine 500) | — | — | — | — |
@@ -41,6 +41,7 @@ run is possible but impractical on this machine.
 | `bonsai` | minecraft | 0.0 | Blank page (`mean=3.0 sd=25.2 dark=98%`) even with `--no-thinking`. |
 | `bonsai` | blender_city | 0.0 | Model bug: `from mathutils import Vector, Matrix4f` — `Matrix4f` does not exist. |
 | `gpt-oss` | email | 0.0 | Reasoning dump instead of an email (no `Subject:`). |
+| `gpt-oss` | minecraft | 0.0 | Model bug: the page has no `<canvas>` at all, so no scene is drawn (blue hero only). Caught by the canvas-scoped check. |
 | `gpt-oss` | blender_city | 0.0 | Model bug: `verts = [(x, y, 0) for x in range(-10, 11)) for y ...]` — mismatched brackets. |
 | `qwen9b` | email | 0.73 | Attempt 0 lacked a closing; repair attempt 1 introduced a bracketed placeholder. |
 | `qwen9b` | company_site | 0.85 | Real HTML now, but no `@media` query and no table/grid layout. |

@@ -393,6 +393,27 @@ that are NOT the runtime optimizer:
 The deep-research tasks are described in [`docs/benchmarks/deep_research.md`](docs/benchmarks/deep_research.md)
 and [`docs/benchmarks/deep_research_sources.md`](docs/benchmarks/deep_research_sources.md).
 
+### Core benchmark set
+
+Five tasks cover the interesting failure modes; the rest are kept for targeted
+checks:
+
+| Task | Why it is in the core set |
+|---|---|
+| `email_write` | sharpest instruction-following test (reasoning leakage shows up immediately) |
+| `company_website` | visual HTML: layout, responsiveness, real render |
+| `minecraft_world` | 3D: proves a scene is drawn (canvas check, not page text) |
+| `blender_city` | the openable `.blend` deliverable |
+| `deep_research_report` | long-form synthesis with citations |
+
+`calendar_event`, `email_and_calendar`, `web_fetch_brief`, `web_search`,
+`deep_research`, `research_synthesis`, `deep_research_online`,
+`deep_research_agent` and `creative_3d_voxel_island` are extended tasks: run
+them when the question is specifically about that behaviour.
+
+Reference images (1 frontier vs 1 local) live in
+[`docs/benchmarks/previews/`](docs/benchmarks/previews/README.md).
+
 All agentic tasks run offline (`network_allowed=false`) with an evidence-only repair loop: on failure the model gets the failing checks, not the solution.
 
 Reasoning levels are pass-through: `lab sandbox --reasoning <level>`,

@@ -45,7 +45,7 @@ scripts no longer apply; regenerate them with the current prompt.
 | nemotron-74b | 1.00 | 1.00 | 0.00 | — (too slow) | — |
 | swift-27b | 1.00 | 1.00 | — | 0.00 | — |
 | bonsai-27b | 1.00 | 1.00 | 0.00 | 0.00 | — |
-| gpt-oss-20b heretic | 0.00 | 1.00 | 1.00 | 0.00 | — |
+| gpt-oss-20b heretic | 0.00 | 1.00 | 0.00 | 0.00 | — |
 | qwen3.8-9b-distill | 0.73 | 0.85 | — | 0.00 | — |
 | gemma-4-26b | 1.00 | timeout | — | — | — |
 | qwen3.6-35b-a3b | engine 500 | — | — | — | — |

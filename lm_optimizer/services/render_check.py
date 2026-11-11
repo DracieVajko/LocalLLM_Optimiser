@@ -41,16 +41,24 @@ def measure_html(
     """Screenshot *html_path* and classify what was rendered.
 
     ``require="content"`` accepts anything that is not blank/flat;
-    ``require="ok"`` additionally rejects a "weak" frame (sd < 6), which is what
-    a 3D scene task needs.
+    ``require="ok"`` additionally rejects a "weak" frame (sd < 6);
+    ``require="canvas"`` measures the ``<canvas>`` element instead of the whole
+    page, which is how a voxel task proves the island is drawn and not just a
+    blue background with a title.
     """
-    from lm_optimizer.services.html_shot import ScreenshotError, capture, find_browser
+    from lm_optimizer.services.html_shot import (
+        ScreenshotError,
+        SelectorNotFound,
+        capture,
+        find_browser,
+    )
 
     if not html_path.exists():
         return RenderVerdict(False, True, f"missing {html_path.name}")
     if find_browser() is None:
         return RenderVerdict(True, True, "no browser installed; render not verified")
 
+    selector = "canvas" if require == "canvas" else None
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         target = Path(tmp) / "render.png"
         try:
@@ -61,7 +69,10 @@ def measure_html(
                 height=height,
                 wait_s=wait_s,
                 full_page=False,
+                selector=selector,
             )
+        except SelectorNotFound:
+            return RenderVerdict(False, False, f"no <{selector}> element rendered")
         except ScreenshotError as exc:
             return RenderVerdict(True, True, f"screenshot failed: {exc}"[:200])
         try:
@@ -69,7 +80,10 @@ def measure_html(
         except (OSError, ValueError) as exc:
             return RenderVerdict(True, True, f"could not measure pixels: {exc}"[:200])
 
-    ok = stats.verdict == "ok" if require == "ok" else stats.has_content
+    if require in ("ok", "canvas"):
+        ok = stats.verdict == "ok"
+    else:
+        ok = stats.has_content
     return RenderVerdict(ok, False, stats.detail(), stats)
 
 

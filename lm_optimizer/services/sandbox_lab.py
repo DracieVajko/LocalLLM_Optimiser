@@ -194,7 +194,7 @@ MINECRAFT_WORLD_TASK = SandboxTask(
         SandboxCheck("has_render_loop", "regex", r"(requestAnimationFrame\s*\(|function\s+animate\s*\()", weight=1.5),
         SandboxCheck("no_external_assets", "regex", r"\.(png|jpg|jpeg|gif|zip)\b", weight=1.0, negate=True),
         SandboxCheck("js_parses", "custom", None, weight=1.5, critical=True),
-        SandboxCheck("renders_content", "custom", "ok", weight=2.0, critical=True),
+        SandboxCheck("renders_content", "custom", "canvas", weight=2.0, critical=True),
     ],
     max_repair_attempts=2,
     timeout_s=300.0,

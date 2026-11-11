@@ -501,4 +501,4 @@ def test_deep_research_report_accepts_not_specified_wording():
 def test_minecraft_requires_a_strong_render():
     task = SANDBOX_TASKS["minecraft_world"]
     check = next(c for c in task.checks if c.name == "renders_content")
-    assert check.value == "ok"
+    assert check.value == "canvas"
