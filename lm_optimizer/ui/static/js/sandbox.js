@@ -172,6 +172,9 @@
     // --- Sandbox history, grouped per model -------------------------------
     var historyRuns = [];
     var pinnedRun = null;
+    var expandedModel = null;
+    var openTask = null;
+    var selectedRun = null;
 
     function badge(ok, text) {
         return '<span class="badge ' + (ok ? 'badge-success' : 'badge-error') + '">' + text + '</span>';
@@ -208,6 +211,35 @@
         });
     }
 
+    // Index = position in the newest-first API list, which is what
+    // /api/sandbox/run/{index} resolves against.
+    function runsFor(model, task) {
+        return historyRuns.map(function (x, idx) { return { index: idx, run: x }; })
+            .filter(function (r) {
+                if ((r.run.model || 'unknown') !== model) return false;
+                return task == null || (r.run.task || 'unknown') === task;
+            })
+            .sort(function (a, b) {
+                return (b.run.ts || '').localeCompare(a.run.ts || '');
+            });
+    }
+
+    function tasksOf(model) {
+        var byTask = {};
+        runsFor(model).forEach(function (r) {
+            var name = r.run.task || 'unknown';
+            if (!byTask[name]) byTask[name] = [];
+            byTask[name].push(r);
+        });
+        return Object.keys(byTask).sort().map(function (name) {
+            return { task: name, runs: byTask[name] };
+        });
+    }
+
+    function modelDomId(model) {
+        return 'sb-expand-' + String(model || '').replace(/[^a-z0-9]+/gi, '_');
+    }
+
     function renderHistory() {
         var box = el('sb-runs');
         if (!historyRuns.length) {
@@ -217,216 +249,253 @@
         }
         var groups = groupRuns(historyRuns);
         box.innerHTML = '<p class="text-xs text-gray-500 mb-2">' + historyRuns.length + ' run(s), '
-            + groups.length + ' model(s). Click a model to see its tests.</p>'
+            + groups.length + ' model(s). Click a model to expand its tests.</p>'
             + '<div class="table-container"><table class="table"><thead><tr>'
-            + '<th>Model</th><th>Runs</th><th>Tasks</th><th>Best</th><th>Last run</th><th></th>'
+            + '<th>Model</th><th>Runs</th><th>Tests</th><th>Best</th><th>Last run</th><th></th>'
             + '</tr></thead><tbody>'
             + groups.map(function (g) {
-                var tasks = {};
-                g.runs.forEach(function (r) { tasks[r.run.task] = true; });
-                var taskCount = Object.keys(tasks).length;
-                return '<tr class="history-model" data-model="' + esc(g.model) + '">'
-                    + '<td class="font-mono text-xs">' + esc(g.model) + '</td>'
+                var tasks = tasksOf(g.model);
+                var open = expandedModel === g.model;
+                return '<tr class="history-model' + (open ? ' is-open' : '') + '" data-model="' + esc(g.model) + '" style="cursor:pointer">'
+                    + '<td class="font-mono text-xs"><span class="sb-chevron mr-1 text-gray-400">'
+                    + (open ? '▾' : '▸') + '</span>' + esc(g.model) + '</td>'
                     + '<td class="font-mono">' + g.runs.length + '</td>'
-                    + '<td class="font-mono">' + taskCount + '</td>'
-                    + '<td>' + (g.best == null ? '-' : scoreText({ final_score: g.best }) + ' <span class="text-xs text-gray-500">' + esc(g.bestTask) + '</span>') + '</td>'
+                    + '<td class="font-mono">' + tasks.length + '</td>'
+                    + '<td>' + (g.best == null ? '-' : scoreText({ final_score: g.best })
+                        + ' <span class="text-xs text-gray-500">' + esc(g.bestTask) + '</span>') + '</td>'
                     + '<td class="font-mono text-xs">' + esc(g.last || '') + '</td>'
-                    + '<td><button class="btn btn-outline btn-sm view-model-runs" data-model="' + esc(g.model) + '">View</button></td>'
+                    + '<td class="text-right text-gray-400">' + (open ? '▾' : '▸') + '</td>'
+                    + '</tr>'
+                    + '<tr class="sb-expand-row" data-model="' + esc(g.model) + '">'
+                    + '<td colspan="6" class="p-0">'
+                    + '<div class="sb-expand" id="' + modelDomId(g.model) + '"></div></td></tr>';
+            }).join('')
+            + '</tbody></table></div>';
+
+        Array.prototype.forEach.call(box.querySelectorAll('tr.history-model'), function (row) {
+            row.addEventListener('click', function () {
+                var name = row.dataset.model;
+                expandedModel = expandedModel === name ? null : name;
+                openTask = null;
+                selectedRun = null;
+                renderHistory();
+            });
+        });
+        renderExpansion();
+    }
+
+    function renderExpansion() {
+        if (!expandedModel) return;
+        var container = document.getElementById(modelDomId(expandedModel));
+        if (!container) return;
+        if (openTask) renderTaskDetail(container, expandedModel, openTask);
+        else renderTaskList(container, expandedModel);
+    }
+
+    function renderTaskList(container, model) {
+        var tasks = tasksOf(model);
+        container.innerHTML = '<div class="p-3 bg-gray-50 border-t">'
+            + '<table class="table"><thead><tr>'
+            + '<th>Test</th><th>Result</th><th>Score</th><th>Date</th><th>Runs</th><th></th>'
+            + '</tr></thead><tbody>'
+            + tasks.map(function (t) {
+                var latest = t.runs[0].run;
+                return '<tr class="sb-test-row" data-task="' + esc(t.task) + '">'
+                    + '<td class="font-mono text-xs">' + esc(t.task) + '</td>'
+                    + '<td>' + resultBadge(latest) + '</td>'
+                    + '<td class="font-mono">' + scoreText(latest) + '</td>'
+                    + '<td class="font-mono text-xs">' + esc(latest.ts || '') + '</td>'
+                    + '<td class="font-mono" title="' + t.runs.length + ' run(s) of this test">' + t.runs.length + '</td>'
+                    + '<td class="text-right"><button class="btn btn-outline btn-sm view-test" data-task="'
+                    + esc(t.task) + '">View</button></td>'
                     + '</tr>';
             }).join('')
-            + '</tbody></table></div><div id="sb-model-detail" class="mt-4"></div>';
+            + '</tbody></table></div>';
 
-        Array.prototype.forEach.call(box.querySelectorAll('.view-model-runs'), function (button) {
+        Array.prototype.forEach.call(container.querySelectorAll('.view-test'), function (button) {
             button.addEventListener('click', function (event) {
                 event.stopPropagation();
-                showModelRuns(button.dataset.model);
+                openTask = button.dataset.task;
+                selectedRun = null;
+                renderExpansion();
             });
-        });
-        Array.prototype.forEach.call(box.querySelectorAll('tr.history-model'), function (row) {
-            row.addEventListener('click', function () { showModelRuns(row.dataset.model); });
         });
     }
 
-    function pinLabel(index) {
-        if (pinnedRun == null) return 'Pin';
-        return pinnedRun === Number(index) ? 'Pinned' : 'Pin';
-    }
+    function renderTaskDetail(container, model, task) {
+        var list = runsFor(model, task);
+        if (!list.length) {
+            openTask = null;
+            renderExpansion();
+            return;
+        }
+        var selected = null;
+        list.forEach(function (r) { if (r.index === selectedRun) selected = r; });
+        if (!selected) selected = list[0];
+        selectedRun = selected.index;
 
-    function showModelRuns(model) {
-        var panel = el('sb-model-detail');
-        var runs = historyRuns.map(function (x, idx) { return { index: idx, run: x }; })
-            .filter(function (r) { return (r.run.model || 'unknown') === model; });
-        if (!runs.length) return;
-
-        var tasks = {};
-        runs.forEach(function (r) {
-            var t = r.run.task || 'unknown';
-            if (!tasks[t]) tasks[t] = [];
-            tasks[t].push(r);
-        });
-        var taskNames = Object.keys(tasks).sort();
-
-        var html = '<div class="card"><div class="card-header"><div class="flex items-center justify-between">'
-            + '<h3 class="font-bold">' + esc(model) + '</h3>'
-            + '<button class="btn btn-outline btn-sm" id="sb-model-close">Close</button>'
-            + '</div><p class="text-xs text-gray-500 mt-1">' + runs.length + ' run(s) across '
-            + taskNames.length + ' test(s), newest first.</p></div><div class="card-body space-y-4">';
-
-        taskNames.forEach(function (task) {
-            var list = tasks[task].slice().sort(function (a, b) {
-                return (b.run.ts || '').localeCompare(a.run.ts || '');
-            });
-            var best = null;
-            list.forEach(function (r) {
-                if (r.run.final_score != null && (best == null || r.run.final_score > best)) {
-                    best = r.run.final_score;
-                }
-            });
-            html += '<div><div class="flex items-center justify-between mb-1">'
-                + '<h4 class="font-semibold">' + esc(task) + '</h4>'
-                + '<span class="text-xs text-gray-500">' + list.length + ' run(s), best '
-                + (best == null ? '-' : best.toFixed(2)) + '</span></div>'
-                + '<div class="table-container"><table class="table"><tbody>'
+        var picker = list.length > 1
+            ? '<select class="run-picker form-select text-xs" aria-label="Choose a run of this test">'
                 + list.map(function (r) {
-                    var x = r.run;
-                    var cmpBtn = (pinnedRun != null && pinnedRun !== r.index)
-                        ? '<button class="btn btn-outline btn-sm compare-run" data-a="' + pinnedRun + '" data-b="' + r.index + '">Compare</button> '
-                        : '';
-                    return '<tr>'
-                        + '<td class="font-mono text-xs">' + esc(x.ts || '') + '</td>'
-                        + '<td>' + resultBadge(x) + '</td>'
-                        + '<td class="font-mono">' + scoreText(x) + '</td>'
-                        + '<td class="font-mono text-xs">' + (x.duration_s ? Number(x.duration_s).toFixed(0) + 's' : '-') + '</td>'
-                        + '<td class="text-right space-x-1">'
-                        + '<button class="btn btn-outline btn-sm open-run" data-index="' + r.index + '">Open</button>'
-                        + '<button class="btn btn-outline btn-sm pin-run" data-index="' + r.index + '">' + pinLabel(r.index) + '</button>'
-                        + cmpBtn
-                        + '</td>'
-                        + '</tr>';
+                    var key = (r.run.run_key || 'legacy').slice(0, 10);
+                    return '<option value="' + r.index + '"'
+                        + (r.index === selected.index ? ' selected' : '') + '>'
+                        + esc((r.run.ts || '') + ' · ' + scoreText(r.run) + ' · ' + key) + '</option>';
                 }).join('')
-                + '</tbody></table></div></div>';
-        });
-        html += '</div></div>';
-        panel.innerHTML = html;
+                + '</select>'
+            : '';
 
-        el('sb-model-close').addEventListener('click', function () {
-            panel.innerHTML = '';
-            pinnedRun = null;
+        var pinBtn = pinnedRun === selected.index
+            ? '<button class="btn btn-outline btn-sm" id="sb-unpin">Unpin</button>'
+            : '<button class="btn btn-outline btn-sm" id="sb-pin">Pin</button>';
+        var compareBtn = (pinnedRun != null && pinnedRun !== selected.index)
+            ? '<button class="btn btn-outline btn-sm" id="sb-compare">Compare with pinned</button>'
+            : '';
+
+        container.innerHTML = '<div class="p-3 bg-gray-50 border-t">'
+            + '<div class="flex flex-wrap items-center justify-between gap-2 mb-2">'
+            + '<div class="flex items-center gap-2">'
+            + '<button class="btn btn-outline btn-sm" id="sb-back-to-tests">← Back to tests</button>'
+            + '<h4 class="font-bold">' + esc(task) + '</h4>'
+            + '<span class="text-xs text-gray-500">' + list.length + ' run(s)</span>'
+            + '</div><div class="flex items-center gap-2">' + picker + pinBtn + compareBtn + '</div>'
+            + '</div><div id="sb-run-detail"><p class="text-sm text-gray-500">Loading run...</p></div></div>';
+
+        el('sb-back-to-tests').addEventListener('click', function () {
+            openTask = null;
+            selectedRun = null;
+            renderExpansion();
         });
-        Array.prototype.forEach.call(panel.querySelectorAll('.open-run'), function (button) {
-            button.addEventListener('click', function () {
-                showSandboxRunDetail(button.dataset.index, model);
+        if (el('sb-pin')) {
+            el('sb-pin').addEventListener('click', function () {
+                pinnedRun = selected.index;
+                renderExpansion();
             });
-        });
-        Array.prototype.forEach.call(panel.querySelectorAll('.pin-run'), function (button) {
-            button.addEventListener('click', function () {
-                pinnedRun = (pinnedRun === Number(button.dataset.index)) ? null : Number(button.dataset.index);
-                showModelRuns(model);
+        }
+        if (el('sb-unpin')) {
+            el('sb-unpin').addEventListener('click', function () {
+                pinnedRun = null;
+                renderExpansion();
             });
-        });
-        Array.prototype.forEach.call(panel.querySelectorAll('.compare-run'), function (button) {
-            button.addEventListener('click', function () {
-                showCompareRuns(button.dataset.a, button.dataset.b);
+        }
+        if (el('sb-compare')) {
+            el('sb-compare').addEventListener('click', function () {
+                showCompareRuns(container, pinnedRun, selected.index);
             });
-        });
+        }
+        var pick = container.querySelector('.run-picker');
+        if (pick) {
+            pick.addEventListener('change', function () {
+                selectedRun = Number(pick.value);
+                renderExpansion();
+            });
+        }
+
+        loadRunDetail(selected.index);
     }
 
-    async function showSandboxRunDetail(index, model) {
-        var panel = el('sb-model-detail');
+    async function loadRunDetail(index) {
+        var host = el('sb-run-detail');
+        if (!host) return;
         try {
             var r = await fetch('/api/sandbox/run/' + encodeURIComponent(index));
             if (!r.ok) throw new Error('HTTP ' + r.status);
             var x = await r.json();
-            var crit = (x.critical_failures || []).length
-                ? '<ul class="text-xs text-red-600 mt-1">'
-                    + (x.critical_failures || []).map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('')
-                    + '</ul>'
-                : '';
-            var failing = [];
-            (x.attempts || []).forEach(function (a) {
-                (a.failing_checks || []).forEach(function (f) { failing.push(f); });
-            });
-            failing = failing.filter(function (v, i, arr) { return arr.indexOf(v) === i; });
-            var failingHtml = failing.length
-                ? '<ul class="text-xs text-red-600 mt-1">'
-                    + failing.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('')
-                    + '</ul>'
-                : '<span class="text-xs text-gray-500">none</span>';
-            var artifacts = (x.artifacts || []).length
-                ? '<ul class="text-xs text-gray-600 mt-1">'
-                    + (x.artifacts || []).map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('')
-                    + '</ul>'
-                : '';
-            var blend = x.blend_file
-                ? '<tr><td class="font-bold">Blend file</td><td class="font-mono text-xs">' + esc(x.blend_file)
-                    + '<div class="text-gray-500">Open it directly in Blender.</div></td></tr>'
-                : '';
-
-            panel.innerHTML = '<div class="card"><div class="card-body">'
-                + '<div class="flex items-center justify-between mb-2">'
-                + '<h3 class="font-bold text-lg">Run detail</h3>'
-                + '<button class="btn btn-outline btn-sm" id="sb-run-back">Back</button>'
-                + '</div>'
-                + '<table class="table text-sm"><tbody>'
-                + '<tr><td class="font-bold">Time</td><td>' + esc(x.ts || '') + '</td></tr>'
-                + '<tr><td class="font-bold">Model</td><td class="font-mono">' + esc(x.model || '') + '</td></tr>'
-                + '<tr><td class="font-bold">Task</td><td>' + esc(x.task || '') + '</td></tr>'
-                + '<tr><td class="font-bold">Score</td><td class="font-mono">' + scoreText(x) + '</td></tr>'
-                + '<tr><td class="font-bold">Result</td><td>' + resultBadge(x) + '</td></tr>'
-                + '<tr><td class="font-bold">Status</td><td>' + esc(x.status || 'measured') + '</td></tr>'
-                + '<tr><td class="font-bold">Repairs</td><td>' + (x.repair_count || 0) + '</td></tr>'
-                + '<tr><td class="font-bold">Duration</td><td class="font-mono">' + (x.duration_s ? Number(x.duration_s).toFixed(0) + 's' : '-') + '</td></tr>'
-                + '<tr><td class="font-bold">Workdir</td><td class="font-mono text-xs truncate" title="' + esc(x.workdir || '') + '">' + esc(x.workdir || '') + '</td></tr>'
-                + blend
-                + '<tr><td class="font-bold">Failing checks</td><td>' + failingHtml + '</td></tr>'
-                + (crit ? '<tr><td class="font-bold">Critical failures</td><td>' + crit + '</td></tr>' : '')
-                + (artifacts ? '<tr><td class="font-bold">Artifacts</td><td>' + artifacts + '</td></tr>' : '')
-                + (x.error ? '<tr><td class="font-bold">Error</td><td class="text-red-600 text-xs">' + esc(x.error) + '</td></tr>' : '')
-                + '</tbody></table>'
-                + '<div class="mt-4"><h4 class="font-bold">Preview</h4>'
-                + (x.artifacts || []).map(function (a) {
-                    var rel = x.workdir ? x.workdir.replace(/^results[\\/]sandbox[\\/]/, '') + '/' + a : a;
-                    var safeRel = rel.replace(/\\/g, '/');
-                    if (/[.](html|htm)$/i.test(a)) {
-                        return '<div class="mt-2 border rounded bg-black p-1">'
-                            + '<iframe sandbox="" src="/sandbox/files?path=' + encodeURIComponent(safeRel) + '"'
-                            + ' class="w-full border rounded" style="height:520px" title="' + esc(a) + ' preview"></iframe>'
-                            + '</div>';
-                    }
-                    if (/[.](py|js|txt|json|md)$/i.test(a)) {
-                        return '<details class="mt-2"><summary class="text-sm font-semibold cursor-pointer">'
-                            + esc(a) + '</summary>'
-                            + '<iframe src="/sandbox/files?path=' + encodeURIComponent(safeRel) + '"'
-                            + ' class="w-full border rounded" style="height:320px" title="' + esc(a) + ' preview"></iframe>'
-                            + '</details>';
-                    }
-                    return '<p class="text-xs text-gray-500 mt-2">' + esc(a) + '</p>';
-                }).join('')
-                + '</div></div></div>';
-
-            el('sb-run-back').addEventListener('click', function () {
-                if (model) showModelRuns(model); else renderHistory();
-            });
+            host.innerHTML = runDetailHtml(x);
         } catch (e) {
-            panel.innerHTML = '<p class="text-sm text-red-600">Failed to load run detail: '
-                + esc((e && e.message) || e) + '</p>';
+            host.innerHTML = '<p class="text-sm text-red-600">Failed to load run detail: '
+                + esc((e && e.message) || e) + '</p>'
+                + '<button class="btn btn-outline btn-sm mt-2" id="sb-detail-retry">Retry</button>';
+            var retry = el('sb-detail-retry');
+            if (retry) {
+                retry.addEventListener('click', function () { loadRunDetail(index); });
+            }
         }
     }
 
-    async function showCompareRuns(indexA, indexB) {
-        var panel = el('sb-model-detail');
-        panel.innerHTML = '<p class="text-sm text-gray-500">Loading comparison...</p>';
+    function runDetailHtml(x) {
+        var crit = (x.critical_failures || []).length
+            ? '<ul class="text-xs text-red-600 mt-1">'
+                + (x.critical_failures || []).map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('')
+                + '</ul>'
+            : '';
+        var failing = [];
+        (x.attempts || []).forEach(function (a) {
+            (a.failing_checks || []).forEach(function (f) { failing.push(f); });
+        });
+        failing = failing.filter(function (v, i, arr) { return arr.indexOf(v) === i; });
+        var failingHtml = failing.length
+            ? '<ul class="text-xs text-red-600 mt-1">'
+                + failing.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('')
+                + '</ul>'
+            : '<span class="text-xs text-gray-500">none</span>';
+        var artifacts = (x.artifacts || []).length
+            ? '<ul class="text-xs text-gray-600 mt-1">'
+                + (x.artifacts || []).map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('')
+                + '</ul>'
+            : '<span class="text-xs text-gray-500">no files</span>';
+        var blend = x.blend_file
+            ? '<tr><td class="font-bold">Blend file</td><td class="font-mono text-xs">' + esc(x.blend_file)
+                + '<div class="text-gray-500">Open it directly in Blender.</div></td></tr>'
+            : '';
+
+        return '<table class="table text-sm"><tbody>'
+            + '<tr><td class="font-bold">Time</td><td>' + esc(x.ts || '') + '</td></tr>'
+            + '<tr><td class="font-bold">Model</td><td class="font-mono">' + esc(x.model || '') + '</td></tr>'
+            + '<tr><td class="font-bold">Task</td><td>' + esc(x.task || '') + '</td></tr>'
+            + '<tr><td class="font-bold">Score</td><td class="font-mono">' + scoreText(x) + '</td></tr>'
+            + '<tr><td class="font-bold">Result</td><td>' + resultBadge(x) + '</td></tr>'
+            + '<tr><td class="font-bold">Status</td><td>' + esc(x.status || 'measured') + '</td></tr>'
+            + '<tr><td class="font-bold">Repairs</td><td>' + (x.repair_count || 0) + '</td></tr>'
+            + '<tr><td class="font-bold">Duration</td><td class="font-mono">'
+            + (x.duration_s ? Number(x.duration_s).toFixed(0) + 's' : '-') + '</td></tr>'
+            + '<tr><td class="font-bold">Workdir</td><td class="font-mono text-xs truncate" title="'
+            + esc(x.workdir || '') + '">' + esc(x.workdir || '') + '</td></tr>'
+            + blend
+            + '<tr><td class="font-bold">Failing checks</td><td>' + failingHtml + '</td></tr>'
+            + (crit ? '<tr><td class="font-bold">Critical failures</td><td>' + crit + '</td></tr>' : '')
+            + (artifacts ? '<tr><td class="font-bold">Artifacts</td><td>' + artifacts + '</td></tr>' : '')
+            + (x.error ? '<tr><td class="font-bold">Error</td><td class="text-red-600 text-xs">'
+                + esc(x.error) + '</td></tr>' : '')
+            + '</tbody></table>'
+            + '<div class="mt-4"><h4 class="font-bold">Preview</h4>'
+            + (x.artifacts || []).map(function (a) {
+                var rel = x.workdir ? x.workdir.replace(/^results[\\/]sandbox[\\/]/, '') + '/' + a : a;
+                var safeRel = rel.replace(/\\/g, '/');
+                if (/[.](html|htm)$/i.test(a)) {
+                    return '<div class="mt-2 border rounded bg-black p-1">'
+                        + '<iframe sandbox="" src="/sandbox/files?path=' + encodeURIComponent(safeRel) + '"'
+                        + ' class="w-full border rounded" style="height:520px" title="' + esc(a) + ' preview"></iframe>'
+                        + '</div>';
+                }
+                if (/[.](py|js|txt|json|md)$/i.test(a)) {
+                    return '<details class="mt-2"><summary class="text-sm font-semibold cursor-pointer">'
+                        + esc(a) + '</summary>'
+                        + '<iframe src="/sandbox/files?path=' + encodeURIComponent(safeRel) + '"'
+                        + ' class="w-full border rounded" style="height:320px" title="' + esc(a) + ' preview"></iframe>'
+                        + '</details>';
+                }
+                return '<p class="text-xs text-gray-500 mt-2">' + esc(a) + '</p>';
+            }).join('')
+            + '</div>';
+    }
+
+    async function showCompareRuns(container, indexA, indexB) {
+        container.innerHTML = '<p class="text-sm text-gray-500 p-3">Loading comparison...</p>';
         try {
             var responses = await Promise.all([
                 fetch('/api/sandbox/run/' + encodeURIComponent(indexA)),
                 fetch('/api/sandbox/run/' + encodeURIComponent(indexB)),
             ]);
-            if (!responses[0].ok || !responses[1].ok) throw new Error('HTTP ' + (responses[0].ok ? responses[1].status : responses[0].status));
+            if (!responses[0].ok || !responses[1].ok) {
+                throw new Error('HTTP ' + (responses[0].ok ? responses[1].status : responses[0].status));
+            }
             var runs = await Promise.all(responses.map(function (r) { return r.json(); }));
-            var html = '<div class="card"><div class="card-header"><div class="flex items-center justify-between">'
-                + '<h3 class="font-bold">Compare two runs</h3>'
-                + '<button class="btn btn-outline btn-sm" id="sb-compare-close">Close</button>'
-                + '</div></div><div class="card-body grid md:grid-cols-2 gap-4">';
+            var html = '<div class="p-3 bg-gray-50 border-t">'
+                + '<div class="flex items-center justify-between mb-2">'
+                + '<h4 class="font-bold">Compare two runs</h4>'
+                + '<button class="btn btn-outline btn-sm" id="sb-compare-back">Back</button>'
+                + '</div><div class="grid md:grid-cols-2 gap-4">';
             runs.forEach(function (x) {
                 var failing = [];
                 (x.attempts || []).forEach(function (a) {
@@ -443,7 +512,8 @@
                             + '</div>';
                     }
                     if (/[.](py|js|txt|json|md)$/i.test(a)) {
-                        return '<details class="mt-2" open><summary class="text-sm font-semibold cursor-pointer">' + esc(a) + '</summary>'
+                        return '<details class="mt-2" open><summary class="text-sm font-semibold cursor-pointer">'
+                            + esc(a) + '</summary>'
                             + '<iframe src="/sandbox/files?path=' + encodeURIComponent(safeRel) + '"'
                             + ' class="w-full border rounded" style="height:260px" title="' + esc(a) + ' preview"></iframe>'
                             + '</details>';
@@ -456,16 +526,23 @@
                     + '<div class="text-sm mb-2">' + esc(x.task || '') + ' ' + resultBadge(x) + '</div>'
                     + '<div class="text-xs text-gray-600 mb-2">score ' + scoreText(x) + ' · '
                     + (x.duration_s ? Number(x.duration_s).toFixed(0) + 's' : '-') + '</div>'
-                    + (failing.length ? '<ul class="text-xs text-red-600 mb-2">' + failing.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>' : '')
-                    + (x.blend_file ? '<div class="text-xs font-mono text-gray-500 mb-2">.blend: ' + esc(x.blend_file) + '</div>' : '')
+                    + (failing.length
+                        ? '<ul class="text-xs text-red-600 mb-2">'
+                            + failing.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('')
+                            + '</ul>'
+                        : '')
+                    + (x.blend_file ? '<div class="text-xs font-mono text-gray-500 mb-2">.blend: '
+                        + esc(x.blend_file) + '</div>' : '')
                     + preview
                     + '</div>';
             });
             html += '</div></div>';
-            panel.innerHTML = html;
-            el('sb-compare-close').addEventListener('click', function () { panel.innerHTML = ''; });
+            container.innerHTML = html;
+            el('sb-compare-back').addEventListener('click', function () {
+                renderExpansion();
+            });
         } catch (e) {
-            panel.innerHTML = '<p class="text-sm text-red-600">Failed to load comparison: '
+            container.innerHTML = '<p class="text-sm text-red-600 p-3">Failed to load comparison: '
                 + esc((e && e.message) || e) + '</p>';
         }
     }
