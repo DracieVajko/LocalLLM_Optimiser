@@ -171,6 +171,7 @@
     });
     // --- Sandbox history, grouped per model -------------------------------
     var historyRuns = [];
+    var pinnedRun = null;
 
     function badge(ok, text) {
         return '<span class="badge ' + (ok ? 'badge-success' : 'badge-error') + '">' + text + '</span>';

@@ -11,6 +11,7 @@ const App = {
         currentView: 'dashboard',
         currentRunId: null,
         wsManager: null,
+        runActive: false,
     },
 
     async init() {
@@ -36,6 +37,14 @@ const App = {
 
             // Periodic status updates
             setInterval(() => this.updateStatus(), 30000);
+
+            // Confirm before navigating away while a run is active.
+            window.addEventListener('beforeunload', (e) => {
+                if (this.state.runActive) {
+                    e.preventDefault();
+                    e.returnValue = 'An optimization run is in progress. Leaving this page will stop live progress updates.';
+                }
+            });
         } catch (error) {
             console.error('Dashboard init failed:', error);
             const main = document.getElementById('main-content');
@@ -98,7 +107,10 @@ const App = {
         let lastError = '';
         try {
             const [status, models, stats] = await Promise.all([
-                API.getStatus(),
+                API.getStatus().catch(() => ({
+                    lm_studio: { connected: false, url: '', loaded_model: null },
+                    hardware: {},
+                })),
                 API.getModels().catch(() => ({ models: [] })),
                 API.getStats().catch(() => ({}))
             ]);
@@ -239,8 +251,14 @@ const App = {
                 const started = await API.startOptimization({ model_id: m.id, profile, quality_threshold: quality });
                 const runId = started.id;
                 let status = 'running';
+                let polls = 0;
+                const maxPolls = 36; // ~12 minutes per model, then stop polling
                 for (;;) {
                     if (this.state.stopAllRequested) break;
+                    if (polls++ >= maxPolls) {
+                        status = 'poll timeout';
+                        break;
+                    }
                     await new Promise(res => setTimeout(res, 20000));
                     try {
                         const run = await API.getRun(runId);
@@ -423,6 +441,7 @@ const App = {
 
             // Navigate to results page with WebSocket
             this.state.currentRunId = response.id;
+            this.state.runActive = true;
             window.location.href = `/results/${response.id}`;
         } catch (error) {
             UI.hideLoading();

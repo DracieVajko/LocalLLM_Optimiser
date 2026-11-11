@@ -4,6 +4,125 @@ export const UI = {
     init() {
         this.setupTooltips();
         this.setupModals();
+        this.initDropdowns();
+        this.initKeyboardShortcuts();
+    },
+
+    // ================= Keyboard shortcuts =================
+    initKeyboardShortcuts() {
+        const shortcuts = [
+            { key: '?', label: 'Show this help' },
+            { key: 'R', label: 'Refresh status' },
+            { key: 'Esc', label: 'Close modal / dropdown' },
+        ];
+
+        document.addEventListener('keydown', (e) => {
+            // Ignore if typing in an input/textarea/select.
+            const target = e.target.tagName;
+            if (target === 'INPUT' || target === 'TEXTAREA' || target === 'SELECT' || e.target.isContentEditable) return;
+
+            if (e.key === '?') {
+                e.preventDefault();
+                this.showShortcutsHelp(shortcuts);
+            } else if (e.key.toLowerCase() === 'r') {
+                e.preventDefault();
+                // Refresh status if on dashboard
+                if (typeof window.App !== 'undefined' && window.App.updateStatus) {
+                    window.App.updateStatus();
+                    UI.showToast('Status refreshed', 'info');
+                }
+            } else if (e.key === 'Escape') {
+                this.closeModal();
+                document.querySelectorAll('.dropdown.open').forEach(d => d.classList.remove('open'));
+            }
+        }, true);
+    },
+
+    showShortcutsHelp(shortcuts) {
+        const rows = shortcuts.map(s =>
+            `<tr><td class="font-mono text-sm kbd">${s.key}</td><td class="text-sm">${s.label}</td></tr>`
+        ).join('');
+        const html = `
+            <div class="p-4">
+                <h3 class="font-semibold mb-3">Keyboard shortcuts</h3>
+                <table class="table text-sm">
+                    <thead><tr><th>Key</th><th>Action</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+                <p class="text-xs text-gray-500 mt-3">Ignore when typing in input fields.</p>
+                <div class="mt-4 flex justify-end">
+                    <button class="btn btn-primary" onclick="UI.closeModal()">Got it</button>
+                </div>
+            </div>`;
+        this.openModal(html, 'Keyboard Shortcuts');
+    },
+
+    // ================= Popups: alert / confirm =================
+    alert(message, title = 'Notice') {
+        const html = `
+            <div class="p-4 text-sm text-gray-700">
+                <p class="mb-4">${String(message)}</p>
+                <div class="flex justify-end">
+                    <button class="btn btn-primary" onclick="UI.closeModal()">OK</button>
+                </div>
+            </div>`;
+        this.openModal(html, title);
+    },
+
+    confirm(message, onConfirm, onCancel, title = 'Confirm') {
+        const html = `
+            <div class="p-4 text-sm text-gray-700">
+                <p class="mb-4">${String(message)}</p>
+                <div class="flex justify-end gap-2">
+                    <button class="btn btn-outline cancel-btn">Cancel</button>
+                    <button class="btn btn-danger confirm-btn">Confirm</button>
+                </div>
+            </div>`;
+        this.openModal(html, title);
+        setTimeout(() => {
+            const modal = document.querySelector('.modal-overlay');
+            if (!modal) return;
+            const cancel = modal.querySelector('.cancel-btn');
+            const confirm = modal.querySelector('.confirm-btn');
+            const cleanup = () => {
+                cancel?.removeEventListener('click', handleCancel);
+                confirm?.removeEventListener('click', handleConfirm);
+            };
+            const handleCancel = (e) => { e.stopPropagation(); cleanup(); if (onCancel) onCancel(); };
+            const handleConfirm = (e) => { e.stopPropagation(); cleanup(); if (onConfirm) onConfirm(); };
+            cancel.addEventListener('click', handleCancel);
+            confirm.addEventListener('click', handleConfirm);
+        }, 0);
+    },
+
+    // ================= Dropdowns =================
+    initDropdowns() {
+        // Toggle dropdown on trigger click.
+        document.addEventListener('click', (e) => {
+            const trigger = e.target.closest('[data-dropdown]');
+            if (trigger) {
+                e.stopPropagation();
+                const parent = trigger.closest('.dropdown');
+                if (parent) {
+                    // Close all other dropdowns first.
+                    document.querySelectorAll('.dropdown.open').forEach(d => {
+                        if (d !== parent) d.classList.remove('open');
+                    });
+                    parent.classList.toggle('open');
+                }
+                return;
+            }
+            // Click outside closes all dropdowns.
+            if (!e.target.closest('.dropdown')) {
+                document.querySelectorAll('.dropdown.open').forEach(d => d.classList.remove('open'));
+            }
+        });
+        // Close dropdowns on Escape.
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.dropdown.open').forEach(d => d.classList.remove('open'));
+            }
+        });
     },
 
     setupTooltips() {
@@ -33,7 +152,7 @@ export const UI = {
 
         if (status.lm_studio?.connected) {
             indicator.className = 'status-badge status-online text-sm font-medium';
-            indicator.innerHTML = '<span class="status-dot"></span>Connected';
+            indicator.innerHTML = '<span class="status-dot pulse"></span>Connected';
         } else {
             indicator.className = 'status-badge status-offline text-sm font-medium';
             indicator.innerHTML = '<span class="status-dot"></span>Disconnected';
@@ -61,7 +180,7 @@ export const UI = {
                     </div>
                 </div>`}
                 <!-- LM Studio Status & Hardware (centered) -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+                <div class="dashboard-center grid grid-cols-1 md:grid-cols-2 gap-6">
                     ${this.renderStatusCard(status.lm_studio || {})}
                     ${this.renderHardwareCard(hardware)}
                 </div>
@@ -102,7 +221,7 @@ export const UI = {
                 <div class="card-body">
                     <div class="flex items-center justify-between mb-3">
                         <span class="status-badge ${connected ? 'status-online' : 'status-offline'}">
-                            <span class="status-dot"></span>${connected ? 'Connected' : 'Disconnected'}
+                            <span class="status-dot${connected ? ' pulse' : ''}"></span>${connected ? 'Connected' : 'Disconnected'}
                         </span>
                     </div>
                     <div class="text-sm text-gray-600 font-mono break-all mb-3">${url}</div>
@@ -140,9 +259,9 @@ export const UI = {
                         <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg">
                             <div>
                                 <div class="text-xs text-gray-500">GPU</div>
-                                <div class="font-mono text-sm font-medium">${gpu.name}</div>
+                                <div class="font-mono text-sm font-medium truncate max-w-[15rem]" title="${gpu.name}">${gpu.name}</div>
                             </div>
-                            <div class="text-right">
+                            <div class="text-right shrink-0 whitespace-nowrap">
                                 <div class="text-xs text-gray-500">VRAM</div>
                                 <div class="font-mono text-lg font-semibold text-green-600">${gpu.vram_gb.toFixed(1)} GB</div>
                             </div>
@@ -235,7 +354,7 @@ export const UI = {
 
                 <!-- Advanced Search Settings - collapsed by default, clear that normal users don't need it -->
                 <div class="accordion-item border rounded-lg">
-                    <div class="accordion-header flex items-center justify-between p-3 cursor-pointer bg-gray-50" onclick="this.parentElement.classList.toggle('open'); document.getElementById('advanced-content').classList.toggle('hidden')">
+                    <div class="accordion-header flex items-center justify-between p-3 cursor-pointer bg-gray-50" role="button" aria-expanded="false" aria-controls="advanced-content" onclick="const isOpen = this.parentElement.classList.toggle('open'); document.getElementById('advanced-content').classList.toggle('hidden'); this.setAttribute('aria-expanded', isOpen)">
                         <span class="font-medium">Advanced Search Settings ▾</span>
                         <span class="text-xs text-gray-500">Normal users do not need to change these</span>
                     </div>

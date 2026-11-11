@@ -5,6 +5,7 @@
 import asyncio
 
 import sqlite3
+import time
 from typing import Any
 
 import statistics
@@ -140,6 +141,11 @@ from lm_optimizer.api.state import registry
 
 
 router = APIRouter()
+
+#: When a status probe fails, skip the next probes for this long so the
+#: dashboard does not wait on the same dead endpoint every poll.
+_STATUS_OFFLINE_TTL_S = 15.0
+_STATUS_OFFLINE_UNTIL = 0.0
 
 
 
@@ -668,11 +674,9 @@ def _convert_preset(p: dict) -> PresetSchema:
 async def get_status() -> dict[str, Any]:
     """Get system status (degrades to disconnected when LM Studio is down)."""
 
-    hardware = hardware_detector.detect()
+    global _STATUS_OFFLINE_UNTIL
 
     url = get_lm_studio_url()
-
-
 
     def _offline():
 
@@ -680,30 +684,30 @@ async def get_status() -> dict[str, Any]:
 
             "lm_studio": {"connected": False, "url": url, "loaded_model": None},
 
-            "hardware": _convert_hardware(hardware),
+            "hardware": _convert_hardware(hardware_detector.detect()),
 
         }
 
-
-
-    try:
-
-        client = await get_lm_client(echo_probe=False)
-
-    except Exception as e:
-
-        logger.warning("LM Studio unreachable for /status", error=str(e)[:160])
-
+    if time.monotonic() < _STATUS_OFFLINE_UNTIL:
+        # A recent probe already failed; do not make the dashboard wait again.
         return _offline()
 
     try:
+        client = await asyncio.wait_for(
+            get_lm_client(echo_probe=False), timeout=3.0
+        )
+    except Exception as e:
+        logger.warning("LM Studio unreachable for /status", error=str(e)[:160])
+        _STATUS_OFFLINE_UNTIL = time.monotonic() + _STATUS_OFFLINE_TTL_S
+        return _offline()
 
+    _STATUS_OFFLINE_UNTIL = 0.0
+    hardware = hardware_detector.detect()
+
+    try:
         try:
-
-            lm_connected = await client.health_check()
-
+            lm_connected = await asyncio.wait_for(client.health_check(), timeout=2.0)
         except Exception:
-
             lm_connected = False
 
 
@@ -794,21 +798,28 @@ async def connect_lm_studio(url: str) -> dict[str, Any]:
 async def list_models() -> dict[str, Any]:
     """List all available models from LM Studio (empty when unreachable)."""
 
+    global _STATUS_OFFLINE_UNTIL
+
+    if time.monotonic() < _STATUS_OFFLINE_UNTIL:
+        return {"models": []}
+
     try:
 
-        client = await get_lm_client(echo_probe=False)
+        client = await asyncio.wait_for(
+            get_lm_client(echo_probe=False), timeout=3.0
+        )
 
     except Exception as e:
 
         logger.warning("LM Studio unreachable for /models", error=str(e)[:160])
-
+        _STATUS_OFFLINE_UNTIL = time.monotonic() + _STATUS_OFFLINE_TTL_S
         return {"models": []}
 
     try:
 
         try:
 
-            models = await client.list_models()
+            models = await asyncio.wait_for(client.list_models(), timeout=3.0)
 
         except Exception:
 
