@@ -4543,9 +4543,26 @@ async def _run_sandbox_job(job_id: str, task_id: str, model: str) -> None:
 
 
 
+        started = time.perf_counter()
         result = await runner.run(_generate)
+        duration_s = time.perf_counter() - started
 
         apply_retention(base_dir, policy)
+
+        from lm_optimizer.services.sandbox_history import (
+            normalize_settings as _normalize_settings,
+            record_run as _record_run,
+        )
+
+        _record_run(
+            model,
+            task_id,
+            result.as_dict(),
+            workdir=str(workdir),
+            duration_s=duration_s,
+            prompt=definition.prompt,
+            settings=_normalize_settings(temperature=0.2, max_output_tokens=2048),
+        )
 
         _sandbox_jobs[job_id] = {
 

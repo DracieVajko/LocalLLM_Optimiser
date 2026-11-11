@@ -76,15 +76,16 @@ python -m lm_optimizer.cli.main lab prune-runs            # dry run, prints the 
 python -m lm_optimizer.cli.main lab prune-runs --apply    # rewrites both files
 ```
 
-Rules per (model, task):
+Rules per (model, task, run_key):
 
-- keyed rows: keep the newest measured row per `run_key`;
-- legacy rows (no key): keep the newest measured row for the pair, and drop the rest;
-- if a keyed row exists for the pair, legacy rows for that pair are dropped as superseded (a legacy row carries no evidence of a different prompt or settings).
+- keep the newest **measured** row of the group and drop the rest of that group (an unmeasured row never represents a config better than a measured one);
+- if the group has no measured row, keep only its newest row;
+- legacy rows (no key) form one group per (model, task), and are dropped entirely when a keyed row exists for the same pair — a legacy row carries no evidence of a different prompt or settings;
+- `(load)` and `(crash)` rows are never pruned.
 
 Output: one line per collapsed group (`model`, `task`, kept key/date, removed count) and the artifact directories to delete. `--apply` rewrites both JSONL files and removes those directories with the same path guard as §4.
 
-Expected effect on current data: sandbox 86 → 45 rows, bakeoff 77 → 43 rows.
+Expected effect on current data: sandbox 86 → 45 rows, bakeoff 77 → 44 rows.
 
 ## 6. Sandbox history UI
 
