@@ -1026,6 +1026,7 @@ def _run_sandbox_one(
     custom_prompt: str | None = None,
     context_length: int | None = None,
     reasoning: str = "off",
+    origin: str = "local",
 ) -> dict:
     """Execute one sandbox task for one model and return the result dict."""
     from dataclasses import replace as _replace
@@ -1147,6 +1148,7 @@ def _run_sandbox_one(
         duration_s=sum(a.duration_s for a in result.attempts),
         prompt=definition.prompt,
         settings=run_meta.get("settings"),
+        origin=origin,
     )
     payload["workdir"] = str(workdir)
     # Stamp every generated web / blender artifact with the model that made it,
@@ -1180,6 +1182,11 @@ def sandbox(
         "--reasoning",
         help="Reasoning level: off|on|low|medium|high|xhigh|default (unknown values fall back)",
     ),
+    origin: str = typer.Option(
+        "local",
+        "--origin",
+        help="local (this hardware) or frontier (an API provider)",
+    ),
 ):
     """Run one sandbox task with the repair loop (P4).
 
@@ -1202,6 +1209,7 @@ def sandbox(
             custom_prompt=custom_prompt,
             context_length=context_length,
             reasoning=reasoning,
+            origin=origin,
         )
     except ValueError as exc:
         console.print(f"[red]{exc}[/red]")
@@ -1259,6 +1267,52 @@ def prune_runs(
             console.print(f"  ... {len(report['groups']) - 40} more group(s)")
     if not apply:
         console.print("[dim]dry run — rerun with --apply to write[/dim]")
+
+
+@app.command("mark-origin")
+def mark_origin(
+    model: str = typer.Option(..., "--model", help="Model id (or substring) to re-label"),
+    origin: str = typer.Option(
+        "frontier", "--origin", help="local or frontier (API provider, not this hardware)"
+    ),
+    apply: bool = typer.Option(False, "--apply", help="Rewrite the history files"),
+    sandbox: bool = typer.Option(
+        True, "--sandbox/--no-sandbox", help="results/sandbox_runs.jsonl"
+    ),
+    bakeoff: bool = typer.Option(
+        True, "--bakeoff/--no-bakeoff", help="results/bakeoff/runs.jsonl"
+    ),
+):
+    """Re-label existing runs as local or frontier.
+
+    Rows written before the field existed default to local. Use this to move an
+    API-provider run (DeepSeek, Gemini, ChatGPT, ...) out of the local table.
+    """
+    from pathlib import Path as _Path
+
+    from lm_optimizer.services.sandbox_history import mark_origin as _mark_origin
+
+    paths = []
+    if sandbox:
+        paths.append(_Path("results") / "sandbox_runs.jsonl")
+    if bakeoff:
+        paths.append(_Path("results") / "bakeoff" / "runs.jsonl")
+    total_changed = 0
+    for path in paths:
+        report = _mark_origin(path, model_match=model, origin=origin, apply=apply)
+        total_changed += report["changed"]
+        models = ", ".join(report["models"]) or "no match"
+        console.print(
+            f"[bold]{path}[/bold]: {report['matched']} row(s) match, "
+            f"{report['changed']} would change -> {report['origin']} ({models})"
+        )
+    if not apply:
+        console.print(
+            f"[dim]dry run — {total_changed} row(s) would change; "
+            "rerun with --apply to write[/dim]"
+        )
+    else:
+        console.print(f"[green]{total_changed} row(s) re-labelled[/green]")
 
 
 @app.command("debug")
@@ -1619,6 +1673,11 @@ def bakeoff(
         help="Minimal memory config: parallel 1, batch 128, KV cache in RAM",
     ),
     out: str = typer.Option("results/bakeoff", "--out", help="Output directory"),
+    origin: str = typer.Option(
+        "local",
+        "--origin",
+        help="local (this hardware) or frontier (an API provider)",
+    ),
 ):
     """Benchmark any backend model on sandbox tasks (load vs generation + score).
 
@@ -1651,6 +1710,7 @@ def bakeoff(
             reasoning_effort=reasoning_effort,
             kv_ram=kv_ram,
             safe=safe,
+            origin=origin,
         )
     )
     if code != 0:

@@ -89,11 +89,18 @@ def settings_from_reasoning(
     )
 
 
-def fingerprint(model: str, task: str, prompt: str, settings: dict[str, Any]) -> str:
+def fingerprint(
+    model: str,
+    task: str,
+    prompt: str,
+    settings: dict[str, Any],
+    origin: str = "local",
+) -> str:
     """Stable id for one identical test (model + task + prompt + settings)."""
     payload = {
         "model": model,
         "task": task,
+        "origin": "frontier" if str(origin).lower() == "frontier" else "local",
         "prompt_sha": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
         "settings": {key: (settings or {}).get(key) for key in SETTINGS_KEYS},
     }
@@ -236,25 +243,29 @@ def record_run(
     path: Path | None = None,
     prompt: str | None = None,
     settings: dict[str, Any] | None = None,
+    origin: str = "local",
 ) -> dict[str, Any]:
     """Append one sandbox run record; returns the stored record.
 
     ``prompt`` and ``settings`` identify the test. When both are given a
     measured run replaces every older record with the same fingerprint.
+    ``origin`` is ``local`` (this hardware) or ``frontier`` (an API provider).
     """
     status = str(result.get("status") or "measured")
     measured = status == "measured"
+    clean_origin = "frontier" if str(origin).lower() == "frontier" else "local"
     run_key = None
     prompt_sha = ""
     clean_settings = None
     if prompt is not None and settings is not None:
         clean_settings = {key: (settings or {}).get(key) for key in SETTINGS_KEYS}
         prompt_sha = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
-        run_key = fingerprint(model, task, prompt, clean_settings)
+        run_key = fingerprint(model, task, prompt, clean_settings, clean_origin)
     record = {
         "ts": datetime.now().isoformat(timespec="seconds"),
         "model": model,
         "task": task,
+        "origin": clean_origin,
         "status": status,
         "first_pass_success": bool(result.get("first_pass_success")),
         "final_success": bool(result.get("final_success")),
@@ -393,6 +404,52 @@ def dedupe_written_rows(
             keep_workdir=str(row.get("workdir") or ""),
         )
     return removed
+
+
+def origin_of(row: dict[str, Any]) -> str:
+    """Where a run executed: ``local`` hardware or a ``frontier`` API provider.
+
+    Records written before the field existed are local, because every writer of
+    that era ran against LM Studio on this machine.
+    """
+    return "frontier" if str(row.get("origin") or "").lower() == "frontier" else "local"
+
+
+def mark_origin(
+    path: Path, *, model_match: str, origin: str, apply: bool = False
+) -> dict[str, Any]:
+    """Re-label existing rows as local/frontier (backfill for legacy records)."""
+    wanted = "frontier" if str(origin).lower() == "frontier" else "local"
+    entries = _load_entries(path)
+    needle = (model_match or "").strip().lower()
+    matched = [
+        index
+        for index, (_, row) in enumerate(entries)
+        if row and needle and needle in str(row.get("model") or "").lower()
+    ]
+    models = sorted({str(entries[i][1].get("model")) for i in matched})
+    changed = [
+        index
+        for index in matched
+        if origin_of(entries[index][1]) != wanted
+    ]
+    if apply and changed:
+        drop = set(changed)
+        lines = []
+        for index, (line, row) in enumerate(entries):
+            if index in drop and row is not None:
+                row = dict(row, origin=wanted)
+                line = json.dumps(row, ensure_ascii=False)
+            lines.append(line)
+        _write_entries(path, lines)
+    return {
+        "path": str(path),
+        "origin": wanted,
+        "models": models,
+        "matched": len(matched),
+        "changed": len(changed),
+        "applied": bool(apply and changed),
+    }
 
 
 def run_id(row: dict[str, Any]) -> str:

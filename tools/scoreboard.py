@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from lm_optimizer.services.png_stats import measure_png  # noqa: E402
+from lm_optimizer.services.sandbox_history import origin_of  # noqa: E402
 
 RUNS = ROOT / "results" / "bakeoff" / "runs.jsonl"
 VISUALS = ROOT / "results" / "compare" / "visuals"
@@ -136,8 +137,10 @@ def main() -> int:
     args = parser.parse_args()
 
     runs = list(latest(_load_jsonl(RUNS)).values()) + _load_jsonl(HISTORY)
-    clean = [row for row in runs if measured(row)]
-    rejected = len(runs) - len(clean)
+    local = [row for row in runs if origin_of(row) != "frontier"]
+    frontier = [row for row in runs if origin_of(row) == "frontier"]
+    clean = [row for row in local if measured(row)]
+    rejected = len(local) - len(clean)
 
     lines = [
         "# Scoreboard",
@@ -146,6 +149,7 @@ def main() -> int:
         "",
         f"- measured runs: **{len(clean)}**",
         f"- excluded (no output, crash, or legacy sub-second 0.00): **{rejected}**",
+        f"- frontier (API) runs kept out of the local table: **{sum(1 for r in frontier if measured(r))}**",
         "",
         "Only text tasks with deterministic checks are ranked. Visual tasks get a",
         "pixel verdict instead, because their score cannot see the canvas.",

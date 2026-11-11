@@ -294,7 +294,6 @@ def test_on_write_dedupe_never_collapses_other_rows(tmp_path, monkeypatch):
 
 
 def test_run_id_is_stable_across_reads(tmp_path, monkeypatch):
-    monkeypatch.setattr(sh, "RESULTS_ROOT", tmp_path)
     path = tmp_path / "runs.jsonl"
     settings = sh.normalize_settings()
     sh.record_run("m", "t", _result(), path=path, prompt="p", settings=settings)
@@ -302,3 +301,46 @@ def test_run_id_is_stable_across_reads(tmp_path, monkeypatch):
     sh.record_run("other", "t", _result(), path=path, prompt="p", settings=settings)
     again = [r for r in sh.list_runs(10, path=path) if r["model"] == "m"][0]["run_id"]
     assert first == again
+
+
+def test_frontier_runs_are_marked_and_never_replace_local_runs(tmp_path, monkeypatch):
+    monkeypatch.setattr(sh, "RESULTS_ROOT", tmp_path)
+    path = tmp_path / "runs.jsonl"
+    settings = sh.normalize_settings(context_length=8192)
+    sh.record_run("m", "t", _result(1.0), path=path, prompt="p", settings=settings)
+    sh.record_run(
+        "m", "t", _result(0.5), path=path, prompt="p", settings=settings, origin="frontier"
+    )
+    rows = sh.list_runs(10, path=path)
+    assert len(rows) == 2
+    assert [sh.origin_of(r) for r in rows] == ["frontier", "local"]
+    assert rows[0]["run_key"] != rows[1]["run_key"]
+
+
+def test_origin_defaults_to_local_for_legacy_rows():
+    assert sh.origin_of({"model": "m"}) == "local"
+    assert sh.origin_of({"model": "m", "origin": "frontier"}) == "frontier"
+    assert sh.origin_of({"model": "m", "origin": "nonsense"}) == "local"
+
+
+def test_mark_origin_dry_run_changes_nothing(tmp_path, monkeypatch):
+    monkeypatch.setattr(sh, "RESULTS_ROOT", tmp_path)
+    path = tmp_path / "runs.jsonl"
+    rows = [_row("deepseek-v4.1-flash (agent)", "t", ts="1"), _row("local-model", "t", ts="2")]
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    before = path.read_text(encoding="utf-8")
+    report = sh.mark_origin(path, model_match="deepseek", origin="frontier", apply=False)
+    assert report["matched"] == 1
+    assert report["changed"] == 1
+    assert path.read_text(encoding="utf-8") == before
+
+
+def test_mark_origin_relabels_only_matching_rows(tmp_path, monkeypatch):
+    monkeypatch.setattr(sh, "RESULTS_ROOT", tmp_path)
+    path = tmp_path / "runs.jsonl"
+    rows = [_row("deepseek-v4.1-flash (agent)", "t", ts="1"), _row("local-model", "t", ts="2")]
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    report = sh.mark_origin(path, model_match="deepseek", origin="frontier", apply=True)
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    assert report["changed"] == 1
+    assert [sh.origin_of(r) for r in rows] == ["frontier", "local"]

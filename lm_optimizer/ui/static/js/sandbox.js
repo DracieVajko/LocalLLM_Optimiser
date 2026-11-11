@@ -212,13 +212,18 @@
         });
     }
 
+    function originOf(run) {
+        return (run.origin || 'local') === 'frontier' ? 'frontier' : 'local';
+    }
+
     // Each entry is addressed by its stable run_id, because a prune (or a new
     // run) shifts the numeric positions of the newest-first list.
-    function runsFor(model, task) {
+    function runsFor(origin, model, task) {
         return historyRuns.map(function (x, idx) {
             return { id: x.run_id || String(idx), run: x };
         })
             .filter(function (r) {
+                if (originOf(r.run) !== origin) return false;
                 if ((r.run.model || 'unknown') !== model) return false;
                 return task == null || (r.run.task || 'unknown') === task;
             })
@@ -227,9 +232,9 @@
             });
     }
 
-    function tasksOf(model) {
+    function tasksOf(origin, model) {
         var byTask = {};
-        runsFor(model).forEach(function (r) {
+        runsFor(origin, model).forEach(function (r) {
             var name = r.run.task || 'unknown';
             if (!byTask[name]) byTask[name] = [];
             byTask[name].push(r);
@@ -239,8 +244,46 @@
         });
     }
 
-    function modelDomId(model) {
-        return expandIds[model] || ('sb-expand-' + String(model || '').replace(/[^a-z0-9]+/gi, '_'));
+    function modelDomId(key) {
+        return expandIds[key] || ('sb-expand-' + String(key || '').replace(/[^a-z0-9]+/gi, '_'));
+    }
+
+    function renderTable(runs, origin, title) {
+        if (!runs.length) return '';
+        var groups = groupRuns(runs);
+        var note = origin === 'frontier'
+            ? '<p class="text-xs text-gray-500 mb-2">Scored from API output, not measured on this hardware.</p>'
+            : '<p class="text-xs text-gray-500 mb-2">' + runs.length + ' local run(s) on this machine.</p>';
+        return '<h3 class="text-sm font-semibold mt-4 mb-1">' + esc(title) + '</h3>' + note
+            + '<div class="table-container"><table class="table"><thead><tr>'
+            + '<th>Model</th><th>Runs</th><th>Tests</th><th>Best</th><th>Last run</th><th></th>'
+            + '</tr></thead><tbody>'
+            + groups.map(function (g, groupIndex) {
+                var key = origin + '::' + g.model;
+                expandIds[key] = 'sb-expand-' + origin + '-' + groupIndex;
+                var tasks = tasksOf(origin, g.model);
+                var open = expandedModel === key;
+                var apiBadge = origin === 'frontier'
+                    ? ' <span class="badge badge-warning">API</span>'
+                    : '';
+                return '<tr class="history-model' + (open ? ' is-open' : '') + '" data-model="'
+                    + esc(g.model) + '" data-origin="' + origin + '" data-key="' + esc(key)
+                    + '" tabindex="0" role="button" aria-expanded="' + (open ? 'true' : 'false')
+                    + '" style="cursor:pointer">'
+                    + '<td class="font-mono text-xs"><span class="sb-chevron mr-1 text-gray-400">'
+                    + (open ? '▾' : '▸') + '</span>' + esc(g.model) + apiBadge + '</td>'
+                    + '<td class="font-mono">' + g.runs.length + '</td>'
+                    + '<td class="font-mono">' + tasks.length + '</td>'
+                    + '<td>' + (g.best == null ? '-' : scoreText({ final_score: g.best })
+                        + ' <span class="text-xs text-gray-500">' + esc(g.bestTask) + '</span>') + '</td>'
+                    + '<td class="font-mono text-xs">' + esc(g.last || '') + '</td>'
+                    + '<td class="text-right text-gray-400">' + (open ? '▾' : '▸') + '</td>'
+                    + '</tr>'
+                    + '<tr class="sb-expand-row" data-origin="' + origin + '" data-model="'
+                    + esc(g.model) + '"><td colspan="6" class="p-0">'
+                    + '<div class="sb-expand" id="' + modelDomId(key) + '"></div></td></tr>';
+            }).join('')
+            + '</tbody></table></div>';
     }
 
     function renderHistory() {
@@ -250,39 +293,19 @@
                 + '<code>python -m lm_optimizer.cli.main lab sandbox --task company_website --model &lt;model&gt;</code></p>';
             return;
         }
-        var groups = groupRuns(historyRuns);
+        var localRuns = historyRuns.filter(function (x) { return originOf(x) === 'local'; });
+        var frontierRuns = historyRuns.filter(function (x) { return originOf(x) === 'frontier'; });
         expandIds = {};
-        box.innerHTML = '<p class="text-xs text-gray-500 mb-2">' + historyRuns.length + ' run(s), '
-            + groups.length + ' model(s). Click a model to expand its tests.</p>'
-            + '<div class="table-container"><table class="table"><thead><tr>'
-            + '<th>Model</th><th>Runs</th><th>Tests</th><th>Best</th><th>Last run</th><th></th>'
-            + '</tr></thead><tbody>'
-            + groups.map(function (g, groupIndex) {
-                expandIds[g.model] = 'sb-expand-' + groupIndex;
-                var tasks = tasksOf(g.model);
-                var open = expandedModel === g.model;
-                return '<tr class="history-model' + (open ? ' is-open' : '')
-                    + '" data-model="' + esc(g.model) + '" tabindex="0" role="button"'
-                    + ' aria-expanded="' + (open ? 'true' : 'false') + '" style="cursor:pointer">'
-                    + '<td class="font-mono text-xs"><span class="sb-chevron mr-1 text-gray-400">'
-                    + (open ? '▾' : '▸') + '</span>' + esc(g.model) + '</td>'
-                    + '<td class="font-mono">' + g.runs.length + '</td>'
-                    + '<td class="font-mono">' + tasks.length + '</td>'
-                    + '<td>' + (g.best == null ? '-' : scoreText({ final_score: g.best })
-                        + ' <span class="text-xs text-gray-500">' + esc(g.bestTask) + '</span>') + '</td>'
-                    + '<td class="font-mono text-xs">' + esc(g.last || '') + '</td>'
-                    + '<td class="text-right text-gray-400">' + (open ? '▾' : '▸') + '</td>'
-                    + '</tr>'
-                    + '<tr class="sb-expand-row" data-model="' + esc(g.model) + '">'
-                    + '<td colspan="6" class="p-0">'
-                    + '<div class="sb-expand" id="' + modelDomId(g.model) + '"></div></td></tr>';
-            }).join('')
-            + '</tbody></table></div>';
+        box.innerHTML = '<p class="text-xs text-gray-500 mb-2">' + historyRuns.length + ' run(s): '
+            + localRuns.length + ' local, ' + frontierRuns.length
+            + ' frontier. Click a model to expand its tests.</p>'
+            + renderTable(localRuns, 'local', 'Local models (this hardware)')
+            + renderTable(frontierRuns, 'frontier', 'Frontier (API) — not measured on this hardware');
 
         Array.prototype.forEach.call(box.querySelectorAll('tr.history-model'), function (row) {
             function toggle() {
-                var name = row.dataset.model;
-                expandedModel = expandedModel === name ? null : name;
+                var key = row.dataset.key;
+                expandedModel = expandedModel === key ? null : key;
                 openTask = null;
                 selectedRun = null;
                 renderHistory();
@@ -302,14 +325,18 @@
 
     function renderExpansion() {
         if (!expandedModel) return;
+        var separator = expandedModel.indexOf('::');
+        if (separator < 0) return;
+        var origin = expandedModel.slice(0, separator);
+        var model = expandedModel.slice(separator + 2);
         var container = document.getElementById(modelDomId(expandedModel));
         if (!container) return;
-        if (openTask) renderTaskDetail(container, expandedModel, openTask);
-        else renderTaskList(container, expandedModel);
+        if (openTask) renderTaskDetail(container, origin, model, openTask);
+        else renderTaskList(container, origin, model);
     }
 
-    function renderTaskList(container, model) {
-        var tasks = tasksOf(model);
+    function renderTaskList(container, origin, model) {
+        var tasks = tasksOf(origin, model);
         container.innerHTML = '<div class="p-3 bg-gray-50 border-t">'
             + '<table class="table"><thead><tr>'
             + '<th>Test</th><th>Result</th><th>Score</th><th>Date</th><th>Runs</th><th></th>'
@@ -338,8 +365,8 @@
         });
     }
 
-    function renderTaskDetail(container, model, task) {
-        var list = runsFor(model, task);
+    function renderTaskDetail(container, origin, model, task) {
+        var list = runsFor(origin, model, task);
         if (!list.length) {
             openTask = null;
             renderExpansion();
@@ -583,9 +610,17 @@
             var ids = historyRuns.map(function (x) { return x.run_id; });
             if (pinnedRun != null && ids.indexOf(pinnedRun) === -1) pinnedRun = null;
             if (selectedRun != null && ids.indexOf(selectedRun) === -1) selectedRun = null;
-            if (expandedModel && !historyRuns.some(function (x) { return x.model === expandedModel; })) {
-                expandedModel = null;
-                openTask = null;
+            if (expandedModel) {
+                var separator = expandedModel.indexOf('::');
+                var origin = expandedModel.slice(0, separator);
+                var model = expandedModel.slice(separator + 2);
+                var stillListed = historyRuns.some(function (x) {
+                    return originOf(x) === origin && x.model === model;
+                });
+                if (!stillListed) {
+                    expandedModel = null;
+                    openTask = null;
+                }
             }
             renderHistory();
         } catch (e) {

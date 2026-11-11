@@ -164,6 +164,7 @@ async def _run_task(
     context: int,
     kv_ram: bool = False,
     safe: bool = False,
+    origin: str = "local",
 ) -> dict:
     definition = SANDBOX_TASKS[task_id]
     settings = task_settings(
@@ -174,7 +175,7 @@ async def _run_task(
         kv_ram=kv_ram,
         safe=safe,
     )
-    run_key = fingerprint(model, task_id, definition.prompt, settings)
+    run_key = fingerprint(model, task_id, definition.prompt, settings, origin)
     # The model must receive exactly the reasoning value the fingerprint assumes.
     reasoning_value = settings["reasoning_effort"] if settings["thinking"] else "off"
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -250,6 +251,7 @@ async def _run_task(
         duration_s=metrics["gen_s"],
         prompt=definition.prompt,
         settings=settings,
+        origin=origin,
     )
     apply_retention(base_dir, policy)
 
@@ -264,6 +266,7 @@ async def _run_task(
         "context": None,
         "run_key": run_key,
         "settings": settings,
+        "origin": "frontier" if str(origin).lower() == "frontier" else "local",
         "load_s": round(load_s, 1) if load_s is not None else None,
         "load_measured": load_s is not None,
         "gen_s": gen_s,
@@ -294,6 +297,7 @@ async def _run_model(
     reasoning_effort: str,
     kv_ram: bool = False,
     safe: bool = False,
+    origin: str = "local",
 ) -> list[dict]:
     from lm_optimizer.cli.main import get_client
 
@@ -340,6 +344,7 @@ async def _run_model(
                     context=context,
                     kv_ram=kv_ram,
                     safe=safe,
+                    origin=origin,
                 )
                 row["context"] = context
                 rows.append(row)
@@ -412,6 +417,7 @@ async def run_bakeoff(
     reasoning_effort: str,
     kv_ram: bool = False,
     safe: bool = False,
+    origin: str = "local",
 ) -> int:
     unknown = [t for t in tasks if t not in SANDBOX_TASKS]
     if unknown:
@@ -432,6 +438,7 @@ async def run_bakeoff(
                 reasoning_effort=reasoning_effort,
                 kv_ram=kv_ram,
                 safe=safe,
+                origin=origin,
             )
         except Exception as exc:  # one bad model must not stop the sweep
             print(f"[model] {model} crashed: {type(exc).__name__}: {exc}", flush=True)
@@ -470,6 +477,7 @@ async def main_async(args) -> int:
         reasoning_effort=args.reasoning_effort,
         kv_ram=args.kv_ram,
         safe=args.safe,
+        origin=args.origin,
     )
 
 
@@ -495,6 +503,12 @@ def main() -> int:
         help="Reasoning level: off|on|low|medium|high|xhigh|default or any server value",
     )
     parser.add_argument("--out", default=str(DEFAULT_ROOT))
+    parser.add_argument(
+        "--origin",
+        default="local",
+        choices=("local", "frontier"),
+        help="local (this hardware) or frontier (an API provider)",
+    )
     return asyncio.run(main_async(parser.parse_args()))
 
 

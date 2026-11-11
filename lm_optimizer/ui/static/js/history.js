@@ -286,9 +286,10 @@ const HistoryPage = {
                 ${models.map(model => {
                     const group = byModel.get(model).slice().sort((a, b) => String(b.x.ts || '').localeCompare(String(a.x.ts || '')));
                     const best = group.reduce((acc, r) => (r.x.final_score != null && (acc == null || r.x.final_score > acc)) ? r.x.final_score : acc, null);
+                    const isFrontier = group.some(r => (r.x.origin || 'local') === 'frontier');
                     return `<details class="border-b last:border-0">
                         <summary class="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50">
-                            <span class="font-mono text-sm font-semibold">${esc(model)}</span>
+                            <span class="font-mono text-sm font-semibold">${esc(model)}${isFrontier ? ' <span class="badge badge-warning" title="API provider, not this hardware">FRONTIER</span>' : ''}</span>
                             <span class="text-xs text-gray-500">${group.length} run(s) · ${Object.keys(group.reduce((a, r) => { a[r.x.task] = true; return a; }, {})).length} test(s) · best ${best == null ? '-' : Number(best).toFixed(2)}</span>
                         </summary>
                         <div class="table-container px-4 pb-3">

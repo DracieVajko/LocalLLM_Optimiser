@@ -56,6 +56,26 @@ Consequences:
 
 Records gain three fields: `run_key`, `settings`, `prompt_sha`. Legacy records keep working without them.
 
+### 3.1 Origin: local hardware vs frontier API
+
+A run also carries `origin`: `local` (executed on this machine) or `frontier`
+(an API provider such as DeepSeek, Gemini or ChatGPT). Origin is part of the
+fingerprint, so a frontier run can never replace a local run of the same model
+id, and vice versa.
+
+- `lab sandbox --origin local|frontier` and `lab bakeoff --origin …` set it;
+  the default is `local`.
+- Rows written before the field existed read as `local`.
+- `lab mark-origin --model <id-or-substring> --origin frontier [--apply]`
+  re-labels existing rows (dry run by default). The 2026-11-10 DeepSeek import
+  was corrected this way: 7 rows became `frontier`.
+- `tools/scoreboard.py` keeps frontier rows out of the local text ranking and
+  reports them separately.
+- The sandbox page renders local models under "Local models (this hardware)"
+  and frontier runs in a second, collapsed table labelled "Frontier (API) —
+  not measured on this hardware", with an `API` badge.
+
+
 ## 4. Dedupe on write
 
 `sandbox_history.record_run(...)` gains `prompt` and `settings` parameters and, after appending, prunes the file:
@@ -102,7 +122,7 @@ Model                              Tests  Best           Last
     company_website  PASS      1.00   11-10 19:02    1     [View]
 ```
 
-- State: `expandedModel`, `openTask`, `selectedRun`, `pinnedRun` (both run ids). Only the expansion container is re-rendered, so the row does not collapse on every click. Model rows are focusable and expand on Enter/Space.
+- State: `expandedModel` (an `origin::model` key), `openTask`, `selectedRun`, `pinnedRun` (both run ids). Only the expansion container is re-rendered, so the row does not collapse on every click. Model rows are focusable and expand on Enter/Space.
 - `View` swaps the test list for the run detail: task, status badge, score, duration, artifact links (existing `/api/sandbox/files` opener), critical failures, and `← Back to tests`.
 - When a test has more than one surviving config, a `<select>` lists them (`date · score · short run_key`) and switches the detail without leaving the view.
 - `Pin` marks a run; other runs then offer `Compare with pinned`, reusing the existing split view.
