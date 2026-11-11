@@ -272,28 +272,46 @@ const HistoryPage = {
         if (!runs.length) {
             return `<div class="card-body"><p class="text-sm text-gray-500">No sandbox task runs yet — run one from the Sandbox page.</p></div>`;
         }
+        // Group by model so a page with 60 runs stays readable: one collapsed
+        // card per model, expand to see the task runs, each with its own View.
+        const byModel = new Map();
+        runs.forEach((x, idx) => {
+            const key = x.model || 'unknown';
+            if (!byModel.has(key)) byModel.set(key, []);
+            byModel.get(key).push({ idx, x });
+        });
+        const models = [...byModel.keys()].sort();
         return `
-            <div class="card-body p-0">
-                <div class="table-container">
-                    <table class="table">
-                        <thead><tr>
-                            <th>Time</th><th>Model</th><th>Task</th><th>Score</th><th>Result</th><th>Duration</th><th>Actions</th>
-                        </tr></thead>
-                        <tbody>
-                            ${runs.map((x, idx) => `
-                                <tr class="sandbox-task-row hover:bg-gray-50" data-index="${idx}">
-                                    <td class="font-mono text-sm">${new Date(x.ts || 0).toLocaleString()}</td>
-                                    <td class="font-mono text-sm">${esc(x.model || '')}</td>
-                                    <td>${esc(x.task || '')}</td>
-                                    <td class="font-mono">${x.final_score == null ? '-' : Number(x.final_score).toFixed(3)}</td>
-                                    <td><span class="badge ${x.final_success ? 'badge-success' : 'badge-error'}">${x.final_success ? 'PASS' : 'FAIL'}</span></td>
-                                    <td class="font-mono">${x.duration_s ? Number(x.duration_s).toFixed(0) + 's' : '—'}</td>
-                                    <td><button class="btn btn-outline btn-sm view-sandbox-run" data-index="${idx}">View</button></td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
+            <div class="card-body p-0 space-y-2">
+                ${models.map(model => {
+                    const group = byModel.get(model).slice().sort((a, b) => String(b.x.ts || '').localeCompare(String(a.x.ts || '')));
+                    const best = group.reduce((acc, r) => (r.x.final_score != null && (acc == null || r.x.final_score > acc)) ? r.x.final_score : acc, null);
+                    return `<details class="border-b last:border-0">
+                        <summary class="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50">
+                            <span class="font-mono text-sm font-semibold">${esc(model)}</span>
+                            <span class="text-xs text-gray-500">${group.length} run(s) · ${Object.keys(group.reduce((a, r) => { a[r.x.task] = true; return a; }, {})).length} test(s) · best ${best == null ? '-' : Number(best).toFixed(2)}</span>
+                        </summary>
+                        <div class="table-container px-4 pb-3">
+                            <table class="table">
+                                <thead><tr>
+                                    <th>Time</th><th>Task</th><th>Score</th><th>Result</th><th>Duration</th><th>Actions</th>
+                                </tr></thead>
+                                <tbody>
+                                    ${group.map(({ idx, x }) => `
+                                        <tr class="sandbox-task-row hover:bg-gray-50" data-index="${idx}">
+                                            <td class="font-mono text-sm">${new Date(x.ts || 0).toLocaleString()}</td>
+                                            <td>${esc(x.task || '')}</td>
+                                            <td class="font-mono">${x.final_score == null ? '-' : Number(x.final_score).toFixed(3)}</td>
+                                            <td><span class="badge ${x.final_success ? 'badge-success' : 'badge-error'}">${x.final_success ? 'PASS' : 'FAIL'}</span></td>
+                                            <td class="font-mono">${x.duration_s ? Number(x.duration_s).toFixed(0) + 's' : '—'}</td>
+                                            <td><button class="btn btn-outline btn-sm view-sandbox-run" data-index="${idx}">View</button></td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>`;
+                }).join('')}
             </div>
         `;
     },
