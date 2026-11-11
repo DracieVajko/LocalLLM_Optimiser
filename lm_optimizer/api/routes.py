@@ -3297,6 +3297,17 @@ def get_sandbox_task_run(index: int) -> dict[str, Any]:
 
 
 
+@router.get("/sandbox/run-id/{run_identifier}")
+def get_sandbox_task_run_by_id(run_identifier: str) -> dict[str, Any]:
+    """Detail of one sandbox run by its stable ``run_id`` (index shift safe)."""
+    from lm_optimizer.services.sandbox_history import find_run
+
+    row = find_run(run_identifier)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Sandbox run not found")
+    return row
+
+
 @router.post("/sandbox/runs/clear-failed")
 
 def clear_failed_sandbox_task_runs() -> dict[str, Any]:
@@ -3329,30 +3340,26 @@ def get_sandbox_file(file_path: str) -> dict[str, Any]:
 
 
 
-    base = Path("results/sandbox").resolve()
+    bases = [Path("results/sandbox"), Path("results/bakeoff")]
 
     # Normalize backslashes (Windows) to forward slashes before joining.
 
     normalized = file_path.replace("\\", "/")
 
-    target = (base / normalized).resolve()
+    target = None
+    for base in bases:
+        resolved_base = base.resolve()
+        candidate = (resolved_base / normalized).resolve()
+        # Reject traversal outside this root.
+        try:
+            candidate.relative_to(resolved_base)
+        except ValueError:
+            raise HTTPException(status_code=403, detail="Forbidden path")
+        if candidate.is_file():
+            target = candidate
+            break
 
-
-
-    # Reject traversal outside the sandbox root.
-
-    try:
-
-        target.relative_to(base)
-
-    except ValueError:
-
-        raise HTTPException(status_code=403, detail="Forbidden path")
-
-
-
-    if not target.exists() or not target.is_file():
-
+    if target is None:
         raise HTTPException(status_code=404, detail="Sandbox file not found")
 
 
@@ -4544,7 +4551,8 @@ async def _run_sandbox_job(job_id: str, task_id: str, model: str) -> None:
 
 
         started = time.perf_counter()
-        result = await runner.run(_generate)
+        # run() wraps asyncio.run and cannot be called from this running loop.
+        result = await runner.run_async(_generate)
         duration_s = time.perf_counter() - started
 
         apply_retention(base_dir, policy)

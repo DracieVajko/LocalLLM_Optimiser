@@ -209,3 +209,96 @@ def test_prune_drops_legacy_rows_once_a_keyed_row_exists(tmp_path, monkeypatch):
     sh.prune_history(path, apply=True)
     kept = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
     assert [r["run_key"] for r in kept] == ["rk1:a"]
+
+
+def test_delete_refuses_the_results_root_itself(tmp_path, monkeypatch):
+    root = tmp_path / "sandbox"
+    (root / "email_write" / "run1").mkdir(parents=True)
+    monkeypatch.setattr(sh, "RESULTS_ROOT", tmp_path)
+    assert sh.delete_workdir(str(root)) is False
+    assert (root / "email_write" / "run1").exists()
+
+
+def test_delete_refuses_a_parent_of_the_results_root(tmp_path, monkeypatch):
+    monkeypatch.setattr(sh, "RESULTS_ROOT", tmp_path)
+    assert sh.delete_workdir(str(tmp_path)) is False
+
+
+def test_rewrite_retries_while_the_file_is_locked(tmp_path, monkeypatch):
+    path = tmp_path / "runs.jsonl"
+    path.write_text('{"a": 1}\n', encoding="utf-8")
+    real_replace = sh.os.replace
+    calls = {"n": 0}
+
+    def flaky_replace(src, dst):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise PermissionError("locked")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(sh.os, "replace", flaky_replace)
+    monkeypatch.setattr(sh.time, "sleep", lambda _s: None, raising=False)
+    sh._write_entries(path, ['{"a": 2}'])
+    assert path.read_text(encoding="utf-8") == '{"a": 2}\n'
+    assert calls["n"] == 3
+
+
+def test_blank_lines_survive_a_rewrite(tmp_path, monkeypatch):
+    monkeypatch.setattr(sh, "RESULTS_ROOT", tmp_path)
+    path = tmp_path / "runs.jsonl"
+    settings = sh.normalize_settings()
+    sh.record_run("m", "t", _result(), path=path, prompt="p", settings=settings)
+    path.write_text(path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+    sh.record_run("m", "t", _result(), path=path, prompt="p", settings=settings)
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert lines.count("") == 1
+    assert sum(1 for line in lines if line.startswith("{")) == 1
+
+
+def test_prune_report_lists_the_directories_it_would_delete(tmp_path, monkeypatch):
+    monkeypatch.setattr(sh, "RESULTS_ROOT", tmp_path)
+    old = tmp_path / "sandbox" / "t" / "old"
+    old.mkdir(parents=True)
+    path = tmp_path / "runs.jsonl"
+    rows = [_row("m", "t", ts="1", workdir=str(old)), _row("m", "t", ts="2")]
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    report = sh.prune_history(path, apply=False)
+    assert str(old) in report["directories"]
+    assert old.exists()
+
+
+def test_a_model_literally_named_special_is_pruned(tmp_path, monkeypatch):
+    monkeypatch.setattr(sh, "RESULTS_ROOT", tmp_path)
+    path = tmp_path / "runs.jsonl"
+    rows = [_row("special", "t", ts="1"), _row("special", "t", ts="2")]
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    assert sh.prune_history(path, apply=True)["removed"] == 1
+
+
+def test_on_write_dedupe_never_collapses_other_rows(tmp_path, monkeypatch):
+    monkeypatch.setattr(sh, "RESULTS_ROOT", tmp_path)
+    path = tmp_path / "runs.jsonl"
+    rows = [
+        _row("m", "t", ts="1"),                      # legacy, measured
+        _row("m", "t", key="rk1:a", ts="2", status="not_measured"),
+        _row("m", "t", key="rk1:a", ts="3"),
+        _row("m", "t", key="rk1:a", ts="4"),
+    ]
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    removed = sh.dedupe_written_rows(path, rows[-1:])
+    kept = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    # The legacy row survives (no key to match); the unmeasured and the older
+    # measured row of the same key go, because a measured rerun supersedes them.
+    assert removed == 2
+    assert [r["ts"] for r in kept] == ["1", "4"]
+
+
+def test_run_id_is_stable_across_reads(tmp_path, monkeypatch):
+    monkeypatch.setattr(sh, "RESULTS_ROOT", tmp_path)
+    path = tmp_path / "runs.jsonl"
+    settings = sh.normalize_settings()
+    sh.record_run("m", "t", _result(), path=path, prompt="p", settings=settings)
+    first = sh.list_runs(10, path=path)[0]["run_id"]
+    sh.record_run("other", "t", _result(), path=path, prompt="p", settings=settings)
+    again = [r for r in sh.list_runs(10, path=path) if r["model"] == "m"][0]["run_id"]
+    assert first == again

@@ -76,3 +76,30 @@ def test_bakeoff_thinking_or_context_changes_the_test_identity():
         sh.fingerprint("m", "t", "p", settings) for settings in (base, thinking, small)
     }
     assert len(keys) == 3
+
+
+def test_bakeoff_identity_follows_the_value_actually_sent():
+    from lm_optimizer.services import sandbox_history as sh
+
+    def settings(thinking, effort):
+        return bakeoff.task_settings(
+            thinking=thinking,
+            reasoning_effort=effort,
+            context=8192,
+            max_output_tokens=2048,
+            kv_ram=False,
+            safe=False,
+        )
+
+    # `--thinking --reasoning-effort off` sends reasoning=off, like --no-thinking.
+    assert sh.fingerprint("m", "t", "p", settings(True, "off")) == sh.fingerprint(
+        "m", "t", "p", settings(False, "on")
+    )
+    # `--no-thinking --reasoning-effort high` still sends off.
+    assert sh.fingerprint("m", "t", "p", settings(False, "high")) == sh.fingerprint(
+        "m", "t", "p", settings(False, "on")
+    )
+    # A real effort level is its own test.
+    assert sh.fingerprint("m", "t", "p", settings(True, "high")) != sh.fingerprint(
+        "m", "t", "p", settings(True, "on")
+    )

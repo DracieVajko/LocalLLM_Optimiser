@@ -56,7 +56,8 @@ def test_sandbox_history_skips_malformed_lines(tmp_path: Path):
     path = tmp_path / "sandbox_runs.jsonl"
     path.write_text('{"model": "a", "task": "t"}\nnot-json\n', encoding="utf-8")
     listed = sandbox_history.list_runs(10, path=path)
-    assert listed == [{"model": "a", "task": "t"}]
+    assert [row["model"] for row in listed] == ["a"]
+    assert listed[0]["run_id"]
 
 
 def test_sandbox_history_missing_file_is_empty(tmp_path: Path):

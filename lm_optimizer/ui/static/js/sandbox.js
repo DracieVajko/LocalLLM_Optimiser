@@ -212,10 +212,12 @@
         });
     }
 
-    // Index = position in the newest-first API list, which is what
-    // /api/sandbox/run/{index} resolves against.
+    // Each entry is addressed by its stable run_id, because a prune (or a new
+    // run) shifts the numeric positions of the newest-first list.
     function runsFor(model, task) {
-        return historyRuns.map(function (x, idx) { return { index: idx, run: x }; })
+        return historyRuns.map(function (x, idx) {
+            return { id: x.run_id || String(idx), run: x };
+        })
             .filter(function (r) {
                 if ((r.run.model || 'unknown') !== model) return false;
                 return task == null || (r.run.task || 'unknown') === task;
@@ -259,7 +261,9 @@
                 expandIds[g.model] = 'sb-expand-' + groupIndex;
                 var tasks = tasksOf(g.model);
                 var open = expandedModel === g.model;
-                return '<tr class="history-model' + (open ? ' is-open' : '') + '" data-model="' + esc(g.model) + '" style="cursor:pointer">'
+                return '<tr class="history-model' + (open ? ' is-open' : '')
+                    + '" data-model="' + esc(g.model) + '" tabindex="0" role="button"'
+                    + ' aria-expanded="' + (open ? 'true' : 'false') + '" style="cursor:pointer">'
                     + '<td class="font-mono text-xs"><span class="sb-chevron mr-1 text-gray-400">'
                     + (open ? '▾' : '▸') + '</span>' + esc(g.model) + '</td>'
                     + '<td class="font-mono">' + g.runs.length + '</td>'
@@ -276,12 +280,21 @@
             + '</tbody></table></div>';
 
         Array.prototype.forEach.call(box.querySelectorAll('tr.history-model'), function (row) {
-            row.addEventListener('click', function () {
+            function toggle() {
                 var name = row.dataset.model;
                 expandedModel = expandedModel === name ? null : name;
                 openTask = null;
                 selectedRun = null;
                 renderHistory();
+                var reopened = document.querySelector('tr.history-model.is-open');
+                if (reopened) reopened.focus();
+            }
+            row.addEventListener('click', toggle);
+            row.addEventListener('keydown', function (event) {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    toggle();
+                }
             });
         });
         renderExpansion();
@@ -333,25 +346,25 @@
             return;
         }
         var selected = null;
-        list.forEach(function (r) { if (r.index === selectedRun) selected = r; });
+        list.forEach(function (r) { if (r.id === selectedRun) selected = r; });
         if (!selected) selected = list[0];
-        selectedRun = selected.index;
+        selectedRun = selected.id;
 
         var picker = list.length > 1
             ? '<select class="run-picker form-select text-xs" aria-label="Choose a run of this test">'
                 + list.map(function (r) {
                     var key = (r.run.run_key || 'legacy').slice(0, 10);
-                    return '<option value="' + r.index + '"'
-                        + (r.index === selected.index ? ' selected' : '') + '>'
+                    return '<option value="' + esc(r.id) + '"'
+                        + (r.id === selected.id ? ' selected' : '') + '>'
                         + esc((r.run.ts || '') + ' · ' + scoreText(r.run) + ' · ' + key) + '</option>';
                 }).join('')
                 + '</select>'
             : '';
 
-        var pinBtn = pinnedRun === selected.index
+        var pinBtn = pinnedRun === selected.id
             ? '<button class="btn btn-outline btn-sm" id="sb-unpin">Unpin</button>'
             : '<button class="btn btn-outline btn-sm" id="sb-pin">Pin</button>';
-        var compareBtn = (pinnedRun != null && pinnedRun !== selected.index)
+        var compareBtn = (pinnedRun != null && pinnedRun !== selected.id)
             ? '<button class="btn btn-outline btn-sm" id="sb-compare">Compare with pinned</button>'
             : '';
 
@@ -371,7 +384,7 @@
         });
         if (el('sb-pin')) {
             el('sb-pin').addEventListener('click', function () {
-                pinnedRun = selected.index;
+                pinnedRun = selected.id;
                 renderExpansion();
             });
         }
@@ -383,35 +396,40 @@
         }
         if (el('sb-compare')) {
             el('sb-compare').addEventListener('click', function () {
-                showCompareRuns(container, pinnedRun, selected.index);
+                showCompareRuns(container, pinnedRun, selected.id);
             });
         }
         var pick = container.querySelector('.run-picker');
         if (pick) {
             pick.addEventListener('change', function () {
-                selectedRun = Number(pick.value);
+                selectedRun = pick.value;
                 renderExpansion();
             });
         }
 
-        loadRunDetail(selected.index);
+        loadRunDetail(selected.id);
     }
 
-    async function loadRunDetail(index) {
+    var detailRequest = 0;
+
+    async function loadRunDetail(runId) {
         var host = el('sb-run-detail');
         if (!host) return;
+        var request = ++detailRequest;
         try {
-            var r = await fetch('/api/sandbox/run/' + encodeURIComponent(index));
+            var r = await fetch('/api/sandbox/run-id/' + encodeURIComponent(runId));
             if (!r.ok) throw new Error('HTTP ' + r.status);
             var x = await r.json();
+            if (request !== detailRequest) return;  // a newer pick won
             host.innerHTML = runDetailHtml(x);
         } catch (e) {
+            if (request !== detailRequest) return;
             host.innerHTML = '<p class="text-sm text-red-600">Failed to load run detail: '
                 + esc((e && e.message) || e) + '</p>'
                 + '<button class="btn btn-outline btn-sm mt-2" id="sb-detail-retry">Retry</button>';
             var retry = el('sb-detail-retry');
             if (retry) {
-                retry.addEventListener('click', function () { loadRunDetail(index); });
+                retry.addEventListener('click', function () { loadRunDetail(runId); });
             }
         }
     }
@@ -463,18 +481,18 @@
             + '</tbody></table>'
             + '<div class="mt-4"><h4 class="font-bold">Preview</h4>'
             + (x.artifacts || []).map(function (a) {
-                var rel = x.workdir ? x.workdir.replace(/^results[\\/]sandbox[\\/]/, '') + '/' + a : a;
+                var rel = x.workdir ? x.workdir.replace(/^results[\\/](sandbox|bakeoff)[\\/]/, '') + '/' + a : a;
                 var safeRel = rel.replace(/\\/g, '/');
                 if (/[.](html|htm)$/i.test(a)) {
                     return '<div class="mt-2 border rounded bg-black p-1">'
-                        + '<iframe sandbox="" src="/sandbox/files?path=' + encodeURIComponent(safeRel) + '"'
+                        + '<iframe sandbox="" src="/sandbox/files?file_path=' + encodeURIComponent(safeRel) + '"'
                         + ' class="w-full border rounded" style="height:520px" title="' + esc(a) + ' preview"></iframe>'
                         + '</div>';
                 }
                 if (/[.](py|js|txt|json|md)$/i.test(a)) {
                     return '<details class="mt-2"><summary class="text-sm font-semibold cursor-pointer">'
                         + esc(a) + '</summary>'
-                        + '<iframe src="/sandbox/files?path=' + encodeURIComponent(safeRel) + '"'
+                        + '<iframe src="/sandbox/files?file_path=' + encodeURIComponent(safeRel) + '"'
                         + ' class="w-full border rounded" style="height:320px" title="' + esc(a) + ' preview"></iframe>'
                         + '</details>';
                 }
@@ -483,12 +501,12 @@
             + '</div>';
     }
 
-    async function showCompareRuns(container, indexA, indexB) {
+    async function showCompareRuns(container, idA, idB) {
         container.innerHTML = '<p class="text-sm text-gray-500 p-3">Loading comparison...</p>';
         try {
             var responses = await Promise.all([
-                fetch('/api/sandbox/run/' + encodeURIComponent(indexA)),
-                fetch('/api/sandbox/run/' + encodeURIComponent(indexB)),
+                fetch('/api/sandbox/run-id/' + encodeURIComponent(idA)),
+                fetch('/api/sandbox/run-id/' + encodeURIComponent(idB)),
             ]);
             if (!responses[0].ok || !responses[1].ok) {
                 throw new Error('HTTP ' + (responses[0].ok ? responses[1].status : responses[0].status));
@@ -506,18 +524,18 @@
                 });
                 failing = failing.filter(function (v, i, arr) { return arr.indexOf(v) === i; });
                 var preview = (x.artifacts || []).map(function (a) {
-                    var rel = x.workdir ? x.workdir.replace(/^results[\\/]sandbox[\\/]/, '') + '/' + a : a;
+                    var rel = x.workdir ? x.workdir.replace(/^results[\\/](sandbox|bakeoff)[\\/]/, '') + '/' + a : a;
                     var safeRel = rel.replace(/\\/g, '/');
                     if (/[.](html|htm)$/i.test(a)) {
                         return '<div class="mt-2 border rounded bg-black p-1">'
-                            + '<iframe sandbox="" src="/sandbox/files?path=' + encodeURIComponent(safeRel) + '"'
+                            + '<iframe sandbox="" src="/sandbox/files?file_path=' + encodeURIComponent(safeRel) + '"'
                             + ' class="w-full border rounded" style="height:260px" title="' + esc(a) + ' preview"></iframe>'
                             + '</div>';
                     }
                     if (/[.](py|js|txt|json|md)$/i.test(a)) {
                         return '<details class="mt-2" open><summary class="text-sm font-semibold cursor-pointer">'
                             + esc(a) + '</summary>'
-                            + '<iframe src="/sandbox/files?path=' + encodeURIComponent(safeRel) + '"'
+                            + '<iframe src="/sandbox/files?file_path=' + encodeURIComponent(safeRel) + '"'
                             + ' class="w-full border rounded" style="height:260px" title="' + esc(a) + ' preview"></iframe>'
                             + '</details>';
                     }
@@ -545,8 +563,12 @@
                 renderExpansion();
             });
         } catch (e) {
-            container.innerHTML = '<p class="text-sm text-red-600 p-3">Failed to load comparison: '
-                + esc((e && e.message) || e) + '</p>';
+            container.innerHTML = '<div class="p-3 bg-gray-50 border-t">'
+                + '<p class="text-sm text-red-600">Failed to load comparison: '
+                + esc((e && e.message) || e) + '</p>'
+                + '<button class="btn btn-outline btn-sm mt-2" id="sb-compare-back">Back</button></div>';
+            var back = el('sb-compare-back');
+            if (back) back.addEventListener('click', function () { renderExpansion(); });
         }
     }
 
@@ -558,10 +580,20 @@
             if (!r.ok) throw new Error('HTTP ' + r.status);
             var j = await r.json();
             historyRuns = j.runs || [];
+            var ids = historyRuns.map(function (x) { return x.run_id; });
+            if (pinnedRun != null && ids.indexOf(pinnedRun) === -1) pinnedRun = null;
+            if (selectedRun != null && ids.indexOf(selectedRun) === -1) selectedRun = null;
+            if (expandedModel && !historyRuns.some(function (x) { return x.model === expandedModel; })) {
+                expandedModel = null;
+                openTask = null;
+            }
             renderHistory();
         } catch (e) {
             box.innerHTML = '<p class="text-sm text-red-600">Failed to load sandbox runs: '
-                + esc((e && e.message) || e) + '</p>';
+                + esc((e && e.message) || e) + '</p>'
+                + '<button class="btn btn-outline btn-sm mt-2" id="sb-runs-retry">Retry</button>';
+            var retry = el('sb-runs-retry');
+            if (retry) retry.addEventListener('click', loadTaskRuns);
         }
     }
 

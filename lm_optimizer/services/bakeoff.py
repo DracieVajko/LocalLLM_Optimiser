@@ -24,9 +24,9 @@ from pathlib import Path
 
 from lm_optimizer.domain.models import LoadConfiguration
 from lm_optimizer.services.sandbox_history import (
+    dedupe_written_rows,
     fingerprint,
     normalize_settings,
-    prune_history,
     record_run,
 )
 from lm_optimizer.services.model_gate import ModelGate, ModelGateTimeout
@@ -69,12 +69,24 @@ def task_settings(
     kv_ram: bool,
     safe: bool,
 ) -> dict:
-    """Settings that decide whether two bakeoff runs are the same test."""
+    """Settings that decide whether two bakeoff runs are the same test.
+
+    The reasoning identity is derived from the value actually sent on the
+    wire: ``--thinking --reasoning-effort off`` still sends ``off``, so it is
+    the same test as ``--no-thinking``.
+    """
+    level = (reasoning_effort or "").strip().lower()
+    if not thinking:
+        wire = "off"
+    elif level in ("", "default"):
+        wire = None
+    else:
+        wire = reasoning_effort
     return normalize_settings(
         temperature=0.0,
         max_output_tokens=max_output_tokens,
-        thinking=thinking,
-        reasoning_effort=reasoning_effort,
+        thinking=wire not in (None, "off"),
+        reasoning_effort=wire,
         context_length=context,
         kv_ram=kv_ram,
         safe=safe,
@@ -163,6 +175,8 @@ async def _run_task(
         safe=safe,
     )
     run_key = fingerprint(model, task_id, definition.prompt, settings)
+    # The model must receive exactly the reasoning value the fingerprint assumes.
+    reasoning_value = settings["reasoning_effort"] if settings["thinking"] else "off"
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     base_dir = root / _slug(model) / task_id
     workdir = base_dir / stamp
@@ -179,12 +193,6 @@ async def _run_task(
         if feedback:
             prompt = feedback + "\n\n" + prompt
         started = time.perf_counter()
-        if not thinking:
-            reasoning_value = "off"
-        elif reasoning_effort.strip().lower() in ("", "default"):
-            reasoning_value = None
-        else:
-            reasoning_value = reasoning_effort
         response = await client.chat_completion(
             model=model,
             input_text=prompt,
@@ -438,8 +446,12 @@ async def run_bakeoff(
         for row in rows:
             with jsonl.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(row, ensure_ascii=False) + "\n")
-        # Same test = same model + task + prompt + settings: keep the newest.
-        prune_history(jsonl, apply=True)
+        # Same test (model + task + prompt + settings) keeps its newest measured
+        # row. Legacy/unmeasured rows are left for the explicit `prune-runs`.
+        try:
+            dedupe_written_rows(jsonl, rows)
+        except OSError:
+            pass  # history maintenance never fails a measurement sweep
         all_rows.extend(rows)
     path = _write_summary(all_rows, root)
     print(f"\nsummary: {path}")

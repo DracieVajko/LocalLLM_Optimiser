@@ -17,6 +17,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -104,16 +105,8 @@ def _allowed_roots() -> tuple[Path, Path]:
     return (RESULTS_ROOT / "sandbox", RESULTS_ROOT / "bakeoff")
 
 
-def _is_relative_to(path: Path, root: Path) -> bool:
-    try:
-        path.relative_to(root)
-        return True
-    except ValueError:
-        return False
-
-
 def delete_workdir(workdir: str | None, *, keep: str = "") -> bool:
-    """Remove one artifact dir, only inside this project's results trees."""
+    """Remove one artifact dir, only strictly inside this project's results trees."""
     if not workdir:
         return False
     try:
@@ -126,7 +119,23 @@ def delete_workdir(workdir: str | None, *, keep: str = "") -> bool:
                 return False
         except OSError:
             pass
-    if not any(_is_relative_to(resolved, root.resolve()) for root in _allowed_roots()):
+    inside = False
+    for root in _allowed_roots():
+        try:
+            resolved_root = root.resolve()
+        except OSError:
+            continue
+        # The root itself and anything above it must never be deletable.
+        if resolved == resolved_root:
+            return False
+        try:
+            parts = resolved.relative_to(resolved_root).parts
+        except ValueError:
+            continue
+        if parts:
+            inside = True
+            break
+    if not inside:
         return False
     if not resolved.is_dir():
         return False
@@ -138,7 +147,7 @@ def delete_workdir(workdir: str | None, *, keep: str = "") -> bool:
 
 
 def _load_entries(path: Path) -> list[tuple[str, dict[str, Any] | None]]:
-    """Line/parsed pairs; malformed lines are kept with ``None``."""
+    """Line/parsed pairs; malformed and blank lines are kept with ``None``."""
     if not path.exists():
         return []
     try:
@@ -148,6 +157,7 @@ def _load_entries(path: Path) -> list[tuple[str, dict[str, Any] | None]]:
     entries: list[tuple[str, dict[str, Any] | None]] = []
     for line in lines:
         if not line.strip():
+            entries.append(("", None))
             continue
         try:
             item = json.loads(line)
@@ -158,14 +168,31 @@ def _load_entries(path: Path) -> list[tuple[str, dict[str, Any] | None]]:
     return entries
 
 
+def _count_rows(entries: list[tuple[str, dict[str, Any] | None]]) -> int:
+    return sum(1 for _, row in entries if row is not None)
+
+
 def _write_entries(path: Path, lines: list[str]) -> None:
-    """Atomically replace the JSONL file (a crash cannot truncate history)."""
+    """Atomically replace the JSONL file (a crash cannot truncate history).
+
+    On Windows the replace fails while another process holds the file open;
+    the history is polled by the web UI, so retry briefly instead of failing
+    the run that just succeeded.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
             handle.write("".join(line + "\n" for line in lines))
-        os.replace(tmp, path)
+        last: OSError | None = None
+        for attempt in range(5):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError as exc:  # another handle has the file open
+                last = exc
+                time.sleep(0.05 * (attempt + 1))
+        raise last or OSError("replace failed")
     except BaseException:
         try:
             os.unlink(tmp)
@@ -249,17 +276,21 @@ def record_run(
     with target.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(record, ensure_ascii=False) + "\n")
     if run_key and measured and task not in SPECIAL_TASKS:
-        _drop_superseded(
-            target, run_key=run_key, model=model, task=task, keep_workdir=workdir
-        )
+        try:
+            record["superseded"] = _drop_superseded(
+                target, run_key=run_key, model=model, task=task, keep_workdir=workdir
+            )
+        except OSError:
+            # History maintenance must never fail a run that succeeded.
+            record["superseded"] = 0
     return record
 
 
 def _group_key(row: dict[str, Any]) -> tuple:
     task = str(row.get("task"))
     if task in SPECIAL_TASKS:
-        return ("special", id(row))
-    return (str(row.get("model")), task, row.get("run_key") or "__legacy__")
+        return (1, id(row))
+    return (0, str(row.get("model")), task, row.get("run_key") or "__legacy__")
 
 
 def plan_prune(
@@ -279,9 +310,9 @@ def plan_prune(
     drop: set[int] = set()
     summary: list[dict[str, Any]] = []
     for key, indices in groups.items():
-        if key[0] == "special":
+        if key[0] == 1:
             continue
-        model, task, run_key = key
+        _, model, task, run_key = key
         measured = [
             index
             for index in indices
@@ -313,6 +344,11 @@ def prune_history(path: Path, *, apply: bool = False) -> dict[str, Any]:
     """Collapse duplicate runs; dry run unless ``apply`` is true."""
     entries = _load_entries(path)
     drop, summary = plan_prune(entries)
+    directories = [
+        str((entries[index][1] or {}).get("workdir") or "")
+        for index in sorted(drop)
+        if (entries[index][1] or {}).get("workdir")
+    ]
     removed_dirs = 0
     if apply and drop:
         _write_entries(
@@ -322,21 +358,73 @@ def prune_history(path: Path, *, apply: bool = False) -> dict[str, Any]:
             row = entries[index][1] or {}
             if delete_workdir(row.get("workdir")):
                 removed_dirs += 1
+    before = _count_rows(entries)
     return {
         "path": str(path),
-        "before": len(entries),
-        "after": len(entries) - len(drop),
+        "before": before,
+        "after": before - len(drop),
         "removed": len(drop),
+        "directories": directories,
         "directories_removed": removed_dirs,
         "groups": summary,
     }
 
 
+def dedupe_written_rows(
+    path: Path, rows: list[dict[str, Any]]
+) -> int:
+    """On-write rule for a JSONL a caller appended to: only a measured row
+    replaces rows with its own run_key. Never collapses legacy or unmeasured
+    rows — that is `prune_history`'s explicit migration."""
+    removed = 0
+    for row in rows:
+        run_key = row.get("run_key")
+        if (
+            not run_key
+            or str(row.get("status") or "measured") != "measured"
+            or str(row.get("task")) in SPECIAL_TASKS
+        ):
+            continue
+        removed += _drop_superseded(
+            path,
+            run_key=str(run_key),
+            model=str(row.get("model")),
+            task=str(row.get("task")),
+            keep_workdir=str(row.get("workdir") or ""),
+        )
+    return removed
+
+
+def run_id(row: dict[str, Any]) -> str:
+    """Stable address for one history row (indexes shift after a prune)."""
+    blob = "|".join(
+        str(row.get(key) or "")
+        for key in ("model", "task", "ts", "run_key", "final_score", "status")
+    )
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+
+
 def list_runs(limit: int = 100, *, path: Path | None = None) -> list[dict[str, Any]]:
-    """Return the newest records first; malformed lines are skipped."""
+    """Return the newest records first; each row carries a stable ``run_id``."""
     target = _history_path(path)
     records = [row for _, row in _load_entries(target) if row is not None]
-    return records[-limit:][::-1]
+    newest = records[-limit:][::-1]
+    for row in newest:
+        row.setdefault("run_id", run_id(row))
+    return newest
+
+
+def find_run(identifier: str, *, path: Path | None = None) -> dict[str, Any] | None:
+    """Find one record by its stable ``run_id`` (falls back to a numeric index)."""
+    runs = list_runs(1000, path=path)
+    for row in runs:
+        if row.get("run_id") == identifier:
+            return row
+    if identifier.isdigit():
+        index = int(identifier)
+        if 0 <= index < len(runs):
+            return runs[index]
+    return None
 
 
 def clear_failed_sandbox_runs() -> dict[str, int]:
