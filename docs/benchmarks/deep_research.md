@@ -2,6 +2,11 @@
 
 Task id: `deep_research_report`.
 
+This is the **offline** task: the model writes from a fixed source package.
+The online variants (`deep_research_online`, `deep_research_agent`, and the
+`lab research` command) are documented in
+[deep_research_sources.md](deep_research_sources.md).
+
 Inspired by [DeepResearch Bench](https://deepresearch-bench.github.io/)
 (100 PhD-level tasks, RACE for report quality + FACT for citation quality).
 This is a **deterministic, offline** simplification: one research question with

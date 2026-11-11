@@ -1,11 +1,25 @@
-# Frontier benchmark: Minecraft-style voxel world
+# Frontier benchmarks
 
-This folder contains a reproducible **frontier-model benchmark** used to compare
-local LM Studio models against hosted frontier models on the same task. Only the
-frontier/agent artifacts and results are committed here; local model results are
-kept outside git (they are machine-specific).
+This folder contains the reproducible **frontier-model benchmarks** used to
+compare local LM Studio models against hosted frontier models on the same tasks.
+Only the frontier/agent artifacts and results are committed here; local model
+results are kept outside git (they are machine-specific).
 
-## Task
+Tasks and their docs:
+
+| Task | Doc |
+|---|---|
+| `email_write` | prompt in `benchmarks/compare/prompts/email_write.txt` |
+| `minecraft_world` | this page |
+| `company_website` | prompt in `benchmarks/compare/prompts/company_website.txt` |
+| `blender_city` | [blender_city.md](blender_city.md) |
+| `deep_research_report` | [deep_research.md](deep_research.md) |
+| `deep_research_online` | [deep_research_sources.md](deep_research_sources.md) |
+
+The comparison tooling and the current score table live in
+[`benchmarks/compare/`](../../benchmarks/compare/README.md) and `SCOREBOARD.md`.
+
+## Task: Minecraft-style voxel world
 
 The model must produce **one self-contained HTML file** (`index.html`) that
 renders a Minecraft-style floating voxel island with Three.js from a CDN. No
@@ -45,11 +59,11 @@ The committed example uses **Pixel Perfection** by Hugh "XSSheep" Rutland,
 licensed **CC BY-SA 4.0**. Only 19 basic block textures are included; they are
 packed into a 5x4 atlas and embedded as a base64 data URI so the artifact stays
 a single file. Attribution and the full license are in
-[`deepseek_agent/minecraft_world/textures/pixel_perfection/`](deepseek_agent/minecraft_world/textures/pixel_perfection/):
+[`deepseek_agent/minecraft_world/textures/pixel_perfection/`](../../benchmarks/deepseek_agent/minecraft_world/textures/pixel_perfection/):
 
-- [NOTICE.md](deepseek_agent/minecraft_world/textures/pixel_perfection/NOTICE.md)
-- [LICENSE-CC-BY-SA-4.0.txt](deepseek_agent/minecraft_world/textures/pixel_perfection/LICENSE-CC-BY-SA-4.0.txt)
-- [ATLAS.md](deepseek_agent/minecraft_world/textures/pixel_perfection/ATLAS.md)
+- [NOTICE.md](../../benchmarks/deepseek_agent/minecraft_world/textures/pixel_perfection/NOTICE.md)
+- [LICENSE-CC-BY-SA-4.0.txt](../../benchmarks/deepseek_agent/minecraft_world/textures/pixel_perfection/LICENSE-CC-BY-SA-4.0.txt)
+- [ATLAS.md](../../benchmarks/deepseek_agent/minecraft_world/textures/pixel_perfection/ATLAS.md)
 
 The texture work is CC BY-SA 4.0; the surrounding code stays under the
 repository's MIT license. The original Minecraft textures are **not** used.
@@ -84,13 +98,12 @@ inputs and no external scripts/styles.
 
 | Task | Score | Pass | Artifact |
 |---|---:|---|---|
-| `minecraft_world` | **1.0** | yes | [index.html](deepseek_agent/minecraft_world/index.html) |
-| `company_website` | **1.0** | yes | [index.html](deepseek_agent/company_website/index.html) |
-| `email_write` | **1.0** | yes | [email.txt](deepseek_agent/email_write/email.txt) |
-| `blender_city` | **1.0** | yes | [build_scene.py](deepseek_agent/blender_city/build_scene.py) |
+| `minecraft_world` | **1.0** | yes | [index.html](../../benchmarks/deepseek_agent/minecraft_world/index.html) |
+| `company_website` | **1.0** | yes | [index.html](../../benchmarks/deepseek_agent/company_website/index.html) |
+| `email_write` | **1.0** | yes | [email.txt](../../benchmarks/deepseek_agent/email_write/email.txt) |
+| `blender_city` | **1.0** | yes | [build_scene.py](../../benchmarks/deepseek_agent/blender_city/build_scene.py) |
 
-Full table: [frontier_comparison.md](frontier_comparison.md) and
-[frontier_comparison.csv](frontier_comparison.csv).
+Full table: [frontier_comparison.md](frontier_comparison.md).
 
 The Blender artifact builds the full 12x12 city grid and saves `scene.blend`
 with no renders; the file is opened in background Blender and structurally

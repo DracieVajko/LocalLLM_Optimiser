@@ -9,11 +9,15 @@ and compared mostly visually.
 benchmarks/compare/
   deepseek/          committed reference (DeepSeek V4.1 Flash)
     <task>/<artifact>
-  chatgpt/           put the ChatGPT outputs here (same layout)
+  chatgpt/           ChatGPT outputs (same layout)
     <task>/<artifact>
-  nemotron/          local Nemotron outputs (optional; usually gitignored)
+  gemini/            Gemini outputs (same layout)
     <task>/<artifact>
+  prompts/           generated prompt files (one per task)
 ```
+
+Local-model artifacts are not stored here; `--include-bakeoff` reads them from
+`results/bakeoff/<model>/<task>/` at compare time.
 
 Task → artifact:
 
@@ -42,7 +46,7 @@ python tools/compare_models.py --provider chatgpt --task minecraft_world --file 
 
 ```powershell
 $env:PATH += ";C:\Program Files\Blender Foundation\Blender 5.3"
-python tools/compare_models.py --tasks all
+python tools/compare_models.py --tasks all --include-bakeoff
 ```
 
 Outputs:
@@ -50,7 +54,8 @@ Outputs:
 - `results/compare/comparison.md` — score table
 - `results/compare/comparison.csv` — Excel-friendly
 - `results/compare/gallery.html` — visual side-by-side (open in a browser)
-- `results/compare/visuals/` — screenshots / Blender previews
+- `results/compare/visuals/` — screenshots (Blender city has no render; the
+  gallery prints its `.blend` path instead)
 - `results/compare/runs.jsonl` — raw records
 
 Local model outputs can be dropped into `results/compare/local/<model>/<task>/`

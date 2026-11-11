@@ -17,7 +17,6 @@ instruction sheet.
 | `company_website` | `prompts/company_website.txt` | `index.html` |
 | `deep_research_report` | `prompts/deep_research_report.txt` | `index.html` |
 | `blender_city` | `prompts/blender_city.txt` | `build_scene.py` |
-| `blender_skyblock` | `prompts/blender_skyblock.txt` | `build_scene.py` |
 
 Do not shorten the prompt, add follow-up messages, or ask for a different
 design — the comparison only works if every provider gets the same text.

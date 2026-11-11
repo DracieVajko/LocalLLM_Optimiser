@@ -29,8 +29,8 @@ python -m pytest tests/test_scoring_reference.py -v
 | `company_website` JS body without a form | **<1.0** | no | `has_contact_form` |
 | `email_write` good artifact | **1.000** | yes | — |
 | `email_write` without Subject | **0.000** | no | `has_subject` |
-| `blender_skyblock` valid artifacts | **1.000** | yes | — |
-| `blender_skyblock` broken Blender run | **0.000** | no | `blend_runs`, `blend_is_binary`, `blend_min_size` |
+| `blender_city` valid artifacts | **1.000** | yes | — |
+| `blender_city` broken Blender run | **0.000** | no | `blend_runs`, `blend_is_binary`, `blend_min_size`, `city_mesh_count` |
 
 ## Audit findings fixed
 
@@ -51,8 +51,8 @@ python -m pytest tests/test_scoring_reference.py -v
 5. **`blender_city_bridge` wrote the script to the wrong artifact.** Its
    artifact list started with `scene.blend`, so the runner wrote the Python
    text there and executed the wrong file. The list now starts with
-   `build_scene.py` and the task validates the `.blend` and frames like
-   `blender_skyblock`.
+   `build_scene.py`. (The bridge and skyblock Blender tasks were later removed;
+   `blender_city` is the only Blender task.)
 6. **Prompt/scoring mismatch.** The prompt asked for first-person controls and
    block editing while the intended output is an automatic orbit scene. The
    prompt now asks for an orbiting camera and the check is `has_camera`.

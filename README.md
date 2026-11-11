@@ -186,10 +186,11 @@ python -m lm_optimizer.web_main   # http://127.0.0.1:8080
 Pages: **Dashboard** (optimize form, live status, plain model dropdown, custom
 priorities 0.00-1.00 + hard speed target), **History** (runs + sandbox duels,
 config counts, stale flags, per-row checkboxes with bulk delete / re-run /
-compare, abandon), **Results** (winner card, alternatives, charts, per-test
-Prompt/Thinking/Output, full JSON page, Apply Best Config, Save LM Studio
-config (download) and Save as LM Studio default (persist with backup)),
-**Sandbox** (text/HTML/3D duels with presets), **Brewery** (Lab +
+compare, abandon; sandbox task runs grouped per model in collapsible cards),
+**Results** (winner card, alternatives, charts, per-test Prompt/Thinking/Output,
+full JSON page, Apply Best Config, Save LM Studio config (download) and Save as
+LM Studio default (persist with backup)), **Sandbox** (text/HTML/3D duels with
+presets; per-model history with Pin/Compare split view), **Brewery** (Lab +
 Experiment Builder under one entry), **Settings**. API under single `/api` prefix
 + websocket progress. Dark mode follows the OS (toggle in nav). Read endpoints
 are load-free and degrade gracefully when LM Studio is down.
@@ -369,17 +370,28 @@ that are NOT the runtime optimizer:
   `micro_quality`, `web`, `research`, `blender`, `agentic`,
   `complete_sandbox`, `complete_model`.
 
-**Agentic sandbox tasks** (`lab sandbox --task <task> --model <model>` or duel type `agentic`):
+**Sandbox tasks** (`lab sandbox --task <task> --model <model>`, `lab bakeoff --tasks ...`, or a duel type):
 
-- `email_write` - professional follow-up email with Subject, greeting, next step + deadline, closing; no placeholders.
-- `calendar_event` - JSON calendar event (title, start/end ISO 8601, attendees, location).
-- `email_and_calendar` - combined email + calendar JSON from meeting notes.
-- `web_fetch_brief` - JSON with tool=web_fetch, url, title, facts or error; never invents facts.
-- `minecraft_world` - single self-contained HTML file with a Minecraft-style voxel world (Three.js from a CDN, procedural island, camera orbit). `--scene "..."` customises the scene (fewer trees, a lighthouse, more flowers) while keeping the skyblock base.
-- `company_website` - single-file marketing website for a fictional consultancy: sticky nav, hero, services, about, testimonial, contact form, footer, responsive with a real media query. No external assets.
-- `blender_city` - dense low-poly city built from a fixed 12x12 map excerpt (60+ buildings, park, river, landmarks), saved as an openable `scene.blend`. **No renders, no PNGs.** See [`docs/benchmarks/blender_city.md`](docs/benchmarks/blender_city.md).
-- `deep_research_report` - offline deep-research HTML report scored with a deterministic RACE/FACT-style rubric. See [`docs/benchmarks/deep_research.md`](docs/benchmarks/deep_research.md).
-- `deep_research_agent` - report produced by the tool-calling agent (`lab research --mode agent`); requires `trace.json` with real search/fetch calls, not just citations.
+| Task | Kind | What the model must produce |
+|---|---|---|
+| `email_write` | text | follow-up email with Subject, greeting, next step + deadline, closing; no placeholders |
+| `calendar_event` | text | calendar event JSON (ISO 8601 start/end, attendees, location) |
+| `email_and_calendar` | text | email + calendar JSON from meeting notes |
+| `web_fetch_brief` | text | JSON with `tool=web_fetch`, url, facts or error; never invents facts |
+| `web_search` | text | Python scraping script (queries, user-agent, timeout, error handling) |
+| `deep_research` | text | research plan: sub-questions, search strategy, source criteria, conflict resolution |
+| `research_synthesis` | research | source-grounded answer citing the supplied documents, admitting gaps |
+| `minecraft_world` | web | single HTML voxel world (Three.js, procedural island, orbit camera) |
+| `company_website` | web | single-file marketing site: nav, hero, services, about, testimonial, contact form, footer, media query |
+| `deep_research_report` | web | offline HTML report from a fixed source package (RACE/FACT-style checks) |
+| `deep_research_online` | web | HTML report citing scraped `[S#]` sources (`lab research` output) |
+| `deep_research_agent` | web | report plus `trace.json` with real search/fetch calls |
+| `creative_3d_voxel_island` | text | procedural Three.js module (`export function createScene`) |
+| `blender_city` | blender | dense low-poly city from a fixed 12x12 map, saved as an openable `scene.blend`; **no renders, no PNGs** |
+
+`blender_city` needs Blender on `PATH`; see [`docs/benchmarks/blender_city.md`](docs/benchmarks/blender_city.md).
+The deep-research tasks are described in [`docs/benchmarks/deep_research.md`](docs/benchmarks/deep_research.md)
+and [`docs/benchmarks/deep_research_sources.md`](docs/benchmarks/deep_research_sources.md).
 
 All agentic tasks run offline (`network_allowed=false`) with an evidence-only repair loop: on failure the model gets the failing checks, not the solution.
 
@@ -515,7 +527,8 @@ python tools/compare_models.py --tasks all --include-bakeoff
 Outputs land in `results/compare/`: `comparison.md`, `comparison.csv`,
 `gallery.html` (open it in a browser) and `visuals/`. HTML pages are captured
 with headless Chrome using SwiftShader, so Three.js scenes render without a GPU,
-and Blender tasks contribute their real `preview.png` / first frame.
+and Blender runs contribute their real `.blend` path (the city task renders
+nothing, so there is no preview image).
 
 Only the frontier artifacts under `benchmarks/compare/` are committed. Every
 local run, score and screenshot stays in `results/` (gitignored) and can be
@@ -527,6 +540,10 @@ To see why a stored artifact failed, re-score it with the current checks:
 ```powershell
 python tools/explain_failures.py
 ```
+
+`SCOREBOARD.md` is the current results table (local models + frontier
+providers, with pixel verdicts); `docs/benchmarks/model_failures.md` explains
+every failure and lists what is impossible on this host.
 
 `docs/benchmarks/model_failures.md` records the same analysis in prose: per
 model, per task, and whether the cause was the model, the scorer or the host.
@@ -653,11 +670,22 @@ lm_optimizer/
   services/     clients, benchmark, search space, optimizer, matrix, fit,
                 context_sweep, selection, preheat, workload, run_summary,
                 reporting, recommendations, generation defaults, hostguard,
-                lms_cli, parameter_registry, speculative, compare, sandbox
+                lms_cli, parameter_registry, speculative, compare, sandbox,
+                sandbox_lab/runner/history, web_research, research_agent,
+                blend_inspect, render_check, png_stats, host/lmstudio_errors
   storage/      resumable run checkpoint store
   ui/           templates + static JS (dark mode, status poller, duel UI)
 tools/ run-*.bat run-*.sh scripts/ docs/ results/ (gitignored)
 ```
+
+Key tools: `tools/compare_models.py` (cross-provider scoring + gallery),
+`tools/agent_benchmark.py` (score committed frontier artifacts),
+`tools/explain_failures.py` (re-score stored artifacts with the current checks),
+`tools/scoreboard.py` (measured runs + pixel verdicts),
+`tools/export_prompts.py` (prompt pack + Desktop bundle),
+`tools/prune_models.py` (drop models no longer downloaded),
+`tools/clean_results.py` (delete regenerable results), `tools/html_shot.py`
+(CDP screenshots), `tools/png_stats.py` (blank/flat classifier).
 
 Runtime data (`data/*.db`, `logs/`, `results/`) is gitignored and
 never pushed. No credentials exist in the repo (only `LM_STUDIO_URL` default).
