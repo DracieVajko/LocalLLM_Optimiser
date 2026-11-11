@@ -246,6 +246,11 @@
         });
     }
 
+    function pinLabel(index) {
+        if (pinnedRun == null) return 'Pin';
+        return pinnedRun === Number(index) ? 'Pinned' : 'Pin';
+    }
+
     function showModelRuns(model) {
         var panel = el('sb-model-detail');
         var runs = historyRuns.map(function (x, idx) { return { index: idx, run: x }; })
@@ -283,12 +288,19 @@
                 + '<div class="table-container"><table class="table"><tbody>'
                 + list.map(function (r) {
                     var x = r.run;
+                    var cmpBtn = (pinnedRun != null && pinnedRun !== r.index)
+                        ? '<button class="btn btn-outline btn-sm compare-run" data-a="' + pinnedRun + '" data-b="' + r.index + '">Compare</button> '
+                        : '';
                     return '<tr>'
                         + '<td class="font-mono text-xs">' + esc(x.ts || '') + '</td>'
                         + '<td>' + resultBadge(x) + '</td>'
                         + '<td class="font-mono">' + scoreText(x) + '</td>'
                         + '<td class="font-mono text-xs">' + (x.duration_s ? Number(x.duration_s).toFixed(0) + 's' : '-') + '</td>'
-                        + '<td class="text-right"><button class="btn btn-outline btn-sm open-run" data-index="' + r.index + '">Open</button></td>'
+                        + '<td class="text-right space-x-1">'
+                        + '<button class="btn btn-outline btn-sm open-run" data-index="' + r.index + '">Open</button>'
+                        + '<button class="btn btn-outline btn-sm pin-run" data-index="' + r.index + '">' + pinLabel(r.index) + '</button>'
+                        + cmpBtn
+                        + '</td>'
                         + '</tr>';
                 }).join('')
                 + '</tbody></table></div></div>';
@@ -298,10 +310,22 @@
 
         el('sb-model-close').addEventListener('click', function () {
             panel.innerHTML = '';
+            pinnedRun = null;
         });
         Array.prototype.forEach.call(panel.querySelectorAll('.open-run'), function (button) {
             button.addEventListener('click', function () {
                 showSandboxRunDetail(button.dataset.index, model);
+            });
+        });
+        Array.prototype.forEach.call(panel.querySelectorAll('.pin-run'), function (button) {
+            button.addEventListener('click', function () {
+                pinnedRun = (pinnedRun === Number(button.dataset.index)) ? null : Number(button.dataset.index);
+                showModelRuns(model);
+            });
+        });
+        Array.prototype.forEach.call(panel.querySelectorAll('.compare-run'), function (button) {
+            button.addEventListener('click', function () {
+                showCompareRuns(button.dataset.a, button.dataset.b);
             });
         });
     }
@@ -384,6 +408,63 @@
             });
         } catch (e) {
             panel.innerHTML = '<p class="text-sm text-red-600">Failed to load run detail: '
+                + esc((e && e.message) || e) + '</p>';
+        }
+    }
+
+    async function showCompareRuns(indexA, indexB) {
+        var panel = el('sb-model-detail');
+        panel.innerHTML = '<p class="text-sm text-gray-500">Loading comparison...</p>';
+        try {
+            var responses = await Promise.all([
+                fetch('/api/sandbox/run/' + encodeURIComponent(indexA)),
+                fetch('/api/sandbox/run/' + encodeURIComponent(indexB)),
+            ]);
+            if (!responses[0].ok || !responses[1].ok) throw new Error('HTTP ' + (responses[0].ok ? responses[1].status : responses[0].status));
+            var runs = await Promise.all(responses.map(function (r) { return r.json(); }));
+            var html = '<div class="card"><div class="card-header"><div class="flex items-center justify-between">'
+                + '<h3 class="font-bold">Compare two runs</h3>'
+                + '<button class="btn btn-outline btn-sm" id="sb-compare-close">Close</button>'
+                + '</div></div><div class="card-body grid md:grid-cols-2 gap-4">';
+            runs.forEach(function (x) {
+                var failing = [];
+                (x.attempts || []).forEach(function (a) {
+                    (a.failing_checks || []).forEach(function (f) { failing.push(f); });
+                });
+                failing = failing.filter(function (v, i, arr) { return arr.indexOf(v) === i; });
+                var preview = (x.artifacts || []).map(function (a) {
+                    var rel = x.workdir ? x.workdir.replace(/^results[\\/]sandbox[\\/]/, '') + '/' + a : a;
+                    var safeRel = rel.replace(/\\/g, '/');
+                    if (/[.](html|htm)$/i.test(a)) {
+                        return '<div class="mt-2 border rounded bg-black p-1">'
+                            + '<iframe sandbox="" src="/sandbox/files?path=' + encodeURIComponent(safeRel) + '"'
+                            + ' class="w-full border rounded" style="height:260px" title="' + esc(a) + ' preview"></iframe>'
+                            + '</div>';
+                    }
+                    if (/[.](py|js|txt|json|md)$/i.test(a)) {
+                        return '<details class="mt-2" open><summary class="text-sm font-semibold cursor-pointer">' + esc(a) + '</summary>'
+                            + '<iframe src="/sandbox/files?path=' + encodeURIComponent(safeRel) + '"'
+                            + ' class="w-full border rounded" style="height:260px" title="' + esc(a) + ' preview"></iframe>'
+                            + '</details>';
+                    }
+                    return '<p class="text-xs text-gray-500 mt-2">' + esc(a) + '</p>';
+                }).join('');
+                html += '<div class="border rounded p-3">'
+                    + '<div class="font-mono text-xs text-gray-500 mb-1">' + esc(x.ts || '') + '</div>'
+                    + '<div class="font-mono text-sm font-semibold mb-1">' + esc(x.model || '') + '</div>'
+                    + '<div class="text-sm mb-2">' + esc(x.task || '') + ' ' + resultBadge(x) + '</div>'
+                    + '<div class="text-xs text-gray-600 mb-2">score ' + scoreText(x) + ' · '
+                    + (x.duration_s ? Number(x.duration_s).toFixed(0) + 's' : '-') + '</div>'
+                    + (failing.length ? '<ul class="text-xs text-red-600 mb-2">' + failing.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>' : '')
+                    + (x.blend_file ? '<div class="text-xs font-mono text-gray-500 mb-2">.blend: ' + esc(x.blend_file) + '</div>' : '')
+                    + preview
+                    + '</div>';
+            });
+            html += '</div></div>';
+            panel.innerHTML = html;
+            el('sb-compare-close').addEventListener('click', function () { panel.innerHTML = ''; });
+        } catch (e) {
+            panel.innerHTML = '<p class="text-sm text-red-600">Failed to load comparison: '
                 + esc((e && e.message) || e) + '</p>';
         }
     }
