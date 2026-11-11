@@ -982,7 +982,6 @@ def _stamp_model_into_artifacts(
     Web tasks get an HTML comment, Python tasks a Python comment. Kept
     best-effort: a missing or unreadable artifact never fails the run.
     """
-    from lm_optimizer.services.sandbox_lab import SandboxTaskKind
 
     if task.kind.value not in ("web", "blender"):
         return
@@ -1682,6 +1681,8 @@ def research(
 ):
     """Online deep research: the model calls real search/fetch tools and writes a report."""
     from datetime import datetime
+
+    import asyncio
 
     from lm_optimizer.services.model_gate import ModelGate, ModelGateTimeout
     from lm_optimizer.services.web_research import (

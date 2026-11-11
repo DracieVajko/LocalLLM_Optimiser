@@ -207,6 +207,7 @@ async def _run_task(
 
     gen_s = round(metrics["gen_s"], 1)
     measured = str(payload.get("status") or "measured") == "measured"
+    score = payload.get("final_score")
     return {
         "ts": datetime.now().isoformat(timespec="seconds"),
         "model": model,
