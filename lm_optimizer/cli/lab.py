@@ -1066,12 +1066,16 @@ def _run_sandbox_one(
     from lm_optimizer.cli.sandbox_duel import _load_best_config
     from lm_optimizer.domain.models import LoadConfiguration
     from lm_optimizer.services.model_gate import ModelGate, ModelGateTimeout
+    from lm_optimizer.services.sandbox_history import settings_from_reasoning
     from lm_optimizer.services.sandbox_lab import SandboxResult
+
+    run_meta: dict = {}
 
     async def _run_with_gate():
         client = _client()
         await client.connect(echo_probe=False)
         try:
+            effective = context_length or MIN_SANDBOX_CONTEXT
             try:
                 cfg, ctx = _load_best_config(model)
                 effective = context_length or max(MIN_SANDBOX_CONTEXT, ctx or 0)
@@ -1082,9 +1086,12 @@ def _run_sandbox_one(
                         f"{effective} for sandbox run[/yellow]"
                     )
             except ValueError:
-                cfg = LoadConfiguration(
-                    context_length=context_length or MIN_SANDBOX_CONTEXT
-                )
+                cfg = LoadConfiguration(context_length=effective)
+            run_meta["settings"] = settings_from_reasoning(
+                reasoning,
+                context_length=int(effective),
+                max_output_tokens=definition.max_output_tokens,
+            )
 
             gate = ModelGate(client)
             try:
@@ -1138,6 +1145,8 @@ def _run_sandbox_one(
         payload,
         workdir=str(workdir),
         duration_s=sum(a.duration_s for a in result.attempts),
+        prompt=definition.prompt,
+        settings=run_meta.get("settings"),
     )
     payload["workdir"] = str(workdir)
     # Stamp every generated web / blender artifact with the model that made it,
@@ -1201,6 +1210,55 @@ def sandbox(
     clean = {k: v for k, v in payload.items() if k != "workdir"}
     path = _write_json(f"sandbox-{task}.json", clean)
     console.print(f"\nReport saved: {path}")
+
+
+@app.command("prune-runs")
+def prune_runs(
+    apply: bool = typer.Option(
+        False, "--apply", help="Rewrite the JSONL files and delete artifact dirs"
+    ),
+    sandbox: bool = typer.Option(
+        True, "--sandbox/--no-sandbox", help="Prune results/sandbox_runs.jsonl"
+    ),
+    bakeoff: bool = typer.Option(
+        True, "--bakeoff/--no-bakeoff", help="Prune results/bakeoff/runs.jsonl"
+    ),
+):
+    """Collapse duplicate run history (same model + task + prompt + settings).
+
+    Dry run by default: prints what would be dropped per model/task and keeps
+    every file untouched. ``--apply`` rewrites the history and removes the
+    artifact dirs of the dropped rows.
+    """
+    from pathlib import Path as _Path
+
+    from lm_optimizer.services.sandbox_history import prune_history
+
+    paths = []
+    if sandbox:
+        paths.append(_Path("results") / "sandbox_runs.jsonl")
+    if bakeoff:
+        paths.append(_Path("results") / "bakeoff" / "runs.jsonl")
+    if not paths:
+        console.print("[yellow]nothing selected[/yellow]")
+        raise typer.Exit(1)
+    for path in paths:
+        report = prune_history(path, apply=apply)
+        console.print(
+            f"[bold]{path}[/bold]: {report['before']} -> {report['after']} rows, "
+            f"{report['removed']} duplicate(s), "
+            f"{report['directories_removed']} dir(s) deleted"
+        )
+        for group in report["groups"][:40]:
+            console.print(
+                f"  {group['model']} · {group['task']} · "
+                f"{group['run_key'] or 'legacy'} · kept {group['kept_ts'] or '-'} · "
+                f"dropped {group['dropped']}"
+            )
+        if len(report["groups"]) > 40:
+            console.print(f"  ... {len(report['groups']) - 40} more group(s)")
+    if not apply:
+        console.print("[dim]dry run — rerun with --apply to write[/dim]")
 
 
 @app.command("debug")

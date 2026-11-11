@@ -23,7 +23,12 @@ from datetime import datetime
 from pathlib import Path
 
 from lm_optimizer.domain.models import LoadConfiguration
-from lm_optimizer.services.sandbox_history import record_run
+from lm_optimizer.services.sandbox_history import (
+    fingerprint,
+    normalize_settings,
+    prune_history,
+    record_run,
+)
 from lm_optimizer.services.model_gate import ModelGate, ModelGateTimeout
 from lm_optimizer.services.sandbox_lab import SANDBOX_TASKS, SandboxPolicy
 from lm_optimizer.services.sandbox_runner import (
@@ -53,6 +58,27 @@ def _slug(model: str) -> str:
     for ch in '/\\:@ ':
         out = out.replace(ch, "_")
     return out[:80]
+
+
+def task_settings(
+    *,
+    thinking: bool,
+    reasoning_effort: str,
+    context: int,
+    max_output_tokens: int,
+    kv_ram: bool,
+    safe: bool,
+) -> dict:
+    """Settings that decide whether two bakeoff runs are the same test."""
+    return normalize_settings(
+        temperature=0.0,
+        max_output_tokens=max_output_tokens,
+        thinking=thinking,
+        reasoning_effort=reasoning_effort,
+        context_length=context,
+        kv_ram=kv_ram,
+        safe=safe,
+    )
 
 
 def _backend_models() -> list[str]:
@@ -123,8 +149,20 @@ async def _run_task(
     load_s: float | None,
     root: Path,
     reasoning_effort: str,
+    context: int,
+    kv_ram: bool = False,
+    safe: bool = False,
 ) -> dict:
     definition = SANDBOX_TASKS[task_id]
+    settings = task_settings(
+        thinking=thinking,
+        reasoning_effort=reasoning_effort,
+        context=context,
+        max_output_tokens=definition.max_output_tokens,
+        kv_ram=kv_ram,
+        safe=safe,
+    )
+    run_key = fingerprint(model, task_id, definition.prompt, settings)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     base_dir = root / _slug(model) / task_id
     workdir = base_dir / stamp
@@ -202,6 +240,8 @@ async def _run_task(
         payload,
         workdir=str(workdir),
         duration_s=metrics["gen_s"],
+        prompt=definition.prompt,
+        settings=settings,
     )
     apply_retention(base_dir, policy)
 
@@ -214,6 +254,8 @@ async def _run_task(
         "task": task_id,
         "thinking": thinking,
         "context": None,
+        "run_key": run_key,
+        "settings": settings,
         "load_s": round(load_s, 1) if load_s is not None else None,
         "load_measured": load_s is not None,
         "gen_s": gen_s,
@@ -287,6 +329,9 @@ async def _run_model(
                     load_s=load_s,
                     root=root,
                     reasoning_effort=reasoning_effort,
+                    context=context,
+                    kv_ram=kv_ram,
+                    safe=safe,
                 )
                 row["context"] = context
                 rows.append(row)
@@ -393,6 +438,8 @@ async def run_bakeoff(
         for row in rows:
             with jsonl.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+        # Same test = same model + task + prompt + settings: keep the newest.
+        prune_history(jsonl, apply=True)
         all_rows.extend(rows)
     path = _write_summary(all_rows, root)
     print(f"\nsummary: {path}")

@@ -148,6 +148,20 @@ def _row(model, task, *, key=None, status="measured", score=1.0,
     }
 
 
+def test_cli_settings_include_the_effective_context():
+    settings = sh.settings_from_reasoning(
+        "off", context_length=8192, max_output_tokens=2048
+    )
+    assert settings["thinking"] is False
+    assert settings["context_length"] == 8192
+    assert settings["reasoning_effort"] is None
+    high = sh.settings_from_reasoning(
+        "high", context_length=8192, max_output_tokens=2048
+    )
+    assert high["thinking"] is True
+    assert high["reasoning_effort"] == "high"
+
+
 def test_prune_dry_run_does_not_touch_the_file(tmp_path, monkeypatch):
     monkeypatch.setattr(sh, "RESULTS_ROOT", tmp_path)
     path = tmp_path / "runs.jsonl"
