@@ -60,6 +60,7 @@ Thumbs.db
 # Desloppify health-scan state (local analysis, plans and review packets).
 # The scan history stays on this machine; it is never part of a release.
 .desloppify/
+scorecard.png
 
 # Exported LM Studio preset files (generated, machine-specific)
 lmstudio-presets/
