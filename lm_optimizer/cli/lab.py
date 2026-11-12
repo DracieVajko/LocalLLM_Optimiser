@@ -2227,6 +2227,49 @@ def save_default(
     for key, value in result.fields.items():
         table.add_row(key, json.dumps(value))
     console.print(table)
+def set_kv_quant(
+    model_id: str = typer.Argument(..., help="LM Studio model id"),
+    kv: str = typer.Option(
+        ...,
+        "--kv",
+        help="KV-cache quantization: q4_0, q5_0, q8_0 or f16",
+    ),
+    lmstudio_home: Path | None = typer.Option(
+        None,
+        "--lmstudio-home",
+        help="LM Studio home dir (env LM_OPTIMIZER_LMSTUDIO_HOME; default ~/.lmstudio)",
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would be written, change nothing"
+    ),
+) -> None:
+    """Set the KV-cache quantization in LM Studio's per-model defaults.
+
+    KV-cache quantization is a GUI-only setting in LM Studio (REST rejects
+    it with ``unrecognized_keys``). This writes it directly to the model's
+    defaults file, which LM Studio applies on the next load (no restart).
+    The previous file is backed up before overwriting.
+
+    Useful for comparing quality at q4 vs q5 vs q8 without re-downloading
+    the model.
+    """
+    from lm_optimizer.services.lmstudio_defaults import (
+        DefaultsError,
+        set_kv_cache_quant,
+    )
+
+    home = lmstudio_home
+    try:
+        result = set_kv_cache_quant(model_id, kv, home=home, dry_run=dry_run)
+    except DefaultsError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1)
+    console.print(f"[green]Saved[/green]: {result.path}")
+    if result.backup_path:
+        console.print(f"Backup: {result.backup_path}")
+    console.print(f"KV cache -> {kv}")
+
+
 def _winner_config(run, run_id: str):
     """A run's validated winner config, with the context_length fallback."""
     from dataclasses import replace

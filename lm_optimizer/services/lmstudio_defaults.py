@@ -768,6 +768,61 @@ def read_load_defaults(model_id: str, *, home: Path | None = None) -> dict[str, 
     return result
 
 
+def set_kv_cache_quant(
+    model_id: str,
+    kv_quant: str,
+    *,
+    home: Path | None = None,
+    dry_run: bool = False,
+    backup: bool = True,
+) -> DefaultsSaveResult:
+    """Set the KV-cache quantization in LM Studio's per-model defaults.
+
+    KV-cache quantization is a GUI-only setting (REST rejects it with
+    ``unrecognized_keys``). This writes ``llm.load.llama.kCacheQuantizationType``
+    and ``llm.load.llama.vCacheQuantizationType`` to the model's defaults file
+    so the next load uses the new value.
+
+    ``kv_quant`` is one of ``q4_0``, ``q5_0``, ``q8_0`` or ``f16`` (the
+    values LM Studio accepts in its dropdown). The previous file is backed up
+    before overwriting.
+    """
+    home = home or default_home()
+    path = resolve_defaults_path(model_id, home=home)
+    document, existed = _read_document(path)
+    fields = _field_list(document)
+
+    value = {"checked": True, "value": kv_quant}
+    updates = {
+        "llm.load.llama.kCacheQuantizationType": value,
+        "llm.load.llama.vCacheQuantizationType": value,
+    }
+    _merge(document, updates)
+
+    if dry_run:
+        return DefaultsSaveResult(
+            model_id=model_id,
+            path=path,
+            fields={"kv_quant": kv_quant},
+            created=not existed,
+            backup_path=None,
+        )
+
+    if backup and existed:
+        backup_path = create_backup(path)
+    else:
+        backup_path = None
+
+    _atomic_write(path, document)
+    return DefaultsSaveResult(
+        model_id=model_id,
+        path=path,
+        fields={"kv_quant": kv_quant},
+        created=not existed,
+        backup_path=backup_path,
+    )
+
+
 def _normalize_backup_fields(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return {}
