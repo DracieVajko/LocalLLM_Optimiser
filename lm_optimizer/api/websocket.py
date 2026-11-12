@@ -1,6 +1,7 @@
 """WebSocket handler for live optimization updates."""
 
 import json
+import os
 from datetime import datetime
 from uuid import UUID
 
@@ -13,6 +14,31 @@ from lm_optimizer.domain.models import ConfigurationStatus
 logger = structlog.get_logger(__name__)
 
 ws_router = APIRouter()
+
+_LOOPBACK_CLIENTS = {"127.0.0.1", "::1", "localhost"}
+
+
+def _remote_client_denied(websocket: WebSocket) -> bool:
+    """True when a remote client connected without the configured API token.
+
+    The REST routes are protected by the ``X-API-Token`` middleware for
+    non-loopback clients. The WebSocket channel streams run state and
+    accepts a cancel message, so it needs the same check - otherwise a remote
+    client could read the state of a run and stop it without a token.
+    Browsers cannot set headers on a WebSocket handshake, so the token may
+    also be passed as the ``token`` query parameter.
+    """
+    token = os.environ.get("LM_OPTIMIZER_API_TOKEN")
+    if not token:
+        return False
+    client = websocket.client
+    host = client.host if client else ""
+    if host in _LOOPBACK_CLIENTS:
+        return False
+    provided = websocket.headers.get("x-api-token") or websocket.query_params.get(
+        "token"
+    )
+    return provided != token
 
 
 class ConnectionManager:
@@ -52,6 +78,9 @@ manager = ConnectionManager()
 @ws_router.websocket("/ws/optimize/{run_id}")
 async def optimization_websocket(websocket: WebSocket, run_id: UUID) -> None:
     """WebSocket for live optimization updates."""
+    if _remote_client_denied(websocket):
+        await websocket.close(code=1008, reason="invalid API token")
+        return
     await manager.connect(run_id, websocket)
 
     try:

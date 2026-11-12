@@ -147,7 +147,7 @@ def _phase_transparency_table(run, best):
 
 
 
-def display_optimization_result(run) -> dict[str, Any]:
+def display_optimization_result(run) -> None:
     """Display optimization results with baseline comparison and score breakdown.
 
 
@@ -576,7 +576,7 @@ def display_optimization_result(run) -> dict[str, Any]:
 
 
 
-    def fmt_change(new, old) -> dict[str, Any]:
+    def fmt_change(new, old) -> str:
         if old and old != 0:
 
             pct = (new - old) / old * 100

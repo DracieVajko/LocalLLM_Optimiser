@@ -6,4 +6,7 @@ and manages the llama-server process lifecycle.
 
 from __future__ import annotations
 
-__all__ = ["config", "client"]
+from lm_optimizer.backends.llamacpp.client import LlamaCppClient
+from lm_optimizer.backends.llamacpp.config import LlamaCppArgs
+
+__all__ = ["LlamaCppArgs", "LlamaCppClient"]

@@ -1,6 +1,6 @@
 [project]
 name = "lm-optimizer"
-version = "1.8.0"
+dynamic = ["version"]
 description = "Hardware-aware automatic benchmark and optimization tool for LM Studio. Finds empirically optimized runtime configurations for speed, context, memory, and quality across different hardware, with an offline model sandbox and a load-vs-generation bake-off harness."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -10,7 +10,6 @@ dependencies = [
     "pydantic-settings>=2.3.0",
     "rich>=13.7.0",
     "psutil>=5.9.0",
-    "pyyaml>=6.0.1",
     "structlog>=24.1.0",
     "tenacity>=8.2.0",
     "orjson>=3.9.0",
@@ -18,8 +17,6 @@ dependencies = [
     "uvicorn>=0.29.0",
     "jinja2>=3.1.0",
     "websockets>=12.0.0",
-    "numpy>=1.26.0",
-    "scipy>=1.13.0",
     "typer>=0.9.0",
 ]
 
@@ -89,3 +86,7 @@ addopts = ["-m", "not expert_cache"]
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["lm_optimizer*"]
+
+# The version lives in exactly one place: ``lm_optimizer/__init__.py``.
+[tool.setuptools.dynamic]
+version = { attr = "lm_optimizer.__version__" }

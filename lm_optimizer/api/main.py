@@ -28,6 +28,7 @@ from lm_optimizer.api.state import registry
 
 from lm_optimizer.api.websocket import ws_router
 
+from lm_optimizer import __version__
 from lm_optimizer.config import config
 
 from lm_optimizer.logging_config import get_logger, setup_logging
@@ -107,7 +108,7 @@ app = FastAPI(
 
     description="Finds empirically validated configurations optimized for your hardware, model and selected goal",
 
-    version="1.5.0b1",
+    version=__version__,
 
     lifespan=lifespan,
 

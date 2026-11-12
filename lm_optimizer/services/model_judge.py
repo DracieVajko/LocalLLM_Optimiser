@@ -189,7 +189,7 @@ class HeuristicJudge(ModelJudge):
 
         # Handle both dict and object configs
 
-        def get_attr(c, key, default=None) -> dict[str, Any]:
+        def get_attr(c, key, default=None) -> Any:
             if isinstance(c, dict):
 
                 return c.get(key, default)
@@ -198,7 +198,7 @@ class HeuristicJudge(ModelJudge):
 
 
 
-        def get_quality(c) -> dict[str, Any]:
+        def get_quality(c) -> float:
             """Quality overall from either an object or the stored JSON.
 
 
@@ -245,7 +245,7 @@ class HeuristicJudge(ModelJudge):
 
 
 
-        def get_speed(c) -> dict[str, Any]:
+        def get_speed(c) -> float:
             """Median generation tok/s from a method, a dict or metrics_json."""
 
             method = get_attr(c, "get_avg_generation_tok_s")

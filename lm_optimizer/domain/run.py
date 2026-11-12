@@ -11,6 +11,7 @@ from .enums import ConfigurationStatus, OptimizationProfile, OptimizationStage, 
 from .hardware import HardwareInfo
 from .model import ModelIdentity
 from .quality import QualityScore
+from lm_optimizer import __version__
 
 @dataclass
 class ConfigurationResult:
@@ -99,7 +100,7 @@ class OptimizationRun:
     completed_at: datetime | None = None
     duration_seconds: float = 0.0
     error: str | None = None
-    optimizer_version: str = "1.8.0"
+    optimizer_version: str = __version__
     benchmark_repetitions: int = 3
     validation_repetitions: int = 5
     # Phase A/B strategy fields (all defaulted; legacy runs ignore them).
