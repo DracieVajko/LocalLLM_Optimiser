@@ -1063,12 +1063,22 @@ def score_attempt(
             if name.endswith(".js"):
                 scripts.append(_strip_md_fences(text))
         if not scripts:
-            verdict = (True, "no inline scripts")
+            verdict = (True, "no JavaScript to validate")
         else:
-            from lm_optimizer.services.web_validator import js_syntax_errors
+            from lm_optimizer.services.web_validator import (
+                JS_INVALID,
+                JS_UNAVAILABLE,
+                validate_javascript,
+            )
 
-            errors = js_syntax_errors(scripts)
-            verdict = (not errors, ("; ".join(errors)[:200] or "ok") if errors else "ok")
+            validation = validate_javascript(scripts)
+            if validation.state == JS_UNAVAILABLE:
+                # The JavaScript was never checked - that is not a success.
+                verdict = (False, validation.detail)
+            elif validation.state == JS_INVALID:
+                verdict = (False, "; ".join(validation.errors)[:200] or validation.detail)
+            else:
+                verdict = (True, validation.detail)
         custom_results = {**(custom_results or {}), "js_parses": verdict}
 
     for check in task.checks:

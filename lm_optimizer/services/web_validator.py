@@ -133,6 +133,137 @@ def parse_html(text: str) -> HtmlFacts:
     return parser.facts
 
 
+# --- JavaScript validation --------------------------------------------------
+
+#: The JavaScript parsed cleanly.
+JS_VALID = "valid"
+#: The JavaScript is broken (the validator reported a syntax error).
+JS_INVALID = "invalid"
+#: There was no JavaScript to validate.
+JS_EMPTY = "empty"
+#: The validator could not run - the JavaScript was NOT validated.
+JS_UNAVAILABLE = "unavailable"
+
+#: Module syntax (``import`` / ``export``) means the source must be parsed as
+#: an ES module. Node 20 hides syntax errors in a ``.js`` file that contains
+#: module syntax (its module-detection retry swallows them), while Node 26
+#: reports them. Writing the probe file as ``.mjs`` makes every Node version
+#: parse it as a module.
+_MODULE_SYNTAX = re.compile(
+    r"^\s*(?:import\s+[\w{*'\"$]|import\s*\(|import\.meta"
+    r"|export\s+(?:default|const|let|var|function|async|class|\*|\{))",
+    re.MULTILINE,
+)
+
+#: Seconds a single ``node --check`` may take.
+JS_CHECK_TIMEOUT_S = 20
+
+
+@dataclass
+class JsValidation:
+    """Result of one JavaScript validation pass.
+
+    ``state`` distinguishes "the code is broken" from "the code could not be
+    checked" - an unavailable validator must never look like a success.
+    """
+
+    state: str
+    errors: list[str] = field(default_factory=list)
+    detail: str = ""
+
+    @property
+    def passed(self) -> bool:
+        """True only when there was nothing wrong and nothing unverified."""
+        return self.state in (JS_VALID, JS_EMPTY)
+
+    @property
+    def verified(self) -> bool:
+        """True only when a validator actually inspected the source."""
+        return self.state == JS_VALID
+
+
+def _looks_like_module(code: str) -> bool:
+    return bool(_MODULE_SYNTAX.search(code))
+
+
+def validate_javascript(
+    scripts: list[str],
+    *,
+    node_path: str | None = None,
+) -> JsValidation:
+    """Syntax-check JavaScript sources with ``node --check``.
+
+    Returns a :class:`JsValidation`:
+
+    * ``valid`` - every source parsed,
+    * ``invalid`` - at least one source has a syntax error,
+    * ``empty`` - there was no source to check,
+    * ``unavailable`` - the validator could not run (no Node runtime, the
+      runtime could not be started, or it timed out). The JavaScript was then
+      **not** validated, which is never reported as a success.
+    """
+    sources = [code for code in scripts if code and code.strip()]
+    if not sources:
+        return JsValidation(state=JS_EMPTY, detail="no JavaScript to validate")
+
+    if node_path is None:
+        node_path = shutil.which("node")
+    if not node_path:
+        return JsValidation(
+            state=JS_UNAVAILABLE,
+            detail=(
+                "not validated: the Node.js runtime was not found "
+                "(install Node.js to validate JavaScript)"
+            ),
+        )
+
+    errors: list[str] = []
+    for index, code in enumerate(sources):
+        suffix = ".mjs" if _looks_like_module(code) else ".js"
+        path: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w", suffix=suffix, delete=False, encoding="utf-8"
+            ) as handle:
+                handle.write(code)
+                path = handle.name
+            proc = subprocess.run(
+                [node_path, "--check", path],
+                capture_output=True,
+                text=True,
+                timeout=JS_CHECK_TIMEOUT_S,
+                encoding="utf-8",
+                errors="replace",
+            )
+        except subprocess.TimeoutExpired:
+            return JsValidation(
+                state=JS_UNAVAILABLE,
+                detail=(
+                    f"not validated: node --check timed out after "
+                    f"{JS_CHECK_TIMEOUT_S}s"
+                ),
+            )
+        except (FileNotFoundError, PermissionError, OSError) as exc:
+            return JsValidation(
+                state=JS_UNAVAILABLE,
+                detail=f"not validated: the Node.js runtime could not run ({exc})",
+            )
+        finally:
+            if path:
+                Path(path).unlink(missing_ok=True)
+
+        if proc.returncode != 0:
+            message = (proc.stderr or proc.stdout or "").strip()
+            for ugly in (path or "", (path or "").replace("\\", "/")):
+                if ugly:
+                    message = message.replace(ugly, "inline.js")
+            errors.append(f"script {index}: {message[:200]}" or f"script {index}: failed")
+
+    if errors:
+        return JsValidation(state=JS_INVALID, errors=errors, detail="; ".join(errors)[:300])
+    return JsValidation(state=JS_VALID, detail="JavaScript parses")
+
+
 # --- checks -----------------------------------------------------------------
 
 
@@ -151,49 +282,13 @@ def _is_external(url: str) -> bool:
 
 
 def js_syntax_errors(scripts: list[str]) -> list[str]:
-    """Syntax-check inline scripts with `node --check` when Node exists.
+    """Deprecated: use :func:`validate_javascript`.
 
-    Returns a list of human-readable errors; an empty list means either all
-    scripts parsed or Node is unavailable (checked separately).
+    Kept for callers that only care about syntax errors. It cannot express
+    the "validator unavailable" state - use :func:`validate_javascript` when
+    the difference between "broken" and "not checked" matters.
     """
-    if not scripts:
-        return []
-    errors: list[str] = []
-    for index, code in enumerate(scripts):
-        if not code.strip():
-            continue
-        try:
-            with tempfile.NamedTemporaryFile(
-                "w", suffix=".js", delete=False, encoding="utf-8"
-            ) as handle:
-                handle.write(code)
-                path = handle.name
-            node_path = shutil.which("node")
-            if not node_path:
-                # Node is an optional checker: without it we cannot validate
-                # inline JS, so do not fail the task (same as FileNotFoundError
-                # below). Returning a tuple here used to crash the "; ".join
-                # in validate_web_files on hosts without Node.
-                return []
-            proc = subprocess.run(
-                [node_path, "--check", path],
-                capture_output=True,
-                text=True,
-                timeout=20,
-                encoding="utf-8",
-                errors="replace",
-            )
-            if proc.returncode != 0:
-                message = proc.stderr.strip()
-                for ugly in (path, path.replace("\\", "/")):
-                    message = message.replace(ugly, "inline.js")
-                errors.append(f"script {index}: {message[:200]}")
-            Path(path).unlink(missing_ok=True)
-        except FileNotFoundError:
-            return []  # Node not installed: cannot check, do not fail the task
-        except Exception as e:  # noqa: BLE001
-            errors.append(f"script {index}: {type(e).__name__}: {e}"[:200])
-    return errors
+    return validate_javascript(scripts).errors
 
 
 def validate_web_files(files: dict[str, str]) -> list[WebCheck]:
@@ -298,12 +393,12 @@ def validate_web_files(files: dict[str, str]) -> list[WebCheck]:
         )
     )
 
-    errors = js_syntax_errors(facts.inline_scripts)
+    validation = validate_javascript(facts.inline_scripts)
     checks.append(
         WebCheck(
             "inline_js_parses",
-            not errors,
-            "; ".join(errors)[:300] or "ok",
+            validation.passed,
+            validation.detail or ("; ".join(validation.errors)[:300] or "ok"),
         )
     )
     return checks

@@ -99,8 +99,10 @@ class TestReportIdentity:
         p35 = save_best_report(_run("qwen3.5-4b", "qwen"), out_dir=tmp_path)
         assert p38.name == "qwen3.8-4b-sft-fable5-glint-best.md"
         assert p35.name == "qwen3.5-4b-best.md"
-        assert "qwen3.8-4b-sft-fable5-glint" in p38.read_text()
-        assert "qwen3.5-4b" not in p38.read_text().replace("qwen3.8-4b-sft-fable5-glint", "")
+        assert "qwen3.8-4b-sft-fable5-glint" in p38.read_text(encoding="utf-8")
+        assert "qwen3.5-4b" not in p38.read_text(encoding="utf-8").replace(
+            "qwen3.8-4b-sft-fable5-glint", ""
+        )
 
     def test_report_carries_identity_content(self, tmp_path):
         from lm_optimizer.services.reporting import save_best_report
@@ -118,7 +120,7 @@ class TestReportIdentity:
                 }
             },
         )
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         assert str(run.id) in text  # Run ID
         assert "Display" in text and "Q4" in text and "llama" in text
         assert "Control channels" in text and "Requested vs applied" in text

@@ -1,8 +1,9 @@
 """Web validator tests (P4 static validation, stdlib only)."""
 
 from lm_optimizer.services.web_validator import (
+    JS_EMPTY,
     parse_html,
-    js_syntax_errors,
+    validate_javascript,
     validate_web_files,
 )
 
@@ -112,18 +113,21 @@ def test_parse_html_never_raises_on_garbage():
     assert isinstance(facts.parse_error, str)
 
 
-def test_js_syntax_errors_empty_for_valid_code():
-    assert js_syntax_errors(["const x = 1; console.log(x);"]) == []
+def test_valid_javascript_has_no_errors():
+    assert validate_javascript(["const x = 1; console.log(x);"]).errors == []
 
 
-def test_js_syntax_errors_ignores_blank_scripts():
-    assert js_syntax_errors(["   ", ""]) == []
+def test_blank_scripts_are_nothing_to_validate():
+    result = validate_javascript(["   ", ""])
+    assert result.state == JS_EMPTY
+    assert result.errors == []
 
-def test_missing_node_does_not_fail_inline_js(monkeypatch):
-    # On CI hosts without Node, the validator must skip JS syntax checking
-    # rather than crash on a (False, "...") tuple.
+def test_missing_node_is_reported_as_unverified(monkeypatch):
+    # Without Node the JavaScript cannot be validated. That must never read
+    # as a successful validation.
     import lm_optimizer.services.web_validator as web_validator
 
     monkeypatch.setattr(web_validator.shutil, "which", lambda exe: None)
     checks = _checks_by_name({"index.html": GOOD_HTML})
-    assert checks["inline_js_parses"].passed is True
+    assert checks["inline_js_parses"].passed is False
+    assert "not validated" in checks["inline_js_parses"].detail

@@ -239,7 +239,9 @@ class TestSandboxPresets:
     def test_preset_buttons_per_kind(self):
         from pathlib import Path
 
-        js = (Path(__file__).parent.parent / "ui" / "static" / "js" / "sandbox.js").read_text()
+        js = (
+            Path(__file__).parent.parent / "ui" / "static" / "js" / "sandbox.js"
+        ).read_text(encoding="utf-8")
         for needle in ("Hash-table explainer", "find_duplicates coding", "Coffee landing page",
                        "Todo app", "Skyblock demo", "Simple spinner", "sb-presets"):
             assert needle in js, f"missing preset: {needle}"

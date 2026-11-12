@@ -431,7 +431,7 @@ def test_restore_defaults_from_latest(tmp_path):
     path.write_text(json.dumps(_document(**{"llm.load.contextLength": 200})), encoding="utf-8")
     result = restore_defaults("m", home=home)
     assert result.restored_from == backup.name
-    assert json.loads(path.read_text())["load"]["fields"][0]["value"] == 100
+    assert json.loads(path.read_text(encoding="utf-8"))["load"]["fields"][0]["value"] == 100
     assert result.backup_path is not None
 
 

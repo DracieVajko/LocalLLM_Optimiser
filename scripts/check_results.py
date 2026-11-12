@@ -13,7 +13,7 @@ for model in models:
     files = glob.glob(f'results/*{safe}*best.md')
     if files:
         f = max(files, key=os.path.getmtime)
-        with open(f) as fp:
+        with open(f, encoding="utf-8") as fp:
             text = fp.read()
         print(f"=== {model} ({f}) ===")
         for line in text.split('\n')[:80]:

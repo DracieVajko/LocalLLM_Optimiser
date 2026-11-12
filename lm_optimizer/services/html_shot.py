@@ -90,7 +90,9 @@ def capture(
             stderr=subprocess.DEVNULL,
         )
         try:
-            port = _wait_for_port(Path(profile) / "DevToolsActivePort", launch_timeout_s)
+            port = _wait_for_port(
+                Path(profile) / "DevToolsActivePort", launch_timeout_s, proc
+            )
             asyncio.run(
                 _shoot(
                     port,
@@ -136,13 +138,34 @@ def _note_event(reply: dict, notes: list[str]) -> None:
         notes.append(f"{entry.get('level')}: {entry.get('text')} {entry.get('url', '')}".strip())
 
 
-def _wait_for_port(port_file: Path, timeout_s: float) -> int:
+def _read_port(port_file: Path) -> str | None:
+    """Read Chrome's DevTools port file.
+
+    Chrome keeps the file open while it starts, so a concurrent read can fail
+    with a sharing violation on Windows (``PermissionError``). That is a
+    transient condition: return ``None`` and let the caller retry.
+    """
+    try:
+        return port_file.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
+
+def _wait_for_port(port_file: Path, timeout_s: float, proc=None) -> int:
+    """Wait for Chrome to publish its DevTools port.
+
+    ``proc`` (optional) is the browser process: if it dies while we wait, the
+    wait ends immediately with a clear error instead of burning the timeout.
+    """
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
-        if port_file.exists():
-            lines = port_file.read_text(encoding="utf-8").splitlines()
+        content = _read_port(port_file)
+        if content:
+            lines = content.splitlines()
             if lines and lines[0].strip().isdigit():
                 return int(lines[0].strip())
+        if proc is not None and proc.poll() is not None:
+            raise ScreenshotError("chrome exited before opening a DevTools port")
         time.sleep(0.1)
     raise ScreenshotError("chrome did not open a DevTools port")
 
