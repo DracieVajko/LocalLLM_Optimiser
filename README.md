@@ -71,7 +71,7 @@ verified there.
 | AMD GPU | **Not verified** | No ROCm/Vulkan run was recorded; treat every number as unverified |
 | LM Studio (Developer server) | **Verified live** | The only fully supported inference backend |
 | Ollama | **Beta** | Client implemented against the documented API, mock-tested only - see [§8](#8-ollama-support-and-its-actual-status) |
-| llama.cpp | **Not reachable** | A `llama-server` client exists in `lm_optimizer/backends/llamacpp/`, but no CLI command exposes it yet |
+| llama.cpp | **Reachable, unverified** | `lm-optimizer --backend llama-cpp` now returns a client (phase 2 was a hard error before); the client and the config translator exist, but no live `llama-server` was exercised by this repository, so treat every result as unverified |
 
 Details and the reasoning behind each row: [`docs/HARDWARE.md`](docs/HARDWARE.md).
 

@@ -249,9 +249,14 @@ def get_backend_client(
         return _lm_studio_client(base_url=base_url)
 
     if resolved == "ollama":
-
+ 
         return OllamaClient(base_url=base_url or config.ollama_base_url)
-
+ 
+    if resolved == "llama-cpp":
+ 
+        from lm_optimizer.backends.llamacpp.client import LlamaCppClient
+        return LlamaCppClient(base_url=base_url or config.llamacpp_base_url)
+ 
     raise NotImplementedError("llama.cpp backend is phase 2")
 
 def _acquire_run_lock(purpose: str) -> None:
