@@ -1,733 +1,433 @@
-# LM Studio Auto Optimizer
-
-Hardware-aware automatic benchmarking and runtime configuration optimization for LM Studio.
-Finds empirically validated inference configurations for your hardware, model and goal —
-not theoretical optima. Includes a model-vs-model sandbox (text / HTML / 3D-scene duels),
-an offline model bake-off harness that separates load time from generation time
-(including the thinking phase), transparent results with per-test outputs, and a dark-mode web UI.
-
-**Status: v1.9.0 (Unreleased).** Pause/resume for partial successes (Web UI + CLI), AI-assisted model selection,
-speed-first search, sandbox duels with history, Prompt/Thinking/Output transparency, OS-following dark mode, resilient Web UI.
-Persistence loop: timestamped backups (keep newest 10), diff/restore/verify for LM Studio per-model defaults; test-manager with intelligent ordering (MoE before dense, VRAM-aware, speed floor), partial results, cleanup, recommendations. All within this repo; no leaks.
-1,616 automated tests green (mock-only; live-server E2E validated on earlier suites).
-
-| Platform | Status |
-|-|-|
-| Windows | ✅ Verified (RTX 3060 6 GB host) |
-| Linux | ⬜ Scripts ready (`run-web.sh`), not yet live-verified |
-| macOS | ⬜ CI-tested (install + suite on macOS runner); Apple Silicon reports unified memory honestly (no fake VRAM); live run untested — testers welcome |
-
-## Screenshots
-
-| Dashboard | History |
-|-|-|
-| ![Dashboard](docs/screenshots/dashboard.png) | ![History](docs/screenshots/history.png) |
-
-| Optimization Profiles | Sandbox |
-|-|-|
-| ![Profiles](docs/screenshots/profiles.png) | ![Sandbox](docs/screenshots/sandbox.png) |
-
-| CMD menu (no UI) |
-|-|
-| ![CMD menu](docs/screenshots/cmd-menu.png) |
-
-## Example report (success `.md`)
-
-Every validated run writes `results/<model>-best.md` (excerpt, host details omitted):
-
-```markdown
-# Best settings: qwen3.8-9b-distill
-* Profile: balanced (style: balanced) | Elapsed: 1004.4s
-
-## Best load configuration (REST-settable)
-|Parameter|Value|Verdict|
-|context_length|8192|tested (8192)|
-|flash_attention|yes|verified best of tested (False, True)|
-|offload_kv_cache_to_gpu (KV on GPU)|yes|verified best of tested (False, True)|
-|eval_batch_size|128|verified best of tested (128, 1024, 2048)|
-
-## Requested vs applied (winner load verification)
-* Load channel: REST | Verification: MATCH
-
-## Winner: every test explicitly
-|Test|Gen tok/s|Quality|Status|
-|short_instruction|22.8|1.0 (6/6)|PASS|
-|medium_reasoning|32.2|1.0 (6/6)|PASS|
-|long_context|30.4|1.0 (6/6)|PASS|
-|coding_task|26.9|1.0 (6/6)|PASS|
-|structured_output|34.2|1.0 (6/6)|PASS|
-```
-
-## Measured results (RTX 3060 6 GB, Phase-A campaign, Phase B OFF)
-
-Validated winners (fastest quality-passing config):
-
-|Model|Best|Speed|Quality|
-|-|-|-|-|
-|ministral-3-3b|ctx 32768, flash on, KV-GPU, batch 128|74.9 tok/s|1.000 (30/30)|
-|qwen3.8-9b-distill|ctx 32768, flash on, KV-GPU, batch 2048|28.2 tok/s|0.983 (29/30)|
-|gemma-4-12b|ctx 32768, flash on, KV-GPU, batch 2048|7.1 tok/s|0.987 (29/30)|
-|gpt-oss-20b|ctx 32768, flash on, KV-GPU, batch 1024|12.1 tok/s|1.000 (30/30)|
-
-Honest no-winners (measured, none passed quality — not config bugs): qwen3.8-4b
-(structured-JSON fails), marco-8b (0.65–0.73), ministral-14b (0.60–0.68),
-alibaba-30b (incl. MoE rollback). Unloadable: ternary-27b. Details in
-`results/campaign/` (`INDEX.md`, `CAMPAIGN_SUMMARY.md`).
-
-## Persist the winner in LM Studio
-
-LM Studio keeps per-model load defaults in
-`~/.lmstudio/.internal/user-concrete-model-default-config/<model>.json`.
-`lm-optimizer lab save-default <run-id>` (or Results → **Save as LM Studio
-default**) merges the validated winner into that file:
-
-- only tested, non-`None` fields are written; unknown keys (CPU threads, KV
-  cache quantization, mmap) and prediction presets are preserved;
-- the previous file is copied to `<name>.optimizer-backup` before an overwrite;
-- the next load uses the new values — no LM Studio restart required;
-- unreadable/non-object files are never overwritten (CLI exits 1, API 409).
-
-**Configurable LM Studio home.** The defaults path is
-`<lmstudio-home>/.internal/user-concrete-model-default-config/<model>.json`.
-By default `~/.lmstudio`. Override per-call with `--lmstudio-home` or globally
-with the `LM_OPTIMIZER_LMSTUDIO_HOME` environment variable:
-
-```bash
-LM_OPTIMIZER_LMSTUDIO_HOME=D:/LMStudio lm-optimizer lab save-default <run-id>
-lm-optimizer lab save-default <run-id> --lmstudio-home D:/LMStudio
-```
-
-This keeps the repo machine-agnostic; no user paths are hard-coded.
-
-Verified live on 2026-10-27: writing `llm.load.contextLength=3072`,
-`llm.load.llama.flashAttention=false` and
-`llm.load.offloadKVCacheToGpu=false`, then loading with
-`echo_load_config=true`, echoed `3072 / false / false`; the original file was
-restored byte-for-byte after the test.
-
-## Launchers per OS (same tree and files, only the starter differs)
-
-**Windows** (`.bat`):
-
-```bat
-start.bat          REM unified launcher: Web UI, optimize, tests, cleanup, install
-```
-
-**Linux/macOS** (`.sh`):
-
-```bash
-chmod +x start.sh
-./start.sh         # unified launcher: Web UI, optimize, tests, cleanup, install
-```
-
-> macOS: same `.sh` launchers are expected to work (Metal detection is coded,
-> `lms` CLI optional) but no Mac has run them yet — report back if you try.
-
-Prerequisites (both): LM Studio running with Developer server on `127.0.0.1:1234`,
-KV cache quantization **Q4 starter** + CPU threads at logical maximum (both GUI-only,
-REST cannot set them — verified). **Keep Model in Memory must be OFF** during runs —
-otherwise unloads do not take effect and the run stops fail-closed (see Troubleshooting §11).
-See `python -m lm_optimizer recommend --vram 6`.
-
-Manual install:
-
-```bash
-pip install -e ".[dev]"
-cp .env.example .env    # Windows: copy .env.example .env
-python -m pytest -q                    # all tests
-python -m pytest -q -m unit            # fast unit suite (lm_optimizer/tests)
-python -m pytest -q -m integration     # integration/tooling suite (tests/)
-```
-
-Tests live in two roots: `lm_optimizer/tests/` is the unit suite and
-`tests/` is the integration/tooling suite. Both are collected by default;
-use the `unit`/`integration` markers to run one side.
-
-## CLI reference
-
-|Command|What it does|Live load?|
-|-|-|-|
-|`status`|connection + probed capabilities + hardware|probe only|
-|`models`|list local models (size, quant, ctx, MoE)|probe only|
-|`inspect <model>`|model detail + supported params|probe only|
-|`recommend --vram 6 [--estimate]`|fit table + GUI/host checklist (+ `lms` estimates)|no|
-|`benchmark <model> --context N --style S`|5-test suite, one config|yes|
-|`optimize <model> [--dry-run] [--profile P] [--resume ID]`|Phase-A tuning + preset + report|yes|
-|`compare <model> --config-a A --config-b B [--tests T]`|A/B configs on the same tests|yes|
-|`auto [models] [--skip X,Y]`|smoke → precision → ladder → matrix → optimize|yes|
-|`fit [models]`|max-context ladder per KV path|yes|
-|`ctx <model> [--quality-rungs N]`|geometric context sweep + bisect (+ full quality suites)|yes|
-|`pause <id>` / `resume <id> [--skip-phases]` / `run-status`|graceful pause + resume under same ID|no|
-|`checkpoints`|list interrupt checkpoints|no|
-|`param-matrix [--record]`|parameter control matrix (+ DB snapshot)|no|
-|`apply / restore / presets / runs`|presets and history management|apply/restore yes|
-|`cleanup_test_runs`|remove test runs|no|
-|`python tools/hw_monitor.py [--model M]`|VRAM/RAM/swap snapshot; optional tok/s probe|only with `--model`|
-|`python tools/vram_matrix.py <model>`|12-config ctx×flash×KV fit/speed matrix|yes|
-|`resume-menu [--status] [--limit]`|interactive menu to resume paused/incomplete runs|no|
-|`judge <run_id> [--priority] [--vram-limit]`|AI-assisted model selection (second opinion)|no|
-|`lab context-explorer <model>`|1.5x context ladder + fill ratios + needle retrieval|yes|
-|`lab quality-lab <model> [--category C] [--seeds N]`|deterministic quality tasks, hard gates, reliability|yes|
-|`lab recommend [--min-tps N] [--min-context N] [--vram-only]`|model recommendations from the local fingerprint + local measurements|no|
-|`lab duel <model-a> <model-b> [--type T] [--mode M]`|controlled/best-profile duel, blind A/B judging; types: micro_quality, web, research, blender, agentic, complete_sandbox, complete_model|yes|
-|`lab sandbox --task T --model M`|single-model sandbox task with repair loop (web, research, blender, email_write, calendar_event, email_and_calendar, web_fetch_brief, web_search, deep_research)|yes|
-|`lab sandbox-all --model M [--tasks T1,T2]`|run every sandbox task (or a subset) for one model, with repair loops and per-task reports|yes|
-
-Benchmark styles: `precise` (code/math temp 0.1), `balanced` (suite defaults),
-`creative` (summarization temp 0.9). Every command first unloads stale models and
-verifies empty state; every load/unload is server-state verified.
-
-## Web UI
-
-```bash
-python -m lm_optimizer.web_main   # http://127.0.0.1:8080
-```
-
-Pages: **Dashboard** (optimize form, live status, plain model dropdown, custom
-priorities 0.00-1.00 + hard speed target), **History** (runs + sandbox duels,
-config counts, stale flags, per-row checkboxes with bulk delete / re-run /
-compare, abandon; sandbox task runs grouped per model in collapsible cards),
-**Results** (winner card, alternatives, charts, per-test Prompt/Thinking/Output,
-full JSON page, Apply Best Config, Save LM Studio config (download) and Save as
-LM Studio default (persist with backup)), **Sandbox** (text/HTML/3D duels with
-presets; per-model history with Pin/Compare split view), **Brewery** (Lab +
-Experiment Builder under one entry), **Settings**. API under single `/api` prefix
-+ websocket progress. Dark mode follows the OS (toggle in nav). Read endpoints
-are load-free and degrade gracefully when LM Studio is down.
-
-**Security model:** the web UI has no user login and is intended for
-loopback use only. It binds `127.0.0.1` by default; `web_main` refuses a
-non-loopback bind unless `LM_OPTIMIZER_ALLOW_REMOTE=1` **and**
-`LM_OPTIMIZER_API_TOKEN` are set, and CORS is restricted to localhost origins.
-In remote mode, mutating requests from non-loopback clients must send
-`X-API-Token: <token>`; the local UI is unaffected. For a browser UI on a
-remote network, put an authenticating reverse proxy in front of it.
-
-**Pause/Resume (v1.5.2):** Running and paused runs show **Pause** / **Resume** buttons
-on the Results page. History page has **Resume All Pending** to bulk-resume paused runs.
-API: `POST /api/runs/{run_id}/pause` and `POST /api/runs/{run_id}/resume`.
-Resume from checkpoint skips already-completed candidates (no re-runs).
-
-## CLI Pause/Resume Menu (v1.5.2)
-
-```bash
-lm-optimizer resume-menu                    # interactive selection
-lm-optimizer resume-menu --status paused    # filter by status
-lm-optimizer checkpoints                    # list all checkpoints
-lm-optimizer resume <run-id>                # direct resume (existing)
-```
-
-The `resume-menu` shows runs in `running`, `paused`, `resumed`, `partial_success` states
-with progress info (completed configs, stage, VRAM). Select by number to resume.
-
-## AI Model Judge (v1.5.2) — Second Opinion
-
-```bash
-lm-optimizer judge <run_id> --priority balanced --vram-limit 6
-lm-optimizer judge <run_id> --priority speed --use-case coding
-lm-optimizer judge <run_id> --backend heuristic  # default, no AI needed
-```
-
-**User decides first.** The judge provides analysis to help you choose:
-- Heuristic backend (default): rule-based, fast, no external dependencies
-- Local backend: uses a local model via LM Studio/Ollama (planned)
-- API backend: uses external API like OpenRouter (planned)
-
-Outputs: recommended config, reasoning, confidence, pros/cons, alternatives, VRAM warnings.
-
-## Phase Skips, Fast Tests & Full Reports (v1.6.0)
-
-**Skip phases** (CLI, API i GUI Dashboard): `speed,context_speed,quality,recovery,validation,context`.
-
-```bash
-lm-optimizer optimize <model> --skip-phases recovery,validation
-lm-optimizer auto --skip-phases context --skip a,b
-lm-optimizer resume <run-id> --skip-phases quality   # finish the rest faster
-lm-optimizer resume-menu --all                       # finish every pending run
-```
-
-Skips are stored on the run, so `resume` keeps them. Skipping `quality`
-means no winner path (run ends without best config); skipping `context`
-forces Phase B off, while `context_speed` disables only the context-speed
-ladder. GUI: Dashboard → Advanced → Skip phases checkboxes (same names);
-History → Resume All Pending finishes `paused`, `partial_success` and
-`interrupted` runs.
-
-**Context-speed ladder (every speed run).** After the speed probes, the
-fastest config is re-loaded at 2k, 4k, 8k, 16k, 32k, 64k, 128k, 256k
-(clamped to the model limit) and a short probe records tok/s at each rung.
-The first context that cannot load ends the ladder, so every point is real
-evidence. Results appear in the CLI/report and are persisted for resume.
-
-**Optional absolute maximum.** `--optimize-context --min-context-speed N`
-runs the Phase B sweep after the winner is frozen and stops at the first
-rung below `N` tok/s or an OOM/load failure. On a TTY the threshold is
-prompted when omitted. GUI: Advanced → Phase B minimum generation tok/s.
-
-**Per-model depth (no yes/no chain).** `optimize` and `auto` ask once per
-selected model: quick, standard, full, benchmark or skip. `auto --model-detail
-'qwen=quick,*=standard' --no-ask-tests` supports unattended batches.
-
-**Faster tests.** `--warmup-runs 0-5` (default 1) on `optimize` / `auto` /
-`ctx` — `0` skips the warmup suite pass per config (~15–20% faster quality
-suites, slightly noisier first measurements). GUI: Advanced → Warmup runs.
-
-**Full context + quality.** `ctx <model> --quality-rungs N
---quality-threshold 0.97` runs full quality suites on the top-N stable
-ladder rungs (ctx, tok/s, quality, checks, VRAM, TTFT, PASS/FAIL table).
-
-**Richer best reports.** Tested-configs table now shows run order `#`,
-prompt tok/s, TTFT, VRAM per row; `--report-sort run|speed|quality`
-(`optimize` / `auto`) reorders it. Report layout: Results first, then
-best config, HW details, test details, tried configs, methodology last.
-
-**Wider grid.** `--physical-batches 256,512,1024` adds a real search
-dimension (`optimize` / `auto`). RoPE stays opt-in (`--enable-rope`);
-temperatures are covered by `--style` (precise/balanced/creative),
-`sample-sweep` and the auto precision probe.
-
-**Reliability hardening (unreleased).** `optimize` / `auto` show one
-pre-flight summary (model, profile, phases, experiments) and ask once
-(`--yes` / `--non-interactive` never prompt; `--enable-rope False` as a
-positional is rejected with exit 2). Experimental runs record
-requested/resolved/applied/exercised detail in the report. Quality-skipped
-exploration writes `<model>-explore.md` (`quality_validated: false`) and
-never overwrites the validated preset or `-best.md`. `resume-menu` shows
-checkpoint presence, phase/cursor, last progress and a safe-to-resume hint.
-Failed-run reports group errors by normalized signature with per-signature
-durations and a repeat-failure circuit-breaker verdict (flash-specific
-failures never trip it).
-
-**Granular test modes (v1.6.x).** One-purpose runs for quick answers, all
-following the same `*-only` pattern (`--mtp-test` / `--reasoning-sweep`
-remain accepted aliases of `--mtp-only` / `--reasoning-only`):
-
-```bash
-lm-optimizer optimize <model> --speed-only --context 16384  # only speed probes, context pinned
-lm-optimizer optimize <model> --quality-only                # quality battery on the default config
-lm-optimizer optimize <model> --mtp-only --context 16384    # only the speculative/MTP probes
-lm-optimizer optimize <model> --reasoning-only --max-context 16384  # reasoning off/low/medium/high/xhigh
-```
-
-Modes compose onto the phase-skip machinery (each `*-only` derives its
-required `--skip-phases` set automatically), so `resume` keeps the mode, the
-pre-flight summary shows the real plan and no winner is fabricated without
-the quality phase. `--context` is required with `--speed-only` / `--mtp-only`
-(it pins the probe context, clamped to the model's advertised limit);
-`--max-context` controls the quality context for `--quality-only` /
-`--reasoning-only`, which measure the default (baseline) runtime. Mutually
-exclusive with each other by design. Batch runner for whole model families:
-`python tools/granular_suite.py` (sequential, job-lock aware, per-step
-timeout plus a stall watchdog that kills a step producing no log output for
-20 minutes, then reconciles the dead run).
-
-**Operational tools.** `tools/verify_runs.py` checks persisted runs against
-the acceptance invariants (resolved settings, speed-floor block, probe cap,
-stage skips, explicit no-winner reason); `tools/webui_audit.py` renders every
-page and key API endpoint over HTTP; `tools/speed_summary.py` reports median
-and max generation speed per model; `tools/model_status.py` shows the latest
-run per model. `lm-optimizer lab export-config <run-id>` writes the validated
-winner as a reusable load-config JSON (REST params + vLLM engine config +
-llama.cpp instructions). `lm-optimizer lab save-default <run-id>` persists
-the winner directly into LM Studio's per-model defaults (atomic write, previous
-file backed up, `--dry-run` and `--no-backup` supported).
-
-**Cleanup (v1.6.x).** `cleanup.bat` one-click maintenance:
-archives the run history first (whole `optimizer.db` snapshot plus
-`data/reports` and `data/checkpoints` moved into `data/archive/cleanup_<ts>/`),
-then deletes all run/benchmark rows from the DB, `data/logs` contents and
-Python/test caches (`__pycache__`, `.pytest_cache`, `.ruff_cache`,
-`.mypy_cache`). It keeps LM Studio models, `data/presets`, the curated
-`results/` reports, the tuned presets and settings in the DB, and the archive
-files themselves; refuses to run while the job lock is held. Variants:
-`python tools/cleanup.py --dry-run` (inspect), `--logs-only` (no DB changes,
-also as `cleanup-logs-only.bat`). LM Studio models and everything outside
-the repo are never touched.
-
-**Lab workflows (v1.6.x).** `lm-optimizer lab` groups the four workflows
-that are NOT the runtime optimizer:
-
-- `lab context-explorer <model>` - real context capacity: 1.5x geometric
-  ladder (never power-of-two), binary refinement to 512 tokens, fill ratios
-  (fast 0/50/90 %, detailed 0/25/50/75/90/98 %) and needle retrieval at
-  5/25/50/75/95 %. A context that merely ALLOCATES is not reported as
-  usable. Decode speed below 1 tok/s is `FAIL_TOO_SLOW`, kept distinct from
-  OOM, with a 0.95-1.05 hysteresis band that gets re-measured.
-- `lab quality-lab <model>` - deterministic quality tasks (instruction,
-  coding, reasoning, structured JSON, Slovak, hallucination resistance)
-  with hard gates (empty output, exit code, required files, unit tests,
-  schema, exact functionality) evaluated BEFORE scoring - a broken output
-  can never win on appearance. Reliability is reported as mean / median /
-  worst / stdev / success rate over several seeds.
-- `lab recommend` - model recommendations for the detected fingerprint. Fit
-  is decided by FILE SIZE and bits/weight, never by parameter count
-  (Bonsai 27B Q1_0 fits a 6 GB card, Q4 27B does not), MoE models are
-  estimated from their ACTIVE parameters, and local measurements in the
-  database outrank community priors.
-- `lab duel <model-a> <model-b>` - controlled (identical context, sampling,
-  seed) or best-profile duel with blind A/B judging; the judge never sees
-  the model identity and may not be one of the candidates. Supported types:
-  `micro_quality`, `web`, `research`, `blender`, `agentic`,
-  `complete_sandbox`, `complete_model`.
-
-**Sandbox tasks** (`lab sandbox --task <task> --model <model>`, `lab bakeoff --tasks ...`, or a duel type):
-
-| Task | Kind | What the model must produce |
-|---|---|---|
-| `email_write` | text | follow-up email with Subject, greeting, next step + deadline, closing; no placeholders |
-| `calendar_event` | text | calendar event JSON (ISO 8601 start/end, attendees, location) |
-| `email_and_calendar` | text | email + calendar JSON from meeting notes |
-| `web_fetch_brief` | text | JSON with `tool=web_fetch`, url, facts or error; never invents facts |
-| `web_search` | text | Python scraping script (queries, user-agent, timeout, error handling) |
-| `deep_research` | text | research plan: sub-questions, search strategy, source criteria, conflict resolution |
-| `research_synthesis` | research | source-grounded answer citing the supplied documents, admitting gaps |
-| `minecraft_world` | web | single HTML voxel world (Three.js, procedural island, orbit camera) |
-| `company_website` | web | single-file marketing site: nav, hero, services, about, testimonial, contact form, footer, media query |
-| `deep_research_report` | web | offline HTML report from a fixed source package (RACE/FACT-style checks) |
-| `deep_research_online` | web | HTML report citing scraped `[S#]` sources (`lab research` output) |
-| `deep_research_agent` | web | report plus `trace.json` with real search/fetch calls |
-| `creative_3d_voxel_island` | text | procedural Three.js module (`export function createScene`) |
-| `blender_city` | blender | dense low-poly city from a fixed 12x12 map, saved as an openable `scene.blend`; **no renders, no PNGs** |
-
-`blender_city` needs Blender on `PATH`; see [`docs/benchmarks/blender_city.md`](docs/benchmarks/blender_city.md).
-The deep-research tasks are described in [`docs/benchmarks/deep_research.md`](docs/benchmarks/deep_research.md)
-and [`docs/benchmarks/deep_research_sources.md`](docs/benchmarks/deep_research_sources.md).
-
-### Core benchmark set
-
-Five tasks cover the interesting failure modes; the rest are kept for targeted
-checks:
-
-| Task | Why it is in the core set |
-|---|---|
-| `email_write` | sharpest instruction-following test (reasoning leakage shows up immediately) |
-| `company_website` | visual HTML: layout, responsiveness, real render |
-| `minecraft_world` | 3D: proves a scene is drawn (canvas check, not page text) |
-| `blender_city` | the openable `.blend` deliverable |
-| `deep_research_report` | long-form synthesis with citations |
-
-`calendar_event`, `email_and_calendar`, `web_fetch_brief`, `web_search`,
-`deep_research`, `research_synthesis`, `deep_research_online`,
-`deep_research_agent` and `creative_3d_voxel_island` are extended tasks: run
-them when the question is specifically about that behaviour.
-
-Reference images (1 frontier vs 1 local) live in
-[`docs/benchmarks/previews/`](docs/benchmarks/previews/README.md).
-
-All agentic tasks run offline (`network_allowed=false`) with an evidence-only repair loop: on failure the model gets the failing checks, not the solution.
-
-Reasoning levels are pass-through: `lab sandbox --reasoning <level>`,
-`lab bakeoff --reasoning-effort <level>` and
-`tools/model_bakeoff.py --reasoning-effort <level>` accept `off`, `on`, `low`,
-`medium`, `high`, `xhigh`, `default` or any value the server exposes. This
-LM Studio build advertises `off|on` per model; a rejected value is retried
-without the key, and `default` omits it entirely.
-
-**Frontier benchmark example.** `minecraft_world` is also published as a
-reproducible frontier-model benchmark: the exact prompt, acceptance checks and
-the committed DeepSeek V4.1 Flash artifacts/results live in
-[`docs/benchmarks/README.md`](docs/benchmarks/README.md). Local model scores are
-intentionally not committed.
-
-![Minecraft-style skyblock benchmark](docs/benchmarks/minecraft_world_preview.png)
-
-## Model gate (shared local backends)
-
-Before a sandbox or bake-off run loads a model, the gate probes **LM Studio**,
-**Ollama** and **llama.cpp** for already-loaded models. Policy:
-
-- `MODEL_GATE_MAX_LOADED_MODELS` (default `1`) is the total number of loaded
-  models across backends, including the one the job needs.
-- If a slot is free, the model is loaded immediately (the preload) and stays
-  loaded for every repair attempt of the run.
-- If every slot is busy, the job does **not** fail: it waits and re-checks
-  every `MODEL_GATE_POLL_INTERVAL_S` (default 180 s) up to
-  `MODEL_GATE_WAIT_TIMEOUT_S` (default 3600 s).
-- After the timeout it tries `MODEL_GATE_FALLBACK_MODELS` (comma separated),
-  then reports a clean error if none can run.
-- The gate never unloads a model it did not load. On release it unloads exactly
-  its own model and verifies it is gone.
-- A model that is already loaded is reused without a reload; a context
-  mismatch is logged.
-
-Example: allow two models on a bigger card:
-
-```powershell
-$env:MODEL_GATE_MAX_LOADED_MODELS="2"
-```
-
-## Blender / 3D sandbox requirements
-
-The `blender_city` sandbox task (and duel type `blender`) needs **Blender
-installed on the host**. It runs the model-generated Python script through
-`blender --background --python build_scene.py`, opens the saved `scene.blend`,
-and validates structure (mesh count, height variety, footprint, camera, light).
-Nothing is rendered: the task forbids `bpy.ops.render`, so no PNGs are produced.
-
-- The sandbox runner and duel execute `blender` from `PATH`. Add the Blender
-  install directory to `PATH` for the process that runs the CLI.
-- `BLENDER_PATH` is honoured by `tools/preview_blender.py` (a viewer helper),
-  **not** by the sandbox runner.
-- On Windows the default install is typically `C:\Program Files\Blender
-  Foundation\Blender <version>\blender.exe`.
-- Without Blender the task fails on `blend_runs` / `blend_is_binary` - that is
-  **expected behavior, not a code bug**. The text-generation tasks
-  (`company_website`, `email_write`, etc.) work without Blender.
-
-Per-call (Windows PowerShell):
-
-```powershell
-$env:PATH += ";C:\Program Files\Blender Foundation\Blender 5.3"
-python -m lm_optimizer.cli.main lab sandbox --task blender_city --model <model-id>
-```
-
-Permanent (Windows): add the Blender install directory to the user `Path`
-environment variable, then open a new terminal.
-
-The script must save `scene.blend` with `bpy.ops.wm.save_as_mainfile`. The
-produced file is copied to `results/blends/<model>/blender_city/<stamp>.blend`,
-so it survives cleaning of the scratch workdir and can be opened in Blender.
-
-### Verified 3D output (2026-11-10)
-
-`benchmarks/deepseek_agent/blender_city/build_scene.py` builds the full 12x12
-map grid (60+ buildings, park, river, landmarks), saves `scene.blend` and
-scores **1.0** with Blender 5.3 in about 35 seconds. The file is collected under
-`results/blends/` and is the artifact to inspect - there is no rendered image.
-
-This is an actual render, not a mock. The harness accepts uncompressed,
-zstd-compressed and gzip-compressed `.blend` files, runs Blender once per
-repair attempt, clears stale artifacts between attempts, and writes
-`blender.log` next to the scene for diagnosis.
-
-## Model bake-off and cache A/B
-
-`lab bakeoff` runs one model at a time through the sandbox tasks while keeping
-the model loaded, so load cost is paid once and reported separately. It works
-with **any** LM Studio or Ollama model id; `--models all` reads the model list
-from the configured backend instead of a hardcoded test set:
-
-```powershell
-python -m lm_optimizer.cli.main lab bakeoff --models all --tasks email_write,company_website,minecraft_world --context 8192
-```
-
-`--safe` uses the minimal-memory load config (parallel 1, batch 128, KV cache
-in RAM) for large models on small cards. `--kv-ram` only moves the KV cache.
-`--reasoning-effort` accepts `off|on|low|medium|high|xhigh|default` (or any
-value the server exposes). `tools/model_bakeoff.py` remains a thin standalone
-wrapper around the same service.
-
-Each row records `load_s`, `gen_s` (measured around the chat call, so it
-includes the model's thinking/reasoning phase), `total_s = load_s + gen_s`,
-`tokens`, `tok_s`, `thinking_chars` and the sandbox score. Results are appended
-to `results/bakeoff/runs.jsonl` and summarised in
-`results/bakeoff/summary_*.md`.
-
-`lab score-report <file> --task deep_research_report --model "OpenAI Deep Research"`
-scores a report produced outside this machine (GPT, Gemini, Perplexity,
-Odysseus) with the same checks.
-
-## Comparing providers side by side
-
-Same task, same prompt, same artifact name - then compared, mostly visually.
-`benchmarks/compare/PROMPTS.md` holds the exact prompts to paste into ChatGPT,
-DeepSeek, Nemotron or any other model.
-
-```powershell
-# write the prompts, plus a Desktop bundle with references (Desktop/frontier_bench)
-python tools/export_prompts.py --desktop
-
-# import an answer straight from the clipboard (markdown fences are stripped)
-python tools/compare_models.py --provider chatgpt --task minecraft_world --clipboard
-
-# score + screenshot everything, including the newest local bakeoff runs
-$env:PATH += ";C:\Program Files\Blender Foundation\Blender 5.3"
-python tools/compare_models.py --tasks all --include-bakeoff
-```
-
-Outputs land in `results/compare/`: `comparison.md`, `comparison.csv`,
-`gallery.html` (open it in a browser) and `visuals/`. HTML pages are captured
-with headless Chrome using SwiftShader, so Three.js scenes render without a GPU,
-and Blender runs contribute their real `.blend` path (the city task renders
-nothing, so there is no preview image).
-
-Only the frontier artifacts under `benchmarks/compare/` are committed. Every
-local run, score and screenshot stays in `results/` (gitignored) and can be
-deleted at any time without losing anything reproducible
-(`python tools/explain_failures.py` rebuilds the failure report).
-
-To see why a stored artifact failed, re-score it with the current checks:
-
-```powershell
-python tools/explain_failures.py
-```
-
-`SCOREBOARD.md` is the current results table (local models + frontier
-providers, with pixel verdicts); `docs/benchmarks/model_failures.md` explains
-every failure and lists what is impossible on this host.
-
-`docs/benchmarks/model_failures.md` records the same analysis in prose: per
-model, per task, and whether the cause was the model, the scorer or the host.
-
-`tools/quick_cache_ab.py` measures the same model twice with identical weights
-and context, changing only where the KV cache lives:
-
-```powershell
-python tools/quick_cache_ab.py --model qwen3.8-9b-distill --context 8192
-```
-
-It reports load time and generation time for `KV_GPU` (default) and `KV_RAM`
-(`offload_kv_cache_to_gpu=false`), which is the practical "weights in VRAM,
-context in RAM" split. LM Studio decides the weight split itself; `gpu_ratio`
-is not accepted over REST.
-
-**Verified LM Studio capability boundaries (probed 2026-10-21).** This
-build accepts the whole `speculative_draft_*` family over REST
-(`speculative_draft_mtp`, `_simple`, `_model`, `_min_tokens`,
-`_min_continue_probability`, `_max_tokens`). KV cache quantization
-(`llama_k_cache_quantization_type` and every other spelling), CPU threads
-(`cpu_threads` / `threads` / `num_threads` / `n_threads`) and mmap
-(`try_mmap` / `keep_model_in_memory`) are **not** settable through REST
-here (400 `unrecognized_keys`) - they are runtime facts set in the GUI, so
-the optimizer records them instead of searching them. Draft-token counters
-are parsed from the chat stats when the server exposes them; when it does
-not, the MTP fields stay neutral (never fabricated).
-
-## How it works (Phase-A strategy)
-
-```
-PREPARE → SPEED (fixed small ctx) → FRONTIER → QUALITY (frozen finalists)
-  → RECOVERY (bounded rollback) → FINAL VALIDATION → [optional] CONTEXT
-```
-
-1. **Prepare**: unload-all, snapshot free VRAM/RAM/swap, verify empty, detect hardware.
-2. **Speed**: cheap probes (one short prompt, ≤64 tokens) over high-impact levers at a
-frozen context; adaptive budget from the S0 measurement (fast models 3 reps, slow 1).
-3. **Frontier**: 5% non-inferiority band + one contrarian candidate.
-4. **Quality**: only finalists run the full 5-test suite at the frozen quality context.
-Raw fastest is tracked even when it fails; the winner is the fastest quality-passing
-config. Failed loads never score, never win.
-5. **Recovery**: reconfirm failed tests, then roll back ONE suspect in tier order
-(speculative/MTP, experts, KV → placement, flash → batches), bounded to 3 probes.
-6. **Final validation**: adaptive 2–5 reps from stability; median wins.
-7. Optional Phase B (`--optimize-context`): max-context sweep on the frozen winner.
-
-Quality gate: 6 heuristic checks × 5 tests (JSON, code, instruction, reasoning,
-context). Benchmarks run `reasoning="off"` (auto-omitted where unsupported); empty
-outputs fail loudly. Reasoning traces are preserved separately (`thinking_text`)
-and shown per test, never mixed into answers.
-
-Reports: preset saved + per-model `.md` + campaign exports in `results/campaign/`.
-Sandbox duels persist in their own history (never mixed with optimization runs).
-
-## Verified LM Studio contract
-
-Live-verified. Unknown keys 400 **without loading**, so capabilities probe safely and
-adapt per version (results cached per server, warmed at startup).
-
-**Load** (`POST /api/v1/models/load`, flat params): `context_length`,
-`flash_attention`, `offload_kv_cache_to_gpu`, `eval_batch_size`,
-`physical_batch_size`, `parallel`, `context_checkpoints`,
-`reasoning_budget_message` (string), `num_experts` (MoE), full
-`speculative_draft_*` family, `echo_load_config`. Requested-vs-applied is
-compared on every load (mismatches recorded, never silent).
-
-**Rejected via REST** (400): `gpu_ratio` (use `lms load --gpu`), `rope_*`,
-`keep_model_in_memory`, `try_mmap`, `seed`, `n_threads`, KV-quant types,
-`unified_kv_cache`, `ttl`, `num_layers`, `gpu`.
-
-**Chat** (native `POST /api/v1/chat`, `input` string): `temperature`, `top_p`,
-`top_k`, `min_p`, `presence_penalty`, `reasoning` (model-dependent sets!),
-`max_output_tokens`.
-
-Details: `docs/PARAMETERS.md`, generated `docs/LM_STUDIO_PARAMETER_MATRIX.md`
-(`scripts/generate_parameter_matrix.py`), `lm_optimizer/services/parameter_registry.py`.
-
-## Backends (Ollama beta)
-
-Global switch (default unchanged, LM Studio path byte-identical):
-
-```bash
-python -m lm_optimizer --backend lm-studio status     # default
-python -m lm_optimizer --backend ollama models        # Ollama sweep client (beta)
-python -m lm_optimizer ollama-export --model <tag> --param num_ctx=4096 -o best.modelfile.md
-python -m lm_optimizer ollama-apply --file best.modelfile.md --as <tag>:opt --yes
-```
-
-Ollama is beta: mocked-test evidence only, no live-server verification yet;
-llama.cpp is an explicit phase-2 stub. Live checklist: `docs/OLLAMA_LIVE_CHECK.md`.
-Design: `docs/specs/2026-10-02-multi-backend-design.md`.
-
-## Hardware notes
-
-* Designed hardware-agnostic (no hardcoded GPU): NVIDIA/CPU paths, ASCII output,
-graceful degradation without `nvidia-smi`/psutil. Live-tested on RTX 3060 6 GB;
-CPU-only paths are coded and unit-tested, not physically exercised.
-* Remote LM Studio is detected and warned: local hardware must not score it.
-* Timeouts scale with model size (loads 600 s, generations scale with max tokens).
-
-## Development
-
-```bash
-pip install -e ".[dev]"
-python -m pytest -q                       # 1,500+ tests (mock-only)
-python scripts/generate_parameter_matrix.py
-```
-
-## Project structure
-
-```
-lm_optimizer/
-  api/          FastAPI app, routes (single /api prefix), schemas, websocket
-  backends/     BackendClient seam + ollama/ client, registry, modelfile (llama-cpp: phase-2 stub)
-  benchmark/    suite definitions (5 fixed tests)
-  cli/          commands (status..param-matrix, incl. compare/pause/ctx/resume)
-  database/     SQLite + migrations (runs, duels, capability snapshots)
-  discovery/    model inspection
-  domain/       dataclasses (LoadConfiguration filters to server-supported keys)
-  hardware/     detection (GPU/CPU/RAM, Windows/Linux/macOS branches)
-  profiles/     speed/balanced/context/quality weights
-  scoring/      normalization + heuristic evaluator
-  services/     clients, benchmark, search space, optimizer, matrix, fit,
-                context_sweep, selection, preheat, workload, run_summary,
-                reporting, recommendations, generation defaults, hostguard,
-                lms_cli, parameter_registry, speculative, compare, sandbox,
-                sandbox_lab/runner/history, web_research, research_agent,
-                blend_inspect, render_check, png_stats, host/lmstudio_errors
-  storage/      resumable run checkpoint store
-  ui/           templates + static JS (dark mode, status poller, duel UI)
-tools/ run-*.bat run-*.sh scripts/ docs/ results/ (gitignored)
-```
-
-Key tools: `tools/compare_models.py` (cross-provider scoring + gallery),
-`tools/agent_benchmark.py` (score committed frontier artifacts),
-`tools/explain_failures.py` (re-score stored artifacts with the current checks),
-`tools/scoreboard.py` (measured runs + pixel verdicts),
-`tools/export_prompts.py` (prompt pack + Desktop bundle),
-`tools/prune_models.py` (drop models no longer downloaded),
-`tools/clean_results.py` (delete regenerable results), `tools/html_shot.py`
-(CDP screenshots), `tools/png_stats.py` (blank/flat classifier).
-
-Runtime data (`data/*.db`, `logs/`, `results/`) is gitignored and
-never pushed. No credentials exist in the repo (only `LM_STUDIO_URL` default).
-
-**Type strategy:** domain aggregates (`lm_optimizer/domain/`) are dataclasses;
-Pydantic models appear only at the HTTP boundary (`api/schemas.py`); raw
-`dict`/JSON is kept at file and external-process edges (LM Studio defaults,
-judge responses). New code should follow that split rather than adding a
-second representation of the same aggregate.
-
-## License
-
-MIT — see `LICENSE`.
-```
-
-(End of file)
+# LocalLLM Optimiser
+
+[![ci](https://github.com/DracieVajko/LocalLLM_Optimiser/actions/workflows/ci.yml/badge.svg)](https://github.com/DracieVajko/LocalLLM_Optimiser/actions/workflows/ci.yml)
+[![python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
+[![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![sponsor](https://img.shields.io/badge/sponsor-GitHub-ea4aaa?logo=github)](https://github.com/sponsors/DracieVajko)
+
+**Detect your hardware, benchmark your local models, and find the inference
+settings that actually work on your machine.**
+
+LocalLLM Optimiser measures instead of guessing. It loads a model through
+[LM Studio](https://lmstudio.ai), sweeps the settings that LM Studio exposes
+over REST, and keeps the fastest configuration that still passes a fixed
+quality suite. It also runs a model sandbox - small, reproducible tasks with
+real acceptance checks - so two models can be compared on the same prompt, and
+the resulting artifacts can be inspected.
+
+The project does **not** promise a speed-up. It reports what it measured on
+your hardware, with the evidence attached.
 
 ---
 
-## Support this work
+## 1. Introduction
 
-If you find this project useful, consider supporting its ongoing development, maintenance, and improvements.
+A local model on the same GPU can differ by 2x in tokens per second depending
+on context length, flash attention, KV-cache placement and batch sizes. Those
+settings are also the ones that decide whether a 27B model fits into 6 GB of
+VRAM at all.
 
-[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=github)](https://github.com/sponsors/DracieVajko)
+This tool automates that search:
+
+* **Probes** what your LM Studio build actually accepts (unknown keys are
+  rejected without loading, so probing is safe).
+* **Benchmarks** candidate configurations on your machine - load time,
+  generation time, time to first token, memory.
+* **Validates** quality with a fixed suite, so the fastest configuration that
+  breaks the output never wins.
+* **Explains** every result: which configuration won, which ones failed, and
+  why.
+* **Persists** the winner into LM Studio's per-model load defaults (with a
+  backup), so the next load uses it.
+
+Everything runs against a local LM Studio instance. No data leaves your
+machine.
+
+## 2. Main capabilities
+
+| Area | What it does | Measured or estimated? |
+|---|---|---|
+| Hardware detection | GPU name/VRAM, RAM, swap, CPU threads, per-drive free space; Apple Silicon reports unified memory honestly (no fake VRAM) | **Measured** (via `nvidia-smi` / `psutil` / OS APIs) |
+| Load-parameter probe | Sends every candidate key to the server, records which are accepted (400 = rejected, no model loaded) | **Measured** (server response) |
+| Speed search | Context length × flash attention × KV placement × batch sizes | **Measured** (server timing) |
+| Quality suite | 5 fixed tests (instruction, reasoning, long context, coding, structured output) with hard gates | **Measured** (test output) |
+| Model fit | Whether a model file fits the free VRAM, based on file size and bits per weight | **Estimated** (labelled as such) |
+| Sandbox tasks | 5 core tasks + extended tasks, scored by file/keyword/structure checks, pixels for visual output | **Measured** (checks and pixels) |
+| Model bake-off | One model at a time, load time separated from generation time, per-task reports | **Measured** |
+| Frontier comparison | Same prompt for a hosted model, imported and scored with the same checks | **Measured** for the artifact, **not** for the provider's own hardware |
+
+## 3. Supported systems
+
+Only combinations that are actually exercised are listed. "CI" means the full
+test suite runs there; it does **not** mean a live LM Studio session was
+verified there.
+
+| System | Status | Notes |
+|---|---|---|
+| Windows 10/11 + NVIDIA (CUDA) | **Verified live** | Reference host: RTX 3060 6 GB, 16 GB RAM |
+| Windows + CPU only | Coded and unit-tested | No physical CPU-only run was recorded |
+| Linux | CI (Ubuntu runner) | Launchers exist (`start.sh`); no live LM Studio run recorded here |
+| macOS | CI (macOS runner) | Same as Linux; Apple Silicon memory is reported as unified memory |
+| AMD GPU | **Not verified** | No ROCm/Vulkan run was recorded; treat every number as unverified |
+| LM Studio (Developer server) | **Verified live** | The only fully supported inference backend |
+| Ollama | **Beta** | Client implemented against the documented API, mock-tested only - see [§8](#8-ollama-support-and-its-actual-status) |
+| llama.cpp | **Not reachable** | A `llama-server` client exists in `lm_optimizer/backends/llamacpp/`, but no CLI command exposes it yet |
+
+Details and the reasoning behind each row: [`docs/HARDWARE.md`](docs/HARDWARE.md).
+
+## 4. Prerequisites
+
+* **Python 3.11+** (3.12 recommended).
+* **LM Studio** with the Developer server enabled (default port `1234`).
+* A downloaded model in LM Studio (GGUF).
+* **Node.js** - optional, only needed to validate JavaScript in sandbox output.
+* **Blender** - optional, only needed for the `blender_city` task.
+* A Chromium-based browser (Chrome or Edge) - optional, needed for pixel-level
+  checks of rendered HTML.
+
+Everything else (SQLite, the web UI, the reports) ships with the repository.
+
+## 5. Installation
+
+```bash
+git clone https://github.com/DracieVajko/LocalLLM_Optimiser.git
+cd LocalLLM_Optimiser
+
+python -m venv .venv
+# Windows
+.venv\Scripts\activate
+# Linux / macOS
+source .venv/bin/activate
+
+pip install -e ".[dev]"
+```
+
+Optional launchers for Windows (`.bat`) and Linux/macOS (`.sh`) are in the
+repository root (`start.bat`, `start.sh`).
+
+## 6. Quick start
+
+```bash
+# 1. Is LM Studio reachable, and what does this build accept?
+lm-optimizer status
+
+# 2. Which models are downloaded, and how big are they?
+lm-optimizer models
+
+# 3. What fits into my VRAM?
+lm-optimizer recommend --vram 6
+
+# 4. Benchmark one model across candidate configurations.
+lm-optimizer benchmark qwen3.8-9b-distill --context 8192 --style balanced
+
+# 5. Search for the best configuration (speed first, then quality validation).
+lm-optimizer optimize qwen3.8-9b-distill --profile balanced
+
+# 6. Run the sandbox suite and compare two models on the same task.
+lm-optimizer lab sandbox --task company_website --model qwen3.8-9b-distill
+lm-optimizer lab bakeoff --models all --tasks email_write,company_website
+```
+
+The web UI is the same functionality with a browser front end:
+
+```bash
+python -m lm_optimizer.web_main      # http://127.0.0.1:8080
+```
+
+## 7. Connecting LM Studio
+
+1. Start LM Studio and enable the **Developer server** (Developer tab →
+   "Start Server"). It listens on `http://127.0.0.1:1234` by default.
+2. Check the connection:
+
+   ```bash
+   lm-optimizer status
+   ```
+
+3. Point the tool at a different server or port if needed:
+
+   ```bash
+   lm-optimizer status --base-url http://127.0.0.1:1235
+   # or permanently, in .env:
+   # LM_STUDIO_BASE_URL=http://127.0.0.1:1235
+   ```
+
+Two LM Studio settings **cannot** be changed over REST and must be set in the
+GUI:
+
+* **KV-cache quantization** (K/V cache type) - the tool reads the current
+  value out of LM Studio's per-model defaults file and records it with every
+  run, so a Q4 run and a Q8 run never get mixed up.
+* **CPU thread pool size** - recorded the same way.
+
+**Keep "Keep Model in Memory" OFF** while a run is in progress. With it on,
+LM Studio does not release the model, the next run cannot get the slot, and
+the tool stops fail-closed instead of measuring against a polluted machine.
+
+The tool refuses to score a *remote* LM Studio instance, because the numbers
+would describe someone else's hardware.
+
+## 8. Ollama support and its actual status
+
+Ollama is a **beta** backend, not a finished feature:
+
+* The client (`lm_optimizer/backends/ollama/`) implements discovery
+  (`/api/tags`), details (`/api/show`), generation (`/api/generate`),
+  metrics and the unload protocol.
+* It is covered by mocked-HTTPX tests. **No live Ollama server was exercised
+  by this repository's test suite.**
+* The CLI exposes it explicitly:
+
+  ```bash
+  lm-optimizer --backend ollama models
+  lm-optimizer ollama-probe --model <tag>
+  lm-optimizer ollama-export --model <tag> --param num_ctx=4096 -o best.modelfile.md
+  lm-optimizer ollama-apply --file best.modelfile.md --as <tag>:opt --yes
+  ```
+
+* The live checklist for a first real run is in
+  [`docs/OLLAMA_LIVE_CHECK.md`](docs/OLLAMA_LIVE_CHECK.md).
+
+llama.cpp is **not** usable yet: `lm_optimizer/backends/llamacpp/` contains a
+`llama-server` process manager, but no command reaches it. Treat it as
+unfinished work, not as a supported backend.
+
+## 9. Hardware detection
+
+`lm-optimizer status` and the `lab recommend` workflow report:
+
+* GPU name, count and VRAM - via `nvidia-smi` where available, with graceful
+  degradation when it is not.
+* System RAM, swap usage and per-drive free space.
+* Apple Silicon: unified memory is reported as such; there is no separate
+  VRAM number to pretend.
+* A model-fit table based on **file size and bits per weight** - not on the
+  parameter count. A 27B model at Q1_0 fits a 6 GB card; the same model at Q4
+  does not.
+
+When `nvidia-smi` is missing, the tool says so instead of guessing.
+
+## 10. Running benchmarks
+
+The benchmark suite is the **sandbox**: small tasks with acceptance checks.
+
+Core set (used for model comparisons):
+
+| Task | What it proves |
+|---|---|
+| `email_write` | Instruction following - reasoning leakage shows up immediately |
+| `company_website` | Visual HTML: layout, responsiveness, a real render |
+| `minecraft_world` | 3D: a scene is actually drawn (pixel check, not page text) |
+| `blender_city` | An openable `.blend` file as the deliverable (no renders) |
+| `deep_research_report` | Long-form synthesis with citations |
+
+Extended tasks (`calendar_event`, `web_fetch_brief`, `web_search`,
+`deep_research_online`, `deep_research_agent`, `research_synthesis`,
+`creative_3d_voxel_island`, ...) are available for targeted questions; see
+[`docs/BENCHMARK_TESTS_DETAIL.md`](docs/BENCHMARK_TESTS_DETAIL.md).
+
+```bash
+# one model, one task, with the repair loop
+lm-optimizer lab sandbox --task blender_city --model prism-ml/bonsai-27b
+
+# a matrix, one model at a time
+lm-optimizer lab bakeoff --models qwen3.8-9b-distill,prism-ml/bonsai-27b \
+    --tasks email_write,company_website,blender_city --context 4096
+```
+
+Results land in `results/bakeoff/runs.jsonl` (git-ignored) with load time,
+generation time, tokens, tokens per second and the sandbox score per task.
+
+**Two rules keep the numbers honest:**
+
+* **One model at a time.** The model gate (`MODEL_GATE_MAX_LOADED_MODELS`,
+  default 1) makes sure only the model under test is loaded.
+* **A run that was not measured is not a zero.** If generation failed or
+  returned nothing, the row is `not_measured` - never `0.0`.
+
+The same model, task, prompt and settings is the same test: re-running it
+replaces the previous row instead of piling up duplicates. Two runs only count
+as different tests when the prompt or the settings (including KV-cache
+quantization) differ.
+
+## 11. Model comparison
+
+The same prompt can be given to a local model and to a hosted one, and both
+results are scored with the same checks:
+
+```bash
+# export the prompts for a hosted assistant
+python tools/export_prompts.py --desktop
+
+# import an answer and score it with the local checks
+python tools/compare_models.py --provider chatgpt --task minecraft_world --clipboard
+
+# score the newest local bake-off runs as well
+python tools/compare_models.py --tasks all --include-bakeoff
+```
+
+Outputs land in `results/compare/` (`comparison.md`, `comparison.csv`,
+`gallery.html`, `visuals/`). HTML pages are captured with headless Chrome
+(SwiftShader), so a Three.js scene renders without a GPU.
+
+Only the frontier artifacts under `benchmarks/compare/` are committed. Local
+runs and scores stay in `results/`, which is git-ignored.
+
+## 12. Optimisation recommendations
+
+```bash
+lm-optimizer recommend --vram 6          # what fits, and which config to try
+lm-optimizer lab recommend               # model recommendations from local data
+lm-optimizer fit qwen3.8-9b-distill      # max-context ladder per KV-cache path
+lm-optimizer ctx qwen3.8-9b-distill      # context sweep with quality validation
+```
+
+`lab recommend` prefers measurements from this machine over community priors.
+Fit is decided by file size and bits per weight, and MoE models are estimated
+from their *active* parameters.
+
+The full search strategy (prepare → speed → frontier → quality → recovery →
+final validation → optional context phase) is documented in
+[`docs/OPTIMIZATION_METHOD.md`](docs/OPTIMIZATION_METHOD.md).
+
+## 13. Sandbox
+
+A sandbox task gives a model a prompt, an isolated working directory and a
+set of acceptance checks. On failure the model gets the failing checks (never
+the solution) and may repair its output once.
+
+```bash
+lm-optimizer lab sandbox --task company_website --model <model-id>
+lm-optimizer lab sandbox-all --model <model-id> --tasks email_write,company_website
+```
+
+What the checks look at:
+
+* **Files** - required artifacts exist.
+* **Structure** - HTML parses, has a title, a viewport, a single `h1`, a media
+  query, no external scripts or styles, labelled inputs, `alt` attributes.
+* **JavaScript** - parsed with `node --check`. Module sources are parsed as
+  modules, because some Node versions silently accept a broken `.js` file
+  that contains module syntax. If Node is not installed, the JavaScript is
+  reported as **not validated** - never as valid.
+* **Pixels** - rendered pages are screenshotted and measured (blank/flat
+  detection), so a black canvas cannot score as a finished page.
+* **Blender** - the produced script is executed with Blender, and the
+  resulting `.blend` is inspected (mesh count, height variety, footprint,
+  camera, light). The task forbids rendering, so no PNGs are produced.
+
+Without Blender installed, the Blender task fails with an explicit
+"blender executable not found" - that is the honest answer, not a silent 0.
+
+The task definitions live in
+[`lm_optimizer/services/sandbox_lab.py`](lm_optimizer/services/sandbox_lab.py);
+the checks and their semantics are described in
+[`docs/benchmarks/scoring_reference.md`](docs/benchmarks/scoring_reference.md).
+
+## 14. Web UI
+
+```bash
+python -m lm_optimizer.web_main      # http://127.0.0.1:8080
+```
+
+Pages: **Dashboard** (start an optimisation, live status), **History** (runs,
+duels, sandbox runs, compare and re-run), **Results** (winner, charts, prompt
+/ thinking / output per test, apply or persist the config), **Sandbox**
+(model-vs-model duels and per-task history), **Lab** (context explorer,
+quality lab, recommender, bake-off), **Experiments**, **Settings**.
+Everything the API exposes is under a single `/api` prefix; a websocket
+streams progress.
+
+**Security model:** the UI has no user accounts and is meant for loopback use.
+It binds `127.0.0.1` by default. Binding to another interface requires both
+`LM_OPTIMIZER_ALLOW_REMOTE=1` and `LM_OPTIMIZER_API_TOKEN`; mutating
+requests from non-loopback clients must then send `X-API-Token`. Put an
+authenticating reverse proxy in front of it for anything wider.
+
+If LM Studio is down, the read-only pages still work and say so.
+
+## 15. History and configuration
+
+* **Runs** are stored in SQLite (`data/optimizer.db`), resumable through
+  checkpoints. Pause and resume keep the same run id.
+* **Reports** are written as Markdown per model (`results/<model>-best.md`).
+* **The winner can be persisted into LM Studio**: `lm-optimizer lab
+  save-default <run-id>` merges the validated configuration into LM Studio's
+  per-model defaults file, after backing the previous file up. Unknown keys
+  (CPU threads, KV-cache quantization, mmap) and prediction presets are
+  preserved, and a malformed file is never overwritten.
+* **Configuration** comes from environment variables or `.env`. The full
+  reference - every setting, its default and what it influences - is in
+  [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
+
+## 16. Troubleshooting
+
+Short answers for the most common problems; the long version is in
+[`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `status` cannot connect | Developer server off | Start it in LM Studio (Developer tab) |
+| Every run waits ~1 h and fails | A model is still loaded (Keep Model in Memory on) | Turn it off; `lm-optimizer host-watch` shows what is loaded |
+| `blender_city` fails with "blender executable not found" | Blender is not installed | Install Blender, or set `BLENDER_PATH` |
+| JavaScript is reported as "not validated" | Node.js is missing | Install Node.js, or accept that the check cannot run |
+| A score is `0.0` right after a failure | The run was not measured | Check the run status (`not_measured` is not a quality score) |
+| Reports do not appear | The run is in a different working directory | Results are written relative to the current directory |
+
+## 17. Development and testing
+
+```bash
+pip install -e ".[dev]"
+
+python -m pytest -q                    # the whole suite (mock-based)
+python -m pytest -q -m unit            # fast unit suite
+python -m pytest -q -m integration     # integration/tooling suite
+python -m ruff check lm_optimizer tests --select F821   # undefined names
+python -m mypy lm_optimizer             # type check
+```
+
+The suite runs on Windows, Ubuntu and macOS in CI (`.github/workflows/ci.yml`)
+and needs Node.js for the JavaScript validation tests. The exact test count
+moves with the code - the CI log is the source of truth, not this README.
+
+The version lives in exactly one place: `lm_optimizer/__init__.py`. The
+package metadata, the FastAPI app and the run records all read it from there.
+
+Layout of the repository: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+Contribution guide: [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md).
+Development setup in detail: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
+
+## Sponsoring
+
+Sponsoring keeps this project alive and honest - it pays for the hardware
+matrix (different GPUs, small-VRAM cards, Apple Silicon), the benchmark
+infrastructure, and the time that goes into new model support and bug fixes.
+
+```bash
+# one-time
+gh sponsor create @DracieVajko
+# monthly
+gh sponsor create --interval monthly @DracieVajko
+```
+
+Whatever you choose: bug reports, a failing CI run on a platform I do not own,
+or a pull request with a regression test are worth just as much as money.
+
+## License
+
+MIT - see [`LICENSE`](LICENSE).
+
+## Documentation
+
+| Document | What it covers |
+|---|---|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, module map, data flow |
+| [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | Every setting, its default and its effect |
+| [`docs/HARDWARE.md`](docs/HARDWARE.md) | Verified hardware matrix and its limits |
+| [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Symptoms, causes, fixes |
+| [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) | How to contribute a change |
+| [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Development setup and checks |
+| [`docs/OPTIMIZATION_METHOD.md`](docs/OPTIMIZATION_METHOD.md) | The search strategy in detail |
+| [`docs/metrics_semantics.md`](docs/metrics_semantics.md) | What every metric means |
+| [`docs/benchmarks/README.md`](docs/benchmarks/README.md) | The published benchmark task |
+| [`docs/README.md`](docs/README.md) | Full documentation index |

@@ -2,16 +2,26 @@
 
 | Path | What it is |
 |---|---|
+| `ARCHITECTURE.md` | Layers, module map and data flow of the whole system. |
+| `CONFIGURATION.md` | Every environment variable, its default and what it influences. |
+| `HARDWARE.md` | What was verified on which hardware - and what was not. |
+| `TROUBLESHOOTING.md` | Symptoms, real causes and the fixes that worked. |
+| `CONTRIBUTING.md` | How to contribute a change (and what the bar is). |
+| `DEVELOPMENT.md` | Development setup, checks, repository layout. |
+| `OPTIMIZATION_METHOD.md` | The full search strategy: phases, gates, failure taxonomy. |
+| `OPTIMIZATION_STRATEGY.md` | Why the strategy is shaped that way. |
+| `PARAMETERS.md` | The load/inference parameter reference. |
+| `LM_STUDIO_DEFAULTS.md` | Per-model load-defaults file: layout, verified echo test, field mapping and safety rules for persisting a winner. |
+| `metrics_semantics.md` | What every metric means, how medians vs means are computed, and which values are estimates. |
+| `MEASUREMENT_CONTAMINATION.md` | How a polluted machine invalidates a measurement. |
+| `benchmarks/` | The published benchmark: prompts, acceptance checks, frontier artifacts and the failure analysis. |
 | `specs/LM_STUDIO_OPTIMISER_MASTER_SPEC_SK.md` | **Master product + implementation specification** (the "Delete after everything from this folder is done" folder, archived here). Sections are referenced from the implementation as "spec §N". |
 | `agents/OPENCODE_MASTER_PROMPT_LM_STUDIO_OPTIMISER_SK.md` | Agent prompt for a fresh audit/plan pass over the repository. Use it when the code has drifted from the spec, or for a new contributor. |
 | `research/lmstudio-api-deep-dive.txt` | Raw research notes on the LM Studio API surface: REST v1 endpoints, SDK-only parameters (K/V cache quantization, CPU threads, mmap, draft model), MTP/speculative decoding, and community benchmark data for 6 GB class hardware. |
 | `specs/2026-10-19-llm-judge-design.md` | LLM-as-judge design (Tasks 1-11 of the judge plan). |
 | `specs/2026-10-15-auto-run-design.md` | Auto-run orchestration design. |
 | `specs/2026-10-02-multi-backend-design.md` | Multi-backend (LM Studio / Ollama) design. |
-| `LM_STUDIO_DEFAULTS.md` | Per-model load-defaults file: layout, verified echo test, field mapping and safety rules for persisting a winner. |
-| `metrics_semantics.md` | What every metric means, how medians vs means are computed, and which values are estimates. |
 | `superpowers/plans/` | Implementation plans with step-by-step task lists. |
-| `superpowers/plans/../` (see `.superpowers/sdd/`) | Progress ledger of the SDD workflow. |
 
 ## How the spec maps onto the code
 
@@ -32,16 +42,6 @@
 
 ## Not yet implemented (honest list)
 
-### Out of scope by decision (2026-10-22)
-
-- **Browser rendering / Playwright** and **Blender render validation** were
-  dropped on purpose: the sandbox writes its artifacts into
-  `results/sandbox/<task>/`, so the user inspects the produced page or 3D
-  scene directly. Automating a browser engine and Blender would add heavy
-  dependencies for a judgement the user makes better by looking at the
-  result. The static validators that DO ship (`web_validator.py`,
-  `sandbox_lab.score_attempt`) still catch structural breakage.
-
 ### Still genuinely missing
 
 - **Open-web research sandbox**: the closed-package research task ships
@@ -56,3 +56,15 @@
 - **KV cache quantization / CPU threads / mmap search** - impossible on this
   LM Studio build over REST (probed: 400 `unrecognized_keys`); they are
   recorded as runtime facts instead.
+- **llama.cpp as an inference backend**: the client exists in
+  `lm_optimizer/backends/llamacpp/`, but no CLI command reaches it.
+
+### Deliberate limits
+
+- **Blender renders**: the Blender task forbids rendering, so the
+  `.blend` is validated structurally (mesh count, height variety, footprint,
+  camera, light) and no PNG is produced. Rendering the scene is the user's
+  call, not the benchmark's.
+- **A validator that is not installed cannot validate.** If Node.js, Blender
+  or a browser is missing, the affected check reports that it could not run
+  - it never counts as a pass.
