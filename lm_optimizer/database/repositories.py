@@ -95,7 +95,9 @@ class HardwareRepository:
                     hardware.cuda_version,
                     int(hardware.metal_available),
                     int(hardware.vulkan_available),
-                    hardware.detected_at.isoformat(),
+                    hardware.detected_at.isoformat()
+                        if hasattr(hardware.detected_at, "isoformat")
+                        else str(hardware.detected_at),
                 ),
             )
         return hw_id
