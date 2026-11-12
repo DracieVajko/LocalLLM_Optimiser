@@ -427,7 +427,7 @@ def _convert_preset(p: dict) -> PresetSchema:
 # ============================================================
 
 
-@router.get("/status", response_model=StatusResponse)
+@router.get("/status")
 async def get_status() -> dict[str, Any]:
     """Get system status (degrades to disconnected when LM Studio is down)."""
 
@@ -521,7 +521,7 @@ async def connect_lm_studio(url: str) -> dict[str, Any]:
 # ============================================================
 
 
-@router.get("/models", response_model=ModelsResponse)
+@router.get("/models")
 async def list_models() -> dict[str, Any]:
     """List all available models from LM Studio (empty when unreachable)."""
 
@@ -596,7 +596,7 @@ async def _read_inventory() -> tuple[list, str | None]:
             log_best_effort("best-effort operation failed", exc)
 
 
-@router.get("/stats", response_model=StatsResponse)
+@router.get("/stats")
 async def get_stats() -> dict[str, Any]:
     """Dashboard quick-stats with documented, tested meanings."""
 
@@ -668,7 +668,7 @@ async def get_model(model_id: str) -> dict[str, Any]:
 # ============================================================
 
 
-@router.post("/optimize", response_model=OptimizationRunResponse)
+@router.post("/optimize")
 async def start_optimization(
     request: OptimizationRequest, background_tasks: BackgroundTasks
 ) -> dict[str, Any]:
@@ -1141,7 +1141,7 @@ async def resume_run_task(optimizer: AdaptiveOptimizer, run_id: UUID) -> dict[st
             log_best_effort("best-effort operation failed", exc)
 
 
-@router.get("/checkpoints", response_model=CheckpointsResponse)
+@router.get("/checkpoints")
 def list_checkpoints() -> dict[str, Any]:
     """List interrupt checkpoints."""
 
@@ -1388,7 +1388,7 @@ def _present_config_detail(config, model_id: str) -> dict:
     return conv
 
 
-@router.get("/runs", response_model=RunsResponse)
+@router.get("/runs")
 def list_runs(limit: int = 50, offset: int = 0, model_id: str | None = None) -> dict[str, Any]:
     """List optimization runs (corrupt rows skipped, counted)."""
 
@@ -1426,7 +1426,7 @@ def list_runs(limit: int = 50, offset: int = 0, model_id: str | None = None) -> 
     return {"runs": kept, "skipped": skipped}
 
 
-@router.get("/runs/{run_id}", response_model=OptimizationRunResponse)
+@router.get("/runs/{run_id}")
 def get_run(run_id: UUID) -> dict[str, Any]:
     """Get optimization run details."""
 
@@ -1446,7 +1446,7 @@ def get_run(run_id: UUID) -> dict[str, Any]:
     return _convert_run(run, config_count=n, stale=stale)
 
 
-@router.get("/runs/{run_id}/configurations", response_model=ConfigurationsResponse)
+@router.get("/runs/{run_id}/configurations")
 def list_configurations(run_id: UUID) -> dict[str, Any]:
     """List all configurations for a run (corrupt rows skipped, counted)."""
 
@@ -1469,7 +1469,7 @@ def list_configurations(run_id: UUID) -> dict[str, Any]:
     return {"configurations": kept, "skipped": skipped}
 
 
-@router.get("/runs/{run_id}/configurations/{config_id}", response_model=ConfigurationResultResponse)
+@router.get("/runs/{run_id}/configurations/{config_id}")
 def get_configuration(run_id: UUID, config_id: UUID) -> dict[str, Any]:
     """Get configuration result details (full outputs, per-test quality)."""
 
@@ -1580,7 +1580,7 @@ async def restore_previous(model_id: str) -> dict[str, Any]:
 # ============================================================
 
 
-@router.get("/presets", response_model=PresetsResponse)
+@router.get("/presets")
 def list_presets(model_id: str | None = None) -> dict[str, Any]:
     """List saved presets."""
 
@@ -1593,7 +1593,7 @@ def list_presets(model_id: str | None = None) -> dict[str, Any]:
     return {"presets": [_convert_preset(p) for p in presets]}
 
 
-@router.post("/presets", response_model=SavePresetResponse)
+@router.post("/presets")
 def save_preset(preset: PresetSchema) -> dict[str, Any]:
     """Save a preset."""
 
@@ -1648,7 +1648,7 @@ async def apply_preset(preset_id: UUID) -> dict[str, Any]:
 # ============================================================
 
 
-@router.get("/settings", response_model=SettingsSchema)
+@router.get("/settings")
 def get_settings() -> dict[str, Any]:
     """Get all settings."""
 
@@ -1692,7 +1692,7 @@ def export_lmstudio_config(run_id: UUID) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=str(e)) from None
 
 
-@router.get("/model-default", response_model=GPUInfoSchema)
+@router.get("/model-default")
 def get_model_default(model_id: str) -> dict[str, Any]:
     """Inspect a model's current LM Studio defaults, fields and backups."""
 
@@ -1864,7 +1864,7 @@ async def verify_run_default(run_id: UUID) -> dict[str, Any]:
     return result
 
 
-@router.post("/runs/{run_id}/save-default", response_model=GPUInfoSchema)
+@router.post("/runs/{run_id}/save-default")
 async def save_lmstudio_default(
     run_id: UUID, dry_run: bool = False, verify: bool = False
 ) -> dict[str, Any]:
@@ -2049,7 +2049,7 @@ def generate_markdown_report(run) -> str:
     return "\n".join(lines)
 
 
-@router.post("/compare", response_model=CompareResponse)
+@router.post("/compare")
 def start_compare(request: CompareRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
     """Start an A/B comparison of two configs on the SAME tests."""
 
@@ -2078,7 +2078,7 @@ def start_compare(request: CompareRequest, background_tasks: BackgroundTasks) ->
     return CompareResponse(compare_id=compare_id, status="running")
 
 
-@router.get("/compare/{compare_id}", response_model=CompareResponse)
+@router.get("/compare/{compare_id}")
 def get_compare(compare_id: str) -> dict[str, Any]:
     """Poll an A/B comparison result."""
 
@@ -2140,7 +2140,7 @@ async def _run_compare_task(compare_id: str, request: CompareRequest) -> None:
         }
 
 
-@router.post("/sandbox", response_model=SandboxResponse)
+@router.post("/sandbox")
 async def start_sandbox(
     request: SandboxRequest, background_tasks: BackgroundTasks
 ) -> dict[str, Any]:
@@ -2329,7 +2329,7 @@ def get_sandbox_file(file_path: str) -> dict[str, Any]:
     return PlainTextResponse(page, media_type="text/html")
 
 
-@router.get("/sandbox/{job_id}", response_model=SandboxResponse)
+@router.get("/sandbox/{job_id}")
 def get_sandbox(job_id: str) -> dict[str, Any]:
     """Poll a sandbox duel result (in-memory first, history fallback)."""
 
@@ -2705,7 +2705,7 @@ async def _run_judge_async(judge_id: str, request: JudgeRequest):
         }
 
 
-@router.post("/judge", response_model=JudgeVerdictResponse)
+@router.post("/judge")
 async def judge_submit(
     request: JudgeRequest, background: BackgroundTasks, wait: bool = False
 ) -> dict[str, Any]:
@@ -2776,7 +2776,7 @@ async def judge_submit(
         )
 
 
-@router.get("/judge/history", response_model=list[JudgeHistoryItem])
+@router.get("/judge/history")
 def judge_history(limit: int = 20) -> dict[str, Any]:
     """Get recent judge verdicts from database."""
 
@@ -2822,7 +2822,7 @@ def judge_history(limit: int = 20) -> dict[str, Any]:
 # --- Lab workflows (P2-P5) ------------------------------------------------
 
 
-@router.get("/judge/{judge_id}", response_model=JudgeVerdictResponse)
+@router.get("/judge/{judge_id}")
 def judge_get(judge_id: str) -> dict[str, Any]:
     """Get judge verdict by ID."""
 
@@ -3388,7 +3388,7 @@ class _OllamaRestoreRequest(_OllamaBaseModel):
     dry_run: bool = False
 
 
-@router.get("/ollama-default", response_model=GPUInfoSchema)
+@router.get("/ollama-default")
 def get_ollama_default(model_id: str) -> dict[str, Any]:
     from lm_optimizer.services.ollama_defaults import resolve_ollama_defaults_path
 
@@ -3417,7 +3417,7 @@ def get_ollama_default(model_id: str) -> dict[str, Any]:
     return {"model_id": model_id, "path": str(path), "exists": existed, "fields": fields}
 
 
-@router.post("/runs/{run_id}/save-ollama-default", response_model=GPUInfoSchema)
+@router.post("/runs/{run_id}/save-ollama-default")
 def save_ollama_default(run_id: UUID, dry_run: bool = False) -> dict[str, Any]:
     from lm_optimizer.services.ollama_defaults import DefaultsError, save_run_ollama_defaults
 
@@ -3549,7 +3549,7 @@ async def verify_ollama_default(run_id: UUID) -> dict[str, Any]:
 # --- Monitoring / profiling helper routes ---
 
 
-@router.get("/monitor/gpu-status", response_model=GPUInfoSchema)
+@router.get("/monitor/gpu-status")
 def get_gpu_status() -> dict[str, Any]:
     from lm_optimizer.services.host.gpu_monitor import should_run_tests
 
