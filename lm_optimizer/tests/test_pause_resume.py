@@ -178,7 +178,7 @@ class TestPausePhases:
         _patch_ckpt_dir(tmp_path, monkeypatch)
         opt = _opt()
         _flag(opt, tmp_path)
-        opt._run_recovery = AsyncMock()  # type: ignore — must never fire
+        opt._run_recovery = AsyncMock()  # type: ignore[assignment]
         with pytest.raises(PauseRequested):
             asyncio.run(
                 opt._recover_failed(

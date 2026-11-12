@@ -110,7 +110,7 @@ class TestQualityCompletion:
         opt = _opt()
         failed = _quality_failed_result()
         opt.state.tested_configs = [failed]
-        opt._test_config = AsyncMock()  # type: ignore — must never fire
+        opt._test_config = AsyncMock()  # type: ignore[assignment]
         front = {"winner": None, "finalists": [failed], "contrarian": None}
         safe, failed_out = asyncio.run(opt._phase_quality(front))
         assert opt._test_config.await_count == 0
