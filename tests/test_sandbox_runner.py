@@ -175,6 +175,28 @@ def test_blender_command_runs_once_per_attempt(tmp_path):
     assert (workdir / "frames" / "frame_0001.png").exists()
 
 
+def test_blender_without_executable_fails_blend_runs_with_a_reason(tmp_path):
+    task = _task(
+        kind=SandboxTaskKind.BLENDER,
+        artifacts=("build_scene.py",),
+        max_repair_attempts=0,
+        checks=[SandboxCheck("blend_runs", "custom", None, weight=1.0, critical=True)],
+    )
+    policy = SandboxPolicy(workdir=tmp_path / "wd", allowed_executables=("blender",))
+    runner = SandboxRunner(
+        task=task, policy=policy, workdir=tmp_path / "wd", command=""
+    )
+    result = runner.run(
+        lambda feedback: "import bpy\nbpy.ops.mesh.primitive_cube_add()"
+    )
+    first = result.attempts[0]
+    assert first.passed is False
+    assert any("blend_runs" in c for c in result.critical_failures)
+    # The reason must name the real cause, not a fake exit=0 pass.
+    assert any("blender executable not found" in c for c in result.critical_failures)
+    assert not first.passed or "exit=0" not in first.error
+
+
 def test_blender_repair_does_not_reuse_stale_artifacts(tmp_path):
     first = (
         "from pathlib import Path\n"

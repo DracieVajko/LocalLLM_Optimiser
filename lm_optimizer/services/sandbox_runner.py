@@ -542,20 +542,42 @@ class SandboxRunner:
 
             # Blender tasks: run the produced script with blender, then
             # validate the resulting .blend file is a real binary.
-            if self.task.kind.value == "blender" and self.command:
+            if self.task.kind.value == "blender":
                 blend_path = self.workdir / "scene.blend"
                 frame_dir = self.workdir / "frames"
-                # ``execution`` above already ran the command exactly once.
-                exec_result = execution
-                custom["blend_runs"] = (
-                    exec_result.ok,
-                    f"exit={exec_result.exit_code} stderr={exec_result.stderr[:200]}",
+                if self.command:
+                    # ``execution`` above already ran the command exactly once.
+                    exec_result = execution
+                else:
+                    # No blender executable on this host: an empty command
+                    # must never read as a successful run.
+                    exec_result = ExecutionResult(
+                        ok=False,
+                        exit_code=None,
+                        stdout="",
+                        stderr="",
+                        duration_s=0.0,
+                        error=(
+                            "blender executable not found; install Blender "
+                            "or set BLENDER_PATH"
+                        ),
+                    )
+                blend_detail = (
+                    f"exit={exec_result.exit_code} stderr={exec_result.stderr[:200]}"
                 )
+                if not exec_result.ok and exec_result.error:
+                    blend_detail = f"exit={exec_result.exit_code} {exec_result.error}"
+                custom["blend_runs"] = (exec_result.ok, blend_detail)
                 try:
                     (self.workdir / "blender.log").write_text(
                         f"exit={exec_result.exit_code}\n"
                         f"--- stdout ---\n{exec_result.stdout}\n"
-                        f"--- stderr ---\n{exec_result.stderr}",
+                        f"--- stderr ---\n{exec_result.stderr}"
+                        + (
+                            f"\n--- error ---\n{exec_result.error}"
+                            if exec_result.error
+                            else ""
+                        ),
                         encoding="utf-8",
                         errors="replace",
                     )
@@ -778,10 +800,23 @@ class SandboxRunner:
 
 
 def build_command_for(task: SandboxTask) -> str:
-    """Default command that executes the produced artifact."""
+    """Default command that executes the produced artifact.
+
+    Blender is resolved through :mod:`lm_optimizer.services.blender_locate`
+    (PATH alone misses most Windows installs). An empty return means "cannot
+    execute" - the runner then records the honest reason instead of a fake
+    pass.
+    """
     if task.kind.value == "blender":
+        from lm_optimizer.services.blender_locate import find_blender
+
         primary = task.artifacts[0] if task.artifacts else "build_scene.py"
-        return f"blender --background --python {primary}"
+        exe = find_blender()
+        if not exe:
+            return ""
+        if " " in exe:
+            exe = f'"{exe}"'
+        return f"{exe} --background --python {primary}"
     if task.kind.value == "web":
         return ""
     return ""

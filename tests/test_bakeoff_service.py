@@ -126,3 +126,36 @@ def test_kv_cache_quantization_is_part_of_the_test_identity():
     assert len(keys) == 4
     assert settings("q8")["kv_quant"] == "q8"
     assert settings("F16")["kv_quant"] is None
+
+
+def test_attempt_rows_merge_generation_and_scoring():
+    """The bakeoff row's attempts must carry attempt/passed/score, not just
+    generation timing - the UI renders them and 0/None reads as a lost run."""
+    from lm_optimizer.services.bakeoff import _merge_attempt_details
+
+    gen = [{"gen_s": 10.0, "tokens": 120, "tok_s": 12.0}]
+    scored = [
+        {
+            "attempt": 0,
+            "passed": True,
+            "score": 0.85,
+            "error": "",
+            "duration_s": 12.5,
+            "failing_checks": [],
+        }
+    ]
+
+    merged = _merge_attempt_details(gen, scored)
+
+    assert merged[0]["attempt"] == 0
+    assert merged[0]["passed"] is True
+    assert merged[0]["score"] == 0.85
+    assert merged[0]["duration_s"] == 12.5
+    assert merged[0]["gen_s"] == 10.0  # generation metrics preserved
+    assert merged[0]["tokens"] == 120
+
+
+def test_merge_keeps_generation_rows_without_scoring():
+    from lm_optimizer.services.bakeoff import _merge_attempt_details
+
+    assert _merge_attempt_details([{"gen_s": 1.0}], []) == [{"gen_s": 1.0}]

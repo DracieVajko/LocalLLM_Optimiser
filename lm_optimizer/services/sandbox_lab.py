@@ -1143,6 +1143,9 @@ def score_attempt(
             target = int(check.value or 0)
             ok = words >= target
             detail = f"{words} words (min {target})"
+        elif check.kind == "custom":
+            ok = False
+            detail = "custom check did not run (no result recorded)"
         else:
             ok = False
             detail = f"unknown check kind {check.kind}"

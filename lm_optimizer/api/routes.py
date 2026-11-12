@@ -3364,11 +3364,40 @@ def get_sandbox_file(file_path: str) -> dict[str, Any]:
 
 
 
-    # Serve HTML inline so the browser renders it; everything else as text.
+    # HTML/HTM is served raw so the browser renders it; every other artifact
+    # is embedded in a small dark/light viewer page (JSON pretty-printed).
 
-    media_type = "text/html" if target.suffix.lower() == ".html" else "text/plain"
+    suffix = target.suffix.lower()
+    raw = target.read_text(encoding="utf-8", errors="replace")
 
-    return PlainTextResponse(target.read_text(encoding="utf-8", errors="replace"), media_type=media_type)
+    if suffix in (".html", ".htm"):
+        return PlainTextResponse(raw, media_type="text/html")
+
+    import html as _html
+    import json as _json
+
+    body = raw
+    note = ""
+    if suffix == ".json":
+        try:
+            body = _json.dumps(_json.loads(raw), indent=2, ensure_ascii=False)
+        except _json.JSONDecodeError:
+            note = " · invalid JSON"
+    page = (
+        "<!doctype html><meta charset=\"utf-8\">"
+        "<style>"
+        ":root{color-scheme:light dark}"
+        "body{margin:0;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;"
+        "background:#0f1115;color:#e6e6e6}"
+        "@media (prefers-color-scheme:light){body{background:#fafafa;color:#1a1a1a}}"
+        ".bar{position:sticky;top:0;padding:6px 10px;font:600 11px system-ui;"
+        "background:#1b1f27;color:#9aa4b2;border-bottom:1px solid #2a3040}"
+        "pre{margin:0;padding:10px;white-space:pre-wrap;word-break:break-word}"
+        "</style>"
+        f'<div class="bar">{_html.escape(target.name)} · {len(raw)} B{note}</div>'
+        f"<pre>{_html.escape(body)}</pre>"
+    )
+    return PlainTextResponse(page, media_type="text/html")
 
 
 

@@ -117,9 +117,10 @@
             return '<h4 class="font-bold">' + label + '</h4>'
                 + '<p class="text-red-600 text-sm">' + esc((side && side.error) || 'failed') + '</p>';
         }
-        // job_id/side mirrored into the file-serving route path
-        var parts = String(side.file_path).split('/');
-        var url = '/sandbox/files/' + parts[0] + '/' + parts[1] + '/index.html';
+        // The file-serving endpoint is under /api; path-style URLs 404.
+        var rel = String(side.file_path).replace(/\\/g, '/');
+        if (!/[.](html|htm)$/i.test(rel)) rel += '/index.html';
+        var url = '/api/sandbox/files?file_path=' + encodeURIComponent(rel);
         return '<h4 class="font-bold">' + label + ' <span class="text-xs font-normal text-gray-500">'
             + esc(side.tok_s ? side.tok_s.toFixed(1) + ' tok/s' : '') + '</span></h4>'
             + '<p class="text-xs font-mono text-gray-500">results/sandbox/' + esc(side.file_path) + '</p>'
@@ -524,14 +525,14 @@
                 var safeRel = rel.replace(/\\/g, '/');
                 if (/[.](html|htm)$/i.test(a)) {
                     return '<div class="mt-2 border rounded bg-black p-1">'
-                        + '<iframe sandbox="" src="/sandbox/files?file_path=' + encodeURIComponent(safeRel) + '"'
+                        + '<iframe sandbox="" src="/api/sandbox/files?file_path=' + encodeURIComponent(safeRel) + '"'
                         + ' class="w-full border rounded" style="height:520px" title="' + esc(a) + ' preview"></iframe>'
                         + '</div>';
                 }
                 if (/[.](py|js|txt|json|md)$/i.test(a)) {
                     return '<details class="mt-2"><summary class="text-sm font-semibold cursor-pointer">'
                         + esc(a) + '</summary>'
-                        + '<iframe src="/sandbox/files?file_path=' + encodeURIComponent(safeRel) + '"'
+                        + '<iframe src="/api/sandbox/files?file_path=' + encodeURIComponent(safeRel) + '"'
                         + ' class="w-full border rounded" style="height:320px" title="' + esc(a) + ' preview"></iframe>'
                         + '</details>';
                 }
@@ -567,14 +568,14 @@
                     var safeRel = rel.replace(/\\/g, '/');
                     if (/[.](html|htm)$/i.test(a)) {
                         return '<div class="mt-2 border rounded bg-black p-1">'
-                            + '<iframe sandbox="" src="/sandbox/files?file_path=' + encodeURIComponent(safeRel) + '"'
+                            + '<iframe sandbox="" src="/api/sandbox/files?file_path=' + encodeURIComponent(safeRel) + '"'
                             + ' class="w-full border rounded" style="height:260px" title="' + esc(a) + ' preview"></iframe>'
                             + '</div>';
                     }
                     if (/[.](py|js|txt|json|md)$/i.test(a)) {
                         return '<details class="mt-2" open><summary class="text-sm font-semibold cursor-pointer">'
                             + esc(a) + '</summary>'
-                            + '<iframe src="/sandbox/files?file_path=' + encodeURIComponent(safeRel) + '"'
+                            + '<iframe src="/api/sandbox/files?file_path=' + encodeURIComponent(safeRel) + '"'
                             + ' class="w-full border rounded" style="height:260px" title="' + esc(a) + ' preview"></iframe>'
                             + '</details>';
                     }

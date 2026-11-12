@@ -250,8 +250,9 @@ const HistoryPage = {
         const sideBlock = (label, s) => {
             if (!s) return '';
             if (s.file_path) {
-                const parts = String(s.file_path).split('/');
-                const url = `/sandbox/files/${parts[0]}/${parts[1]}/index.html`;
+                const rel = String(s.file_path).replace(/\\/g, '/');
+                if (!/[.](html|htm)$/i.test(rel)) rel += '/index.html';
+                const url = `/api/sandbox/files?file_path=${encodeURIComponent(rel)}`;
                 return `<div><h4 class="font-bold">${label}</h4>`
                     + `<p class="text-xs font-mono text-gray-500">results/sandbox/${esc(s.file_path)}</p>`
                     + `<p class="mt-1"><a class="underline text-blue-600" target="_blank" rel="noopener" href="${url}">Open index.html</a></p></div>`;

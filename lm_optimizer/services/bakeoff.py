@@ -53,6 +53,28 @@ DEFAULT_TASKS = "email_write,company_website,blender_city"
 DEFAULT_ROOT = Path("results") / "bakeoff"
 
 
+def _merge_attempt_details(gen_attempts: list[dict], scored: list[dict]) -> list[dict]:
+    """Attach per-attempt scoring to the rows the generate() helper collected.
+
+    The generation rows carry timing (gen_s/tokens/tok_s); the runner's scored
+    attempts carry the verdict (attempt/passed/score/error/duration_s). The
+    UI reads both from one list, so they must land in the same dicts.
+    """
+    merged: list[dict] = []
+    for index, gen in enumerate(gen_attempts):
+        row = dict(gen)
+        if index < len(scored):
+            row.update(
+                attempt=scored[index].get("attempt", index),
+                passed=scored[index].get("passed"),
+                score=scored[index].get("score"),
+                error=scored[index].get("error", ""),
+                duration_s=scored[index].get("duration_s"),
+            )
+        merged.append(row)
+    return merged
+
+
 def _slug(model: str) -> str:
     out = model
     for ch in '/\\:@ ':
@@ -290,7 +312,9 @@ async def _run_task(
         "penalized_score": payload.get("penalized_score") if measured else None,
         "error": payload.get("error") or "",
         "critical_failures": payload.get("critical_failures") or [],
-        "attempts": metrics["attempts"],
+        "attempts": _merge_attempt_details(
+            metrics["attempts"], payload.get("attempts") or []
+        ),
         "workdir": str(workdir),
     }
 

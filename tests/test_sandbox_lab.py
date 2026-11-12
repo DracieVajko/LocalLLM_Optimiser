@@ -211,6 +211,24 @@ def test_score_attempt_respects_custom_results():
     assert not failing
 
 
+def test_score_attempt_custom_without_result_is_labeled_not_unknown_kind():
+    """A custom check with no recorded result failed to run - say that, and
+    never mask it behind "unknown check kind custom" (that reads like a
+    configuration bug when the real cause is upstream, e.g. blender missing).
+    """
+    task = SandboxTask(
+        id="t",
+        kind=SandboxTaskKind.WEB,
+        title="t",
+        prompt="p",
+        checks=[SandboxCheck("city_mesh_count", "custom", None, weight=2.0)],
+    )
+    score, failing, critical = score_attempt(task, {})
+    assert any("city_mesh_count" in f for f in failing)
+    assert any("did not run" in f for f in failing)
+    assert not any("unknown check kind" in f for f in failing)
+
+
 # --- repair loop ---
 
 def test_repair_penalty_schedule():
