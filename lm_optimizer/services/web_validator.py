@@ -147,8 +147,10 @@ JS_UNAVAILABLE = "unavailable"
 #: Module syntax (``import`` / ``export``) means the source must be parsed as
 #: an ES module. Node 20 hides syntax errors in a ``.js`` file that contains
 #: module syntax (its module-detection retry swallows them), while Node 26
-#: reports them. Writing the probe file as ``.mjs`` makes every Node version
-#: parse it as a module.
+#: reports them - and Node 26 auto-detects a module in a ``.js`` file where
+#: Node 20 still parses it as CommonJS. The probe file therefore gets the
+#: extension that pins the grammar: ``.mjs`` for a module, ``.cjs`` for a
+#: classic script. The verdict is then the same on every Node version.
 _MODULE_SYNTAX = re.compile(
     r"^\s*(?:import\s+[\w{*'\"$]|import\s*\(|import\.meta"
     r"|export\s+(?:default|const|let|var|function|async|class|\*|\{))",
@@ -190,6 +192,7 @@ def validate_javascript(
     scripts: list[str],
     *,
     node_path: str | None = None,
+    module: bool = False,
 ) -> JsValidation:
     """Syntax-check JavaScript sources with ``node --check``.
 
@@ -201,6 +204,9 @@ def validate_javascript(
     * ``unavailable`` - the validator could not run (no Node runtime, the
       runtime could not be started, or it timed out). The JavaScript was then
       **not** validated, which is never reported as a success.
+
+    ``module=True`` parses the sources as ES modules (top-level ``await`` is
+    legal there and not in a classic script).
     """
     sources = [code for code in scripts if code and code.strip()]
     if not sources:
@@ -219,7 +225,7 @@ def validate_javascript(
 
     errors: list[str] = []
     for index, code in enumerate(sources):
-        suffix = ".mjs" if _looks_like_module(code) else ".js"
+        suffix = ".mjs" if (module or _looks_like_module(code)) else ".cjs"
         path: str | None = None
         try:
             with tempfile.NamedTemporaryFile(

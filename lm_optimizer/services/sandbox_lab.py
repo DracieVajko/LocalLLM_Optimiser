@@ -1043,6 +1043,7 @@ def score_attempt(
             if name.endswith((".html", ".htm"))
         )
         scripts: list[str] = []
+        module_scripts: list[str] = []
         for match in re.finditer(
             r"<script\b([^>]*)>(.*?)</script>", html_text, re.IGNORECASE | re.DOTALL
         ):
@@ -1058,11 +1059,15 @@ def score_attempt(
                 "application/javascript",
             ):
                 continue
-            scripts.append(body)
+            if script_type == "module":
+                # A module may use top-level await; a classic script may not.
+                module_scripts.append(body)
+            else:
+                scripts.append(body)
         for name, text in files.items():
             if name.endswith(".js"):
                 scripts.append(_strip_md_fences(text))
-        if not scripts:
+        if not scripts and not module_scripts:
             verdict = (True, "no JavaScript to validate")
         else:
             from lm_optimizer.services.web_validator import (
@@ -1071,14 +1076,21 @@ def score_attempt(
                 validate_javascript,
             )
 
-            validation = validate_javascript(scripts)
-            if validation.state == JS_UNAVAILABLE:
+            checks = [
+                validate_javascript(scripts),
+                validate_javascript(module_scripts, module=True),
+            ]
+            unavailable = next(
+                (c for c in checks if c.state == JS_UNAVAILABLE), None
+            )
+            invalid = next((c for c in checks if c.state == JS_INVALID), None)
+            if unavailable is not None:
                 # The JavaScript was never checked - that is not a success.
-                verdict = (False, validation.detail)
-            elif validation.state == JS_INVALID:
-                verdict = (False, "; ".join(validation.errors)[:200] or validation.detail)
+                verdict = (False, unavailable.detail)
+            elif invalid is not None:
+                verdict = (False, "; ".join(invalid.errors)[:200] or invalid.detail)
             else:
-                verdict = (True, validation.detail)
+                verdict = (True, "; ".join(c.detail for c in checks if c.detail)[:200])
         custom_results = {**(custom_results or {}), "js_parses": verdict}
 
     for check in task.checks:

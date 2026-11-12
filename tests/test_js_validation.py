@@ -102,6 +102,23 @@ def test_unexpected_output_still_validates(monkeypatch):
     assert result.passed
 
 
+@needs_node
+def test_a_module_script_is_parsed_as_a_module():
+    """A module script may use top-level await - that is valid in a browser."""
+    source = "const value = await Promise.resolve(1);\nexport default value;\n"
+    result = wv.validate_javascript([source], module=True)
+    assert result.state == wv.JS_VALID
+    assert result.passed
+
+
+@needs_node
+def test_a_classic_script_may_not_use_top_level_await():
+    source = "const value = await Promise.resolve(1);\n"
+    result = wv.validate_javascript([source])
+    assert result.state == wv.JS_INVALID
+    assert not result.passed
+
+
 def test_sandbox_js_check_fails_when_the_validator_is_unavailable(monkeypatch):
     """An unvalidated script must not pass the critical js_parses check."""
     from lm_optimizer.services import sandbox_lab
