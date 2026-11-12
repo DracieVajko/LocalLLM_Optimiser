@@ -1,1 +1,0 @@
-Execute in blast-radius order: CLI workflow extraction, typed AdvancedSettings, silent-catch audit, API response models, then the services package split. Keep the green 1,494-test suite as the gate and avoid tools/ or docs churn that does not change the scored surface.
