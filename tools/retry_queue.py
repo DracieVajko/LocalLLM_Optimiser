@@ -54,7 +54,7 @@ QUEUE = [
     },
     {
         "model": "mirothinker-v1.5-30b-q2ks-mixed-autoround",
-        "tasks": BIG_TASKS,
+        "tasks": "email_write,company_website,deep_research_report",
         "safe": True,
         "timeout_min": 240,
     },
