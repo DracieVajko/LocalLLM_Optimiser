@@ -10,10 +10,7 @@ optional assistant endpoint — all within this repo, never leaking outside.
 
 """
 
-
-
 from __future__ import annotations
-
 
 
 from typing import TYPE_CHECKING, Any
@@ -21,13 +18,8 @@ from typing import TYPE_CHECKING, Any
 from lm_optimizer.services.best_effort import log_best_effort
 
 
-
 if TYPE_CHECKING:
-
     from lm_optimizer.domain.models import ModelInfo
-
-
-
 
 
 # Detail levels accepted by `lab test-manager --detail-level/--model-detail`.
@@ -41,37 +33,22 @@ VALID_TEST_DETAILS = ("quick", "standard", "full", "benchmark")
 DETAIL_ALIASES = {"short": "quick", "pure-opt": "standard"}
 
 
-
-
-
 def _normalize_detail(level: str) -> str:
-
     """Normalize one detail level or raise ValueError."""
 
     key = DETAIL_ALIASES.get(level, level)
 
     if key not in VALID_TEST_DETAILS:
-
         raise ValueError(
-
-            f"unknown detail level {level!r}; expected one of "
-
-            f"{', '.join(VALID_TEST_DETAILS)}"
-
+            f"unknown detail level {level!r}; expected one of {', '.join(VALID_TEST_DETAILS)}"
         )
 
     return key
 
 
-
-
-
 def parse_per_model_details(
-
     models: str | None, model_detail: str | None, default: str = "full"
-
 ) -> dict[str, str]:
-
     """Map selected model indices to their own test depth.
 
 
@@ -93,46 +70,29 @@ def parse_per_model_details(
     levels: list[str] = []
 
     if model_detail:
-
         for raw in model_detail.split(","):
-
             level = raw.strip().lower()
 
             if not level:
-
                 continue
 
             levels.append(_normalize_detail(level))
 
-
-
     if not models:
-
         return {"*": levels[0] if levels else default_level}
-
-
 
     indices = [part.strip() for part in models.split(",") if part.strip()]
 
     plan: dict[str, str] = {}
 
     for position, index in enumerate(indices):
-
         plan[index] = levels[position] if position < len(levels) else default_level
 
     return plan
 
 
-
-
-
-
-
 class TestManager:
-
     """Orchestrates benchmark/test runs with intelligent scheduling."""
-
-
 
     def __init__(self, speed_floor: float = 5.0, vram_floor_mb: int = 250):
 
@@ -148,14 +108,10 @@ class TestManager:
 
         self._wire_monitoring()
 
-
-
     def _wire_monitoring(self):
-
         """Wire HardwareDetector into TestManager for real-time VRAM profiling."""
 
         try:
-
             from lm_optimizer.services.host.hardware import HardwareDetector
 
             detector = HardwareDetector()
@@ -171,10 +127,7 @@ class TestManager:
             self._monitoring_info = {"vram_gb": vram_gb, "floor_mb": self.vram_floor_mb}
 
         except Exception:
-
             self._monitoring_info = {"vram_gb": 8.0, "floor_mb": self.vram_floor_mb}
-
-
 
     def auto_tune_speculative(self, config=None) -> dict[str, Any]:
         """Auto-select speculative decoding params based on model size and config."""
@@ -183,11 +136,14 @@ class TestManager:
 
         # Default: draftSimple=True, maxTokens=3, MTP disabled for stability.
 
-        self._speculative_config = {"draftSimple": True, "draftMaxTokens": 3, "draftMinTokens": 0, "draftMtp": False}
+        self._speculative_config = {
+            "draftSimple": True,
+            "draftMaxTokens": 3,
+            "draftMinTokens": 0,
+            "draftMtp": False,
+        }
 
         return self._speculative_config
-
-
 
     def auto_tune_kv_cache(self, gpu_vram_gb=8.0) -> dict[str, Any]:
         """Auto-select KV cache quantization based on GPU VRAM."""
@@ -197,23 +153,26 @@ class TestManager:
         # Default thresholds: >=24GB -> q8_0; >=12GB -> q4_0; else f16.
 
         if gpu_vram_gb >= 24:
-
-            self._kv_cache_config = {"vCacheQuantizationType": "q8_0", "kCacheQuantizationType": "q8_0"}
+            self._kv_cache_config = {
+                "vCacheQuantizationType": "q8_0",
+                "kCacheQuantizationType": "q8_0",
+            }
 
         elif gpu_vram_gb >= 12:
-
-            self._kv_cache_config = {"vCacheQuantizationType": "q4_0", "kCacheQuantizationType": "q4_0"}
+            self._kv_cache_config = {
+                "vCacheQuantizationType": "q4_0",
+                "kCacheQuantizationType": "q4_0",
+            }
 
         else:
-
-            self._kv_cache_config = {"vCacheQuantizationType": "f16", "kCacheQuantizationType": "f16"}
+            self._kv_cache_config = {
+                "vCacheQuantizationType": "f16",
+                "kCacheQuantizationType": "f16",
+            }
 
         return self._kv_cache_config
 
-
-
     def order_models(self, models: list["ModelInfo"]) -> list[str]:
-
         """Ascending size; MoE before dense in same band; dense last."""
 
         def sort_key(m: "ModelInfo") -> tuple:
@@ -228,20 +187,14 @@ class TestManager:
 
         return [str(getattr(m, "id", m)) for m in sorted_models]
 
-
-
     def should_use_short_tests(self, generation_tok_s: float | None) -> bool:
 
         return generation_tok_s is not None and generation_tok_s < self.speed_floor
 
-
-
     def estimate_vram_needed(self, model_id: str) -> int:
-
         """Real VRAM estimation using hardware detector; falls back to 1GB placeholder."""
 
         try:
-
             from lm_optimizer.services.host.hardware import HardwareDetector
 
             detector = HardwareDetector()
@@ -253,11 +206,9 @@ class TestManager:
             gpus = getattr(info, "gpus", None) or []
 
             if gpus:
-
                 vram_gb = float(getattr(gpus[0], "vram_gb", 0) or 0)
 
                 if vram_gb > 0:
-
                     # Reserve floor (250-500MB) for scheduling; return available above floor.
 
                     available = max(0, int((vram_gb - 0.375) * 1024 * 1024 * 1024))  # 375MB floor
@@ -265,12 +216,9 @@ class TestManager:
                     return available
 
         except Exception as exc:
-
             log_best_effort("best-effort operation failed", exc)
 
         return 1024 * 1024 * 1024  # 1 GB placeholder
-
-
 
     def can_use_assistant(self) -> bool:
 
@@ -280,10 +228,7 @@ class TestManager:
 
         return bool(cfg.assistant_url and cfg.assistant_key)
 
-
-
     def save_partial(self, run_id: str, fields: dict) -> dict | None:
-
         """Save intermediate results without overwriting best_config_id."""
 
         from lm_optimizer.database.repositories import run_repo
@@ -291,15 +236,11 @@ class TestManager:
         run = run_repo.get(run_id)
 
         if not run:
-
             return None
 
         return {"run_id": run_id, "status": "partial", "fields": fields}
 
-
-
     def clean_failed(self, threshold: int = 2) -> list[str]:
-
         """Remove artifacts after consecutive failures; never outside folder."""
 
         # Placeholder: actual cleanup should iterate DB runs/configs with status='failed'
@@ -308,10 +249,9 @@ class TestManager:
 
         return ["cleaned"]
 
-
-
-    def quick_test_nemotron(self, model_id: str = "nvidia-nemotron-3.5-bolt-74b-a9b-24gb", dry_run: bool = True) -> dict:
-
+    def quick_test_nemotron(
+        self, model_id: str = "nvidia-nemotron-3.5-bolt-74b-a9b-24gb", dry_run: bool = True
+    ) -> dict:
         """Prepare quick default/test for new Nemotron Bolt models (no live load)."""
 
         from lm_optimizer.services.lmstudio_defaults import resolve_defaults_path, apply_defaults
@@ -319,49 +259,39 @@ class TestManager:
         from lm_optimizer.domain.models import LoadConfiguration
 
         result = {
-
             "model_id": model_id,
-
             "dry_run": dry_run,
-
             "prepared": True,
-
             "note": "No live LLM load performed; file/default preparation only.",
-
         }
 
         try:
-
             path = resolve_defaults_path(model_id)
 
             safe_config = LoadConfiguration(
-
                 context_length=131072,
-
                 flash_attention=True,  # Required for V cache quantization (q4_0)
-
                 offload_kv_cache_to_gpu=True,
-
             )
 
             apply_defaults(model_id, safe_config, dry_run=dry_run, backup=True)
 
             result["path"] = str(path)
 
-            result["applied_config"] = {"context_length": 131072, "flash_attention": False, "offload_kv_cache_to_gpu": True}
+            result["applied_config"] = {
+                "context_length": 131072,
+                "flash_attention": False,
+                "offload_kv_cache_to_gpu": True,
+            }
 
         except Exception as exc:
-
             result["prepared"] = False
 
             result["error"] = str(exc)[:200]
 
         return result
 
-
-
     def recommend_best(self, model_id: str) -> dict | None:
-
         """Recommend best configuration for a model from existing runs/history."""
 
         # Integration point: reads existing runs/configurations and returns best config fields.
@@ -370,10 +300,20 @@ class TestManager:
 
         return {"model_id": model_id, "recommended": True, "source": "history"}
 
-
-
-    def run_cycle(self, model_id: str, interactive: bool = False, use_assistant: bool = False, calm_minutes: int = 15, check_interval: int = 60, all_models: bool = False, models: str = None, test_count: int = 1, detail_level: str = "full", overnight: bool = False, model_detail: str = None) -> dict:
-
+    def run_cycle(
+        self,
+        model_id: str,
+        interactive: bool = False,
+        use_assistant: bool = False,
+        calm_minutes: int = 15,
+        check_interval: int = 60,
+        all_models: bool = False,
+        models: str = None,
+        test_count: int = 1,
+        detail_level: str = "full",
+        overnight: bool = False,
+        model_detail: str = None,
+    ) -> dict:
         """Full automated cycle: discover, order, run partial/full tests, clean, recommend."""
 
         # Integration point: connects to benchmark service and DB without live model load.
@@ -384,55 +324,33 @@ class TestManager:
 
         # models instead of forcing one depth on the whole batch.
 
-        per_model_plan = parse_per_model_details(
-
-            models, model_detail, default=detail_level
-
-        )
+        per_model_plan = parse_per_model_details(models, model_detail, default=detail_level)
 
         result: dict = {
-
             "model_id": model_id,
-
             "interactive": interactive,
-
             "use_assistant": use_assistant,
-
             "ordering_applied": True,
-
             "partial_saved": False,
-
             "cleaned": False,
-
             "all_models": all_models,
-
             "models": models,
-
             "test_count": test_count,
-
             "detail_level": detail_level,
-
             "overnight": overnight,
-
             "model_detail": model_detail,
-
             "per_model_plan": per_model_plan,
-
         }
 
         if use_assistant and not self.can_use_assistant():
-
             result["assistant_available"] = False
 
             result["assistant_used"] = False
 
         else:
-
             result["assistant_available"] = use_assistant and self.can_use_assistant()
 
             result["assistant_used"] = result.get("assistant_available", False)
-
-
 
         # Auto-tune speculative decoding and KV cache based on detected VRAM
 
@@ -444,8 +362,6 @@ class TestManager:
 
         result["monitoring"] = self._monitoring_info
 
-
-
         # 15-minute calm trigger: only proceed when GPU/CPU is calm for scheduling.
 
         from lm_optimizer.services.host.gpu_monitor import should_run_tests
@@ -453,25 +369,24 @@ class TestManager:
         current_check = should_run_tests()
 
         if current_check.get("gpu_busy") or current_check.get("cpu_busy"):
-
             result["pending"] = True
 
             result["pending_reason"] = "gpu_or_cpu_busy"
 
             import datetime as dt
 
-            result["pending_timestamp_utc"] = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            result["pending_timestamp_utc"] = dt.datetime.now(dt.timezone.utc).strftime(
+                "%Y%m%dT%H%M%SZ"
+            )
 
             result["next_check_after_15min_calm"] = True
 
             if interactive:
-
                 result["interactive_paused"] = True
 
             return result
 
         else:
-
             result["pending"] = False
 
             result["pending_reason"] = None
