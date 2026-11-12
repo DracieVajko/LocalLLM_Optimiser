@@ -25,10 +25,12 @@ from lm_optimizer.api.schemas import (
     ApplyConfigRequest,
 
     CompareRequest,
+    CompareResponse,
 
     CompareResponse,
 
     SandboxRequest,
+    SandboxResponse,
 
     SandboxResponse,
 
@@ -38,8 +40,10 @@ from lm_optimizer.api.schemas import (
 
     CheckpointsResponse,
 
+    GPUInfoSchema,
     HardwareInfoSchema,
 
+    LMStudioStatusSchema,
     LoadConfigSchema,
 
     ModelIdentitySchema,
@@ -2462,7 +2466,7 @@ def export_lmstudio_config(run_id: UUID) -> dict[str, Any]:
 
 
 
-@router.get("/model-default")
+@router.get("/model-default", response_model=GPUInfoSchema)
 
 def get_model_default(model_id: str) -> dict[str, Any]:
     """Inspect a model's current LM Studio defaults, fields and backups."""
@@ -2729,7 +2733,7 @@ async def verify_run_default(run_id: UUID) -> dict[str, Any]:
 
 
 
-@router.post("/runs/{run_id}/save-default")
+@router.post("/runs/{run_id}/save-default", response_model=GPUInfoSchema)
 
 async def save_lmstudio_default(run_id: UUID, dry_run: bool = False, verify: bool = False) -> dict[str, Any]:
     """Persist the validated winner as LM Studio's per-model load default."""
@@ -4914,7 +4918,7 @@ class _OllamaRestoreRequest(_OllamaBaseModel):
 
 
 
-@router.get("/ollama-default")
+@router.get("/ollama-default", response_model=GPUInfoSchema)
 
 def get_ollama_default(model_id: str) -> dict[str, Any]:
     from lm_optimizer.services.ollama_defaults import resolve_ollama_defaults_path
@@ -4951,7 +4955,7 @@ def get_ollama_default(model_id: str) -> dict[str, Any]:
 
 
 
-@router.post("/runs/{run_id}/save-ollama-default")
+@router.post("/runs/{run_id}/save-ollama-default", response_model=GPUInfoSchema)
 
 def save_ollama_default(run_id: UUID, dry_run: bool = False) -> dict[str, Any]:
     from lm_optimizer.services.ollama_defaults import DefaultsError, save_run_ollama_defaults
@@ -5133,7 +5137,7 @@ async def verify_ollama_default(run_id: UUID) -> dict[str, Any]:
 
 
 
-@router.get("/monitor/gpu-status")
+@router.get("/monitor/gpu-status", response_model=GPUInfoSchema)
 
 def get_gpu_status() -> dict[str, Any]:
     from lm_optimizer.services.host.gpu_monitor import should_run_tests
