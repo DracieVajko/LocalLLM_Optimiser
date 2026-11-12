@@ -2,82 +2,113 @@
 
 KV-cache quantization and CPU threads are read from LM Studio's per-model
 defaults at run start, so each row is labelled with the setting actually used.
+Every batch is bookended by an explicit unload: a reused ModelGate lease does
+not unload on release, and a leftover instance blocks the only model slot.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
 
+BASE_URL = os.environ.get("LM_STUDIO_BASE_URL", "http://127.0.0.1:1234").rstrip("/")
 BIG_TASKS = "email_write,company_website,minecraft_world,blender_city,deep_research_report"
 
+# Only what the 2026-11-12 run did not measure (blocked load, timeout, or
+# not_measured). Bonsai finished: minecraft 0.00, blender 0.00, research 0.83.
 QUEUE = [
     {
-        "model": "prism-ml/bonsai-27b",
-        "tasks": "minecraft_world,blender_city,deep_research_report",
-        "safe": True,
-    },
-    {
         "model": "qwen3.8-9b-distill",
-        "tasks": "minecraft_world,blender_city,deep_research_report",
+        "tasks": "blender_city,deep_research_report",
         "safe": False,
+        "timeout_min": 120,
     },
     {
         "model": "nvidia-nemotron-3.5-bolt-e4b",
         "tasks": "blender_city,deep_research_report",
         "safe": False,
+        "timeout_min": 120,
     },
     {
         "model": "swift-qwen3.8-27b",
         "tasks": "minecraft_world,blender_city,deep_research_report",
         "safe": True,
+        "timeout_min": 180,
     },
     {
         "model": "openai-gpt-oss-20b-claude-4.5-opus-heretic-uncensored-i1",
         "tasks": "email_write,blender_city,deep_research_report",
         "safe": False,
+        "timeout_min": 180,
     },
     {
         "model": "google/gemma-4-26b-a4b-qat",
         "tasks": "company_website,minecraft_world,blender_city,deep_research_report",
         "safe": True,
+        "timeout_min": 180,
     },
     {
         "model": "mirothinker-v1.5-30b-q2ks-mixed-autoround",
         "tasks": BIG_TASKS,
         "safe": True,
-        "timeout_min": 180,
+        "timeout_min": 240,
     },
     {
         "model": "qwen/qwen3.6-35b-a3b",
         "tasks": "email_write",
         "safe": True,
+        "timeout_min": 30,
     },
     {
         "model": "qwen3.8-27b-twin-turbo-fable-cold-fusion-709-ultra-heretic-uncensored-nm-dau-neo-mtp",
         "tasks": "email_write",
         "safe": True,
+        "timeout_min": 60,
     },
     {
         "model": "qwen3.8-27b-twin-turbo-fable-cold-fusion-709-ultra-heretic-uncensored-nm-dau-neo-mtp",
         "tasks": BIG_TASKS,
         "safe": True,
-        "timeout_min": 300,
+        "timeout_min": 360,
     },
     {
         "model": "nvidia-nemotron-3.5-bolt-74b-a9b",
         "tasks": BIG_TASKS,
         "safe": True,
-        "timeout_min": 720,
+        "timeout_min": 900,
     },
 ]
 
 STATE = Path("results") / "retry_queue_state.json"
 LOG = Path("results") / "retry_queue.log"
+
+
+def unload_all() -> None:
+    """Free every model slot before and after a batch."""
+    try:
+        import httpx
+    except ImportError:  # pragma: no cover - httpx is a project dependency
+        return
+    try:
+        models = httpx.get(f"{BASE_URL}/api/v1/models", timeout=15).json().get("models", [])
+    except Exception:
+        return
+    for model in models:
+        for instance in model.get("loaded_instances") or []:
+            instance_id = instance.get("id") or model.get("key")
+            try:
+                httpx.post(
+                    f"{BASE_URL}/api/v1/models/unload",
+                    json={"instance_id": instance_id},
+                    timeout=60,
+                )
+            except Exception:
+                continue
 
 
 def mark(index: int, entry: dict, status: str, started: float, extra: str = "") -> None:
@@ -127,6 +158,7 @@ def main() -> int:
             )
             log.flush()
             mark(index, entry, "running", started)
+            unload_all()
             try:
                 result = subprocess.run(
                     command,
@@ -148,6 +180,8 @@ def main() -> int:
                 log.write(f"[timeout after {entry.get('timeout_min', 90)} min]\n")
                 log.flush()
                 mark(index, entry, "timeout", started)
+            finally:
+                unload_all()
         log.write(f"\n=== queue finished {datetime.now().isoformat(timespec='seconds')}\n")
     return 0
 
