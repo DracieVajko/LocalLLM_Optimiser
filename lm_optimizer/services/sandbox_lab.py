@@ -584,6 +584,34 @@ CREATIVE_3D_TASK = SandboxTask(
     artifacts=("scene.js",),
 )
 
+LONG_CONTEXT_TASK = SandboxTask(
+    id="long_context_generation",
+    kind=SandboxTaskKind.TEXT,
+    title="Long-context coherence (hallucination check)",
+    prompt=(
+        "Write a detailed, well-structured essay of at least 2000 words about "
+        "the history of space exploration. Cover: the early rocket pioneers "
+        "(Godard, von Braun), the Space Race (Sputnik, Apollo), the Space "
+        "Shuttle era, the ISS, commercial spaceflight (SpaceX, Blue Origin), "
+        "and future plans (Mars, Artemis). Use clear headings for each section. "
+        "Do not repeat yourself. Every section must contain new information. "
+        "Do not hallucinate facts - if you are unsure, say so. End with a "
+        "concise conclusion."
+    ),
+    checks=[
+        SandboxCheck("min_length", "min_words", 1500, weight=2.0, critical=True),
+        SandboxCheck("has_headings", "regex", r"#{1,3}\s+\w", weight=1.0, critical=True),
+        SandboxCheck("no_repeated_paragraphs", "custom", None, weight=2.0, critical=True),
+        SandboxCheck("coherent_ending", "custom", None, weight=1.5, critical=True),
+    ],
+    max_repair_attempts=1,
+    timeout_s=300.0,
+    max_output_tokens=4096,
+    network_allowed=False,
+    allowed_executables=(),
+    artifacts=("essay.txt",),
+)
+
 DEEP_RESEARCH_REPORT_TASK = SandboxTask(
     id="deep_research_report",
     kind=SandboxTaskKind.WEB,
@@ -721,6 +749,7 @@ SANDBOX_TASKS: dict[str, SandboxTask] = {
         DEEP_RESEARCH_AGENT_TASK,
         CREATIVE_3D_TASK,
         MINECRAFT_WORLD_TASK,
+        LONG_CONTEXT_TASK,
     )
 }
 
@@ -1165,6 +1194,47 @@ def score_attempt(
             target = int(check.value or 0)
             ok = words >= target
             detail = f"{words} words (min {target})"
+        elif check.name == "no_repeated_paragraphs":
+            combined = "\n".join(files.values())
+            text = re.sub(r"<[^>]+>", " ", combined)
+            paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+            seen = set()
+            repeats = 0
+            for p in paragraphs:
+                key = " ".join(p.split()[:12]).lower()
+                if key in seen:
+                    repeats += 1
+                seen.add(key)
+            tail = text[-200:].strip().lower()
+            head = text[:200].strip().lower()
+            looped = tail == head and len(text) > 400
+            ok = repeats == 0 and not looped
+            detail = (
+                f"paragraphs={len(paragraphs)} repeats={repeats} "
+                f"looped_tail={looped}"
+            )
+        elif check.name == "coherent_ending":
+            combined = "\n".join(files.values())
+            text = re.sub(r"<[^>]+>", " ", combined)
+            words = text.split()
+            if len(words) < 100:
+                ok = False
+                detail = f"too short ({len(words)} words)"
+            else:
+                head = " ".join(words[:60]).lower()
+                tail = " ".join(words[-60:]).lower()
+                repeated = head == tail
+                last_para = text.strip().rsplit("\n\n", 1)[-1].lower()
+                has_conclusion = any(
+                    marker in last_para
+                    for marker in ("conclusion", "summary", "in summary", "to conclude",
+                                   "overall", "in closing", "finally")
+                )
+                ok = not repeated
+                detail = (
+                    f"words={len(words)} repeated_tail={repeated} "
+                    f"conclusion_marker={has_conclusion}"
+                )
         elif check.kind == "custom":
             ok = False
             detail = "custom check did not run (no result recorded)"
