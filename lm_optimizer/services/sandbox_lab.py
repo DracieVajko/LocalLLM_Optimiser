@@ -352,15 +352,27 @@ BLENDER_CITY_TASK = SandboxTask(
 EMAIL_TASK = SandboxTask(
     id="email_write",
     kind=SandboxTaskKind.TEXT,
-    title="Professional follow-up email",
+    title="Professional follow-up email (multi-part)",
     prompt=(
-        "Write a concise professional follow-up email to a client after a "
-        "project kickoff. Include a Subject line, a greeting, a 2-3 sentence "
-        "body with the next step and a concrete deadline, and a closing. "
-        "Output only the email, with no placeholders such as [name]."
+        "You are an executive assistant. A client meeting just happened. "
+        "Here is the meeting transcript:\n\n"
+        "Alice (client): 'We need the new dashboard by end of Q3. The current "
+        "version is too slow and the export feature is broken.'\n"
+        "Bob (PM): 'Understood. We'll prioritize the dashboard and fix the export. "
+        "Can we have a demo by next Friday?'\n"
+        "Alice: 'Yes, that works. Also, please send us the updated timeline.'\n"
+        "Bob: 'Will do. I'll send it by Wednesday.'\n\n"
+        "TASK 1: Write a 3-5 sentence summary of the meeting (key decisions and "
+        "next steps). Output it under a heading '## Summary'.\n\n"
+        "TASK 2: Write a professional follow-up email to Alice based on the "
+        "summary. Include a Subject line, a greeting, a body with the next step "
+        "and a concrete deadline, and a closing. Output it under a heading "
+        "'## Email'. Output only the two sections, no extra text."
     ),
     checks=[
-        SandboxCheck("has_subject", "regex", r"^\W*Subject(?:\s+line)?\s*[:\-]\s*\S+", weight=2.0, critical=True),
+        SandboxCheck("has_summary", "regex", r"##\s*Summary", weight=2.0, critical=True),
+        SandboxCheck("has_email", "regex", r"##\s*Email", weight=2.0, critical=True),
+        SandboxCheck("has_subject", "regex", r"Subject(?:\s+line)?\s*[:\-]\s*\S+", weight=2.0, critical=True),
         SandboxCheck("has_greeting", "regex", r"\b(Dear|Hello|Hi)\b", weight=1.0),
         SandboxCheck(
             "has_closing",
@@ -371,10 +383,12 @@ EMAIL_TASK = SandboxTask(
         SandboxCheck(
             "has_next_step_and_deadline",
             "regex",
-            r"(next step|deadline|by\s+\w+)",
+            r"(next step|deadline|by\s+\w+|Wednesday|Friday)",
             weight=1.5,
         ),
         SandboxCheck("no_placeholders", "regex", r"\[[^\]]+\]", weight=2.0, negate=True),
+        SandboxCheck("summary_min_words", "min_words", 20, weight=1.0),
+        SandboxCheck("email_min_words", "min_words", 30, weight=1.0),
     ],
     max_repair_attempts=1,
     timeout_s=180.0,
@@ -648,6 +662,8 @@ DEEP_RESEARCH_REPORT_TASK = SandboxTask(
         SandboxCheck("cites_technical", "regex", r"technical_secondary", weight=1.5),
         SandboxCheck("cites_conflicting", "regex", r"conflicting_source", weight=1.5),
         SandboxCheck("no_irrelevant_source", "regex", r"cassette", weight=2.0, negate=True),
+        SandboxCheck("no_repeated_paragraphs", "custom", None, weight=1.5, critical=True),
+        SandboxCheck("coherent_ending", "custom", None, weight=1.0),
         SandboxCheck("mentions_uncertainty", "regex", r"(not\s+(stated|provided|mentioned|specified|answered|covered|given|clear)|no\s+(information|mention|data|answer|evidence)|uncertain|limitation|unclear|unknown|insufficient)", weight=1.0),
         SandboxCheck("has_references", "regex", r"(references|bibliography|sources)", weight=1.0),
         SandboxCheck("no_external_assets", "regex", r"\.(png|jpg|jpeg|gif|zip)\b", weight=1.0, negate=True),
