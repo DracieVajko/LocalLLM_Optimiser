@@ -301,7 +301,8 @@ def quality_lab(
     import asyncio
     asyncio.run(_run())
 async def _chat(
-    client, model: str, prompt: str, max_tokens: int, reasoning: str = "off"
+    client, model: str, prompt: str, max_tokens: int, reasoning: str = "off",
+    images: list[str] | None = None,
 ) -> str:
     # The reasoning value is passed through as-is (off/on/low/medium/high/
     # xhigh/default/...). "default" omits the key so the server uses its own
@@ -311,6 +312,7 @@ async def _chat(
     response = await client.chat_completion(
         model=model,
         input_text=prompt,
+        images=images,
         temperature=0.0,
         max_output_tokens=max_tokens,
         reasoning=reasoning_value,
@@ -1029,6 +1031,8 @@ def _run_sandbox_one(
     origin: str = "local",
     kv_quant: str | None = None,
     threads: str | int | None = None,
+    image: str = "",
+    image_description: str = "",
 ) -> dict:
     """Execute one sandbox task for one model and return the result dict."""
     from dataclasses import replace as _replace
@@ -1049,6 +1053,20 @@ def _run_sandbox_one(
         )
     if custom_prompt:
         definition = _replace(definition, prompt=custom_prompt)
+    if image:
+        definition = _replace(definition, image_path=image)
+    if image_description:
+        # Override the prompt to include the user's description as the
+        # expected answer for scoring.
+        definition = _replace(
+            definition,
+            prompt=(
+                f"Describe this image in detail. What objects, colors, textures, "
+                f"and scenes do you see? Be specific and accurate.\n\n"
+                f"Expected description (for reference): {image_description}\n\n"
+                f"Output only the description."
+            ),
+        )
 
     from datetime import datetime
 
@@ -1116,12 +1134,20 @@ def _run_sandbox_one(
                 prompt = definition.prompt
                 if feedback:
                     prompt = feedback + "\n\n" + definition.prompt
+                images = None
+                if getattr(definition, "image_path", ""):
+                    from pathlib import Path
+                    import base64
+                    img_path = Path(definition.image_path)
+                    if img_path.exists():
+                        images = [base64.b64encode(img_path.read_bytes()).decode("ascii")]
                 return await _chat(
                     client,
                     lease.model,
                     prompt,
                     definition.max_output_tokens,
                     reasoning=reasoning,
+                    images=images,
                 )
 
             try:
@@ -1206,6 +1232,16 @@ def sandbox(
         "--threads",
         help="CPU threads you set in LM Studio (max or a number). Label only.",
     ),
+    image: str = typer.Option(
+        "",
+        "--image",
+        help="Path to an image file for vision tasks (model must support vision).",
+    ),
+    image_description: str = typer.Option(
+        "",
+        "--image-description",
+        help="Expected description of the image (used for scoring).",
+    ),
 ):
     """Run one sandbox task with the repair loop (P4).
 
@@ -1231,6 +1267,8 @@ def sandbox(
             origin=origin,
             kv_quant=kv_quant or None,
             threads=threads or None,
+            image=image,
+            image_description=image_description,
         )
     except ValueError as exc:
         console.print(f"[red]{exc}[/red]")

@@ -41,6 +41,7 @@ class SandboxTaskKind(str, Enum):
     RESEARCH = "research"
     BLENDER = "blender"
     TEXT = "text"  # plain generation; scored only when checks are supplied
+    VISION = "vision"  # image description; scored by keyword overlap
 
 
 @dataclass
@@ -73,6 +74,7 @@ class SandboxTask:
     network_allowed: bool = False
     allowed_executables: tuple[str, ...] = ()
     artifacts: tuple[str, ...] = ()
+    image_path: str = ""
     max_output_tokens: int = 2048
     network_allowed: bool = False
 
@@ -639,6 +641,29 @@ LONG_CONTEXT_TASK = SandboxTask(
     artifacts=("essay.txt",),
 )
 
+VISION_DESCRIBE_TASK = SandboxTask(
+    id="vision_describe",
+    kind=SandboxTaskKind.VISION,
+    title="Image description (vision)",
+    prompt=(
+        "Describe this image in detail. What objects, colors, textures, and "
+        "scenes do you see? Be specific and accurate. Do not guess or invent "
+        "details that are not visible. Output only the description."
+    ),
+    checks=[
+        SandboxCheck("min_words", "min_words", 10, weight=1.0, critical=True),
+        SandboxCheck("mentions_texture", "regex", r"(dirt|soil|ground|texture|surface|brown|earth)", weight=2.0, critical=True),
+        SandboxCheck("no_hallucination", "regex", r"(cat|dog|person|car|building|sky|ocean|mountain)", weight=2.0, negate=True),
+    ],
+    max_repair_attempts=1,
+    timeout_s=120.0,
+    max_output_tokens=512,
+    network_allowed=False,
+    allowed_executables=(),
+    artifacts=("description.txt",),
+    image_path="benchmarks/deepseek_agent/minecraft_world/textures/pixel_perfection/source/default_dirt.png",
+)
+
 DEEP_RESEARCH_REPORT_TASK = SandboxTask(
     id="deep_research_report",
     kind=SandboxTaskKind.WEB,
@@ -779,6 +804,7 @@ SANDBOX_TASKS: dict[str, SandboxTask] = {
         CREATIVE_3D_TASK,
         MINECRAFT_WORLD_TASK,
         LONG_CONTEXT_TASK,
+        VISION_DESCRIBE_TASK,
     )
 }
 

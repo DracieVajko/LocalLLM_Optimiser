@@ -224,9 +224,17 @@ async def _run_task(
         if feedback:
             prompt = feedback + "\n\n" + prompt
         started = time.perf_counter()
+        images = None
+        if getattr(definition, "image_path", ""):
+            from pathlib import Path
+            import base64
+            img_path = Path(definition.image_path)
+            if img_path.exists():
+                images = [base64.b64encode(img_path.read_bytes()).decode("ascii")]
         response = await client.chat_completion(
             model=model,
             input_text=prompt,
+            images=images,
             temperature=0.0,
             max_output_tokens=definition.max_output_tokens,
             reasoning=reasoning_value,

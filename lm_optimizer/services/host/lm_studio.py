@@ -770,6 +770,7 @@ class LMStudioClient:
         self,
         model: str,
         input_text: str,
+        images: list[str] | None = None,
         temperature: float = 0.7,
         max_output_tokens: int = 512,
         top_p: float | None = None,
@@ -792,12 +793,23 @@ class LMStudioClient:
             logger.debug("Skipping known-rejected reasoning value", model=model)
             reasoning = None
         use_reasoning = reasoning if model not in self._no_reasoning_models else None
-        body: dict = {
-            "model": model,
-            "input": input_text,
-            "temperature": temperature,
-            "max_output_tokens": max_output_tokens,
-        }
+        if images:
+            content_parts = [{"type": "text", "content": input_text}]
+            for img in images:
+                content_parts.append({"type": "image", "content": img})
+            body: dict = {
+                "model": model,
+                "input": content_parts,
+                "temperature": temperature,
+                "max_output_tokens": max_output_tokens,
+            }
+        else:
+            body: dict = {
+                "model": model,
+                "input": input_text,
+                "temperature": temperature,
+                "max_output_tokens": max_output_tokens,
+            }
         for key, value in (
             ("top_p", top_p),
             ("top_k", top_k),
