@@ -711,8 +711,9 @@ class SandboxRunner:
             )
             if attempt == 0:
                 result.first_pass_success = passed
-            if critical:
-                result.critical_failures = critical
+            # Each attempt replaces the verdict: a repaired success must not
+            # keep the critical failures of the attempt it repaired.
+            result.critical_failures = critical
             if passed:
                 result.final_success = True
                 result.final_score = score
