@@ -445,3 +445,14 @@ class PresetsResponse(BaseModel):
 class SavePresetResponse(BaseModel):
     id: str
     success: bool = True
+
+
+class SaveDefaultResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    model_id: str
+    path: str
+    fields: dict[str, Any] = Field(default_factory=dict)
+    created: bool = False
+    backup_path: str | None = None
+    dry_run: bool = False

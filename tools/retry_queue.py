@@ -1,9 +1,17 @@
 """Sequential retry queue: failed or missing core runs. One model at a time.
 
-KV-cache quantization and CPU threads are read from LM Studio's per-model
-defaults at run start, so each row is labelled with the setting actually used.
-Every batch is bookended by an explicit unload: a reused ModelGate lease does
-not unload on release, and a leftover instance blocks the only model slot.
+KV-cache quantization escalation: start at Q4, and if any task scores 0.0 or
+is not_measured, escalate to Q5, then Q8. If all three fail, skip the model
+to save time. Each run is labelled with the quant actually used.
+
+Model/task combinations (fresh start, frontier excluded):
+  e4b              -> all core tasks (allrounder fast)
+  gpt-oss 20b      -> all core tasks (allrounder fast)
+  gemma 26b        -> email + website + research (writer)
+  mirothinker 30b  -> email + website + research (deep research)
+  swift 27b        -> email + website + research (coder)
+  twin-turbo 27b   -> email + website + research (coder)
+  nemotron 74b     -> all core tasks (final boss)
 """
 
 from __future__ import annotations
@@ -18,81 +26,25 @@ from pathlib import Path
 
 BASE_URL = os.environ.get("LM_STUDIO_BASE_URL", "http://127.0.0.1:1234").rstrip("/")
 BIG_TASKS = "email_write,company_website,minecraft_world,blender_city,deep_research_report"
+WRITER_TASKS = "email_write,company_website,deep_research_report"
+CODER_TASKS = "email_write,company_website,deep_research_report"
 
-# Only what the 2026-11-12 run did not measure (blocked load, timeout, or
-# not_measured). Bonsai finished: minecraft 0.00, blender 0.00, research 0.83.
 QUEUE = [
-    {
-        "model": "qwen3.8-9b-distill",
-        "tasks": "blender_city,deep_research_report",
-        "safe": False,
-        "timeout_min": 120,
-    },
-    {
-        "model": "nvidia-nemotron-3.5-bolt-e4b",
-        "tasks": "blender_city,deep_research_report",
-        "safe": False,
-        "timeout_min": 120,
-    },
-    {
-        "model": "swift-qwen3.8-27b",
-        "tasks": "minecraft_world,blender_city,deep_research_report",
-        "safe": True,
-        "timeout_min": 180,
-    },
-    {
-        "model": "openai-gpt-oss-20b-claude-4.5-opus-heretic-uncensored-i1",
-        "tasks": "email_write,blender_city,deep_research_report",
-        "safe": False,
-        "timeout_min": 180,
-    },
-    {
-        "model": "google/gemma-4-26b-a4b-qat",
-        "tasks": "company_website,minecraft_world,blender_city,deep_research_report",
-        "safe": True,
-        "timeout_min": 180,
-    },
-    {
-        "model": "mirothinker-v1.5-30b-q2ks-mixed-autoround",
-        "tasks": "email_write,company_website,deep_research_report",
-        "safe": True,
-        "timeout_min": 240,
-    },
-    {
-        "model": "qwen/qwen3.6-35b-a3b",
-        "tasks": "email_write",
-        "safe": True,
-        "timeout_min": 30,
-    },
-    {
-        "model": "qwen3.8-27b-twin-turbo-fable-cold-fusion-709-ultra-heretic-uncensored-nm-dau-neo-mtp",
-        "tasks": "email_write",
-        "safe": True,
-        "timeout_min": 60,
-    },
-    {
-        "model": "qwen3.8-27b-twin-turbo-fable-cold-fusion-709-ultra-heretic-uncensored-nm-dau-neo-mtp",
-        "tasks": BIG_TASKS,
-        "safe": True,
-        "timeout_min": 360,
-    },
-    {
-        "model": "nvidia-nemotron-3.5-bolt-74b-a9b",
-        "tasks": BIG_TASKS,
-        "safe": True,
-        "timeout_min": 900,
-    },
+    {"model": "google/gemma-4-26b-a4b-qat", "tasks": "minecraft_world,blender_city", "safe": True},
+    {"model": "openai-gpt-oss-20b-claude-4.5-opus-heretic-uncensored-i1", "tasks": "blender_city", "safe": False},
+    {"model": "swift-qwen3.8-27b", "tasks": "blender_city", "safe": True},
+    {"model": "nvidia-nemotron-3.5-bolt-74b-a9b", "tasks": "blender_city", "safe": True, "timeout_min": 900},
 ]
 
+KV_QUANTS = ["q4_0", "q5_0", "q8_0"]
 STATE = Path("results") / "retry_queue_state.json"
 LOG = Path("results") / "retry_queue.log"
 
 
 def unload_all() -> None:
-    """Free every model slot before and after a batch."""
     try:
         import httpx
-    except ImportError:  # pragma: no cover - httpx is a project dependency
+    except ImportError:
         return
     try:
         models = httpx.get(f"{BASE_URL}/api/v1/models", timeout=15).json().get("models", [])
@@ -102,13 +54,36 @@ def unload_all() -> None:
         for instance in model.get("loaded_instances") or []:
             instance_id = instance.get("id") or model.get("key")
             try:
-                httpx.post(
-                    f"{BASE_URL}/api/v1/models/unload",
-                    json={"instance_id": instance_id},
-                    timeout=60,
-                )
+                httpx.post(f"{BASE_URL}/api/v1/models/unload", json={"instance_id": instance_id}, timeout=60)
             except Exception:
                 continue
+
+
+def set_kv_quant(model: str, quant: str) -> None:
+    from lm_optimizer.services.lmstudio_defaults import set_kv_cache_quant
+    try:
+        set_kv_cache_quant(model, quant)
+    except Exception as e:
+        print(f"  WARNING: could not set KV quant to {quant}: {e}")
+
+
+def check_failed(model: str, quant: str) -> bool:
+    """Check if any recent run for this model at this quant scored 0 or not_measured."""
+    from pathlib import Path
+    import json
+    runs_path = Path("results/bakeoff/runs.jsonl")
+    if not runs_path.exists():
+        return True
+    rows = [json.loads(l) for l in runs_path.read_text(encoding="utf-8").splitlines() if l.strip()]
+    recent = [r for r in rows if r.get("model") == model and r.get("settings", {}).get("kv_quant") == quant]
+    if not recent:
+        return True
+    for r in recent:
+        if r.get("status") == "not_measured":
+            return True
+        if r.get("final_score") == 0.0 or r.get("final_score") is None:
+            return True
+    return False
 
 
 def mark(index: int, entry: dict, status: str, started: float, extra: str = "") -> None:
@@ -125,6 +100,28 @@ def mark(index: int, entry: dict, status: str, started: float, extra: str = "") 
     STATE.write_text(json.dumps(state, indent=1), encoding="utf-8")
 
 
+def run_bakeoff(entry: dict, quant: str) -> int:
+    """Run the bakeoff for one model at one KV quant level."""
+    command = [
+        sys.executable, "-m", "lm_optimizer.cli.main", "lab", "bakeoff",
+        "--models", entry["model"],
+        "--tasks", entry["tasks"],
+        "--no-thinking",
+        "--context", "4096",
+        "--origin", "local",
+        "--kv-quant", quant,
+    ]
+    if entry.get("safe"):
+        command.append("--safe")
+
+    timeout = 60 * int(entry.get("timeout_min", 90))
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+        return result.returncode
+    except subprocess.TimeoutExpired:
+        return -1
+
+
 def main() -> int:
     STATE.parent.mkdir(parents=True, exist_ok=True)
     STATE.write_text("{}", encoding="utf-8")
@@ -134,55 +131,50 @@ def main() -> int:
             if only and entry["model"] not in only:
                 continue
             started = time.time()
-            command = [
-                sys.executable,
-                "-m",
-                "lm_optimizer.cli.main",
-                "lab",
-                "bakeoff",
-                "--models",
-                entry["model"],
-                "--tasks",
-                entry["tasks"],
-                "--no-thinking",
-                "--context",
-                "4096",
-                "--origin",
-                "local",
-            ]
-            if entry.get("safe"):
-                command.append("--safe")
-            log.write(
-                f"\n=== [{index}] {datetime.now().isoformat(timespec='seconds')} "
-                f"{entry['model']} :: {entry['tasks']} safe={bool(entry.get('safe'))}\n"
-            )
+            model_short = entry["model"].split("/")[-1][:40]
+            log.write(f"\n=== [{index}] {datetime.now().isoformat(timespec='seconds')} {model_short} :: {entry['tasks']} ===\n")
             log.flush()
-            mark(index, entry, "running", started)
-            unload_all()
-            try:
-                result = subprocess.run(
-                    command,
-                    capture_output=True,
-                    text=True,
-                    timeout=60 * int(entry.get("timeout_min", 90)),
-                )
-                tail = (result.stdout or "")[-4000:] + (result.stderr or "")[-2000:]
-                log.write(tail + f"\n[exit {result.returncode}]\n")
+
+            skipped = False
+            for qi, quant in enumerate(KV_QUANTS):
+                log.write(f"\n--- quant attempt {qi+1}/{len(KV_QUANTS)}: {quant} ---\n")
                 log.flush()
-                mark(
-                    index,
-                    entry,
-                    "done" if result.returncode == 0 else "error",
-                    started,
-                    f"exit {result.returncode}",
-                )
-            except subprocess.TimeoutExpired:
-                log.write(f"[timeout after {entry.get('timeout_min', 90)} min]\n")
-                log.flush()
-                mark(index, entry, "timeout", started)
-            finally:
+                mark(index, entry, "running", started, f"quant={quant}")
                 unload_all()
-        log.write(f"\n=== queue finished {datetime.now().isoformat(timespec='seconds')}\n")
+                set_kv_quant(entry["model"], quant)
+                rc = run_bakeoff(entry, quant)
+                unload_all()
+
+                if rc != 0:
+                    log.write(f"[bakeoff exit {rc}]\n")
+                    log.flush()
+                    mark(index, entry, "error", started, f"quant={quant} exit {rc}")
+                    skipped = True
+                    break
+
+                # Check if any task failed
+                if check_failed(entry["model"], quant):
+                    log.write(f"[some tasks failed at {quant}, escalating]\n")
+                    log.flush()
+                    if qi < len(KV_QUANTS) - 1:
+                        continue
+                    else:
+                        log.write(f"[all quants failed, skipping {model_short}]\n")
+                        log.flush()
+                        mark(index, entry, "skipped", started, "all quants failed")
+                        skipped = True
+                        break
+                else:
+                    log.write(f"[all tasks passed at {quant}]\n")
+                    log.flush()
+                    mark(index, entry, "done", started, f"quant={quant} all passed")
+                    skipped = True
+                    break
+
+            if not skipped:
+                mark(index, entry, "done", started, "completed")
+
+        log.write(f"\n=== queue finished {datetime.now().isoformat(timespec='seconds')} ===\n")
     return 0
 
 
