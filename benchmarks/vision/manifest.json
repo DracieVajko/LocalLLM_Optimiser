@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "description": "Vision benchmark set. Each image is a sealed test: the prompt asks a question with a verifiable answer, and the checks reward the correct answer while penalising hallucination. Images are normalised to max 1280 px on the long side (aspect ratio preserved).",
+  "version": 2,
+  "description": "Vision benchmark set. Each image is a sealed test: the prompt asks a question with a verifiable answer, and the checks reward the correct answer while penalising hallucination. Images are normalised to max 1280 px on the long side (aspect ratio preserved). Expected answers were verified against the images by the project owner.",
   "images": [
     {
       "id": "counting_coins",
@@ -12,33 +12,12 @@
       "max_repair_attempts": 1,
       "timeout_s": 120.0,
       "max_output_tokens": 1024,
-      "expected": "12 fully visible coins in a 3-row x 4-column grid, plus 6 partial coins cut off at the left and right edges (3 on each side).",
+      "expected": "12 fully visible coins in a 3-row x 4-column grid. A few partial coins are cut off at the left and right edges (the exact number depends on whether thin slivers are counted; the fully visible count is 12).",
       "checks": [
-        {
-          "name": "counts_twelve",
-          "kind": "regex",
-          "value": "\\b(12|twelve)\\b",
-          "weight": 2.0,
-          "critical": true
-        },
-        {
-          "name": "mentions_grid",
-          "kind": "regex",
-          "value": "(row|column|grid|arranged|pattern)",
-          "weight": 1.0
-        },
-        {
-          "name": "mentions_partial",
-          "kind": "regex",
-          "value": "(partial|cut off|edge|incomplete)",
-          "weight": 1.0
-        },
-        {
-          "name": "min_words",
-          "kind": "min_words",
-          "value": 10,
-          "weight": 0.5
-        }
+        {"name": "counts_twelve", "kind": "regex", "value": "\\b(12|twelve)\\b", "weight": 2.0, "critical": true},
+        {"name": "mentions_grid", "kind": "regex", "value": "(row|column|grid|arranged|pattern|3\\s*[x×]\\s*4|4\\s*[x×]\\s*3)", "weight": 1.0},
+        {"name": "mentions_partial", "kind": "regex", "value": "(partial|cut off|edge|incomplete)", "weight": 0.75},
+        {"name": "min_words", "kind": "min_words", "value": 10, "weight": 0.5}
       ]
     },
     {
@@ -51,44 +30,14 @@
       "max_repair_attempts": 1,
       "timeout_s": 120.0,
       "max_output_tokens": 1024,
-      "expected": "July: Actual Savings about 900 USD (bar just below 1000), Spending about -3100 USD (bar just below -3000), Target Goal about 1950-2000 USD (orange line just below 2000). Difference between highest (1950-2000) and lowest (-3100) is about 5050. Largest absolute value: Spending (about 3100).",
+      "expected": "July: Actual Savings about 1000 USD, Spending about -3000 USD, Target Goal about 2000 USD. Difference between highest (2000) and lowest (-3000) is about 5000. Largest absolute value: Spending (3000).",
       "checks": [
-        {
-          "name": "reads_savings",
-          "kind": "regex",
-          "value": "(8\\d\\d|9\\d\\d|1[,.]?000)",
-          "weight": 1.5
-        },
-        {
-          "name": "reads_spending",
-          "kind": "regex",
-          "value": "(-\\s*3[,.]?1\\d\\d|-\\s*3[,.]?000|3[,.]?1\\d\\d)",
-          "weight": 1.5
-        },
-        {
-          "name": "reads_target",
-          "kind": "regex",
-          "value": "(1[,.]?9\\d\\d|2[,.]?000|1950|2000)",
-          "weight": 1.5
-        },
-        {
-          "name": "reads_difference",
-          "kind": "regex",
-          "value": "(4[,.]?0\\d\\d|5[,.]?0[0-9]\\d|5[,.]?1\\d\\d)",
-          "weight": 2.0
-        },
-        {
-          "name": "identifies_largest",
-          "kind": "regex",
-          "value": "(spending|debt)",
-          "weight": 1.0
-        },
-        {
-          "name": "min_words",
-          "kind": "min_words",
-          "value": 20,
-          "weight": 0.5
-        }
+        {"name": "reads_savings", "kind": "regex", "value": "(\\b1[,.]?000\\b|\\b9\\d\\d\\b|\\b1[,.]?1\\d\\d\\b)", "weight": 1.5},
+        {"name": "reads_spending", "kind": "regex", "value": "(-\\s*3[,.]?000|-\\s*3[,.]?0\\d\\d|\\b3[,.]?000\\b)", "weight": 1.5},
+        {"name": "reads_target", "kind": "regex", "value": "(\\b2[,.]?000\\b|\\b1[,.]?9\\d\\d\\b)", "weight": 1.5},
+        {"name": "reads_difference", "kind": "regex", "value": "(\\b5[,.]?000\\b|\\b4[,.]?9\\d\\d\\b|\\b5[,.]?1\\d\\d\\b)", "weight": 2.0, "critical": true},
+        {"name": "identifies_largest", "kind": "regex", "value": "(spending|debt)", "weight": 1.0},
+        {"name": "min_words", "kind": "min_words", "value": 20, "weight": 0.5}
       ]
     },
     {
@@ -103,38 +52,11 @@
       "max_output_tokens": 1024,
       "expected": "No - it is not physically constructible. It is the Penrose triangle (tribar), an impossible object. Each bar looks locally like a normal square-section beam, but the three corners connect in a way that cannot exist: the beams appear to recede and advance at the same time, so the far/near joins are contradictory.",
       "checks": [
-        {
-          "name": "says_impossible",
-          "kind": "regex",
-          "value": "(impossible|not\\s+(physically\\s+)?(possible|constructible|buildable)|cannot\\s+(exist|be\\s+built))",
-          "weight": 2.0,
-          "critical": true
-        },
-        {
-          "name": "names_penrose",
-          "kind": "regex",
-          "value": "(penrose|tribar|optical\\s+illusion|illusion)",
-          "weight": 1.5
-        },
-        {
-          "name": "describes_break",
-          "kind": "regex",
-          "value": "(corner|join|bar|beam|prism|perspective|angle)",
-          "weight": 1.0
-        },
-        {
-          "name": "not_a_normal_cube",
-          "kind": "regex",
-          "value": "(normal|ordinary|regular|standard)\\s+(cube|box|block)",
-          "weight": 2.0,
-          "negate": true
-        },
-        {
-          "name": "min_words",
-          "kind": "min_words",
-          "value": 15,
-          "weight": 0.5
-        }
+        {"name": "says_impossible", "kind": "regex", "value": "(impossible|not\\s+(physically\\s+)?(possible|constructible|buildable)|cannot\\s+(exist|be\\s+built))", "weight": 2.0, "critical": true},
+        {"name": "names_penrose", "kind": "regex", "value": "(penrose|tribar|optical\\s+illusion|illusion)", "weight": 1.5},
+        {"name": "describes_break", "kind": "regex", "value": "(corner|join|bar|beam|prism|perspective|angle)", "weight": 1.0},
+        {"name": "not_a_normal_cube", "kind": "regex", "value": "(normal|ordinary|regular|standard)\\s+(cube|box|block)", "weight": 2.0, "negate": true},
+        {"name": "min_words", "kind": "min_words", "value": 15, "weight": 0.5}
       ]
     },
     {
@@ -149,107 +71,36 @@
       "max_output_tokens": 1024,
       "expected": "Header: TO WHOM IT MAY CONCERN; ICMR guideline; contacts of COVID positive cases; HOME ISOLATION; social distancing, hand hygiene, wearing mask. Prescription: TAB HYDROXYCHLOROQUINE 400 mg once a week; TAB VITAMIN C 1 gram once a day; TAB ZINC 50 mg once a day; in case of fever: TAB CROCIN / CALPOL 650 mg SOS; in case of throat pain and cough: TAB CETIRIZINE 10 mg once a day; SYRUP ALEX 2/3 teaspoon 3 times a day.",
       "checks": [
-        {
-          "name": "reads_hydroxychloroquine",
-          "kind": "regex",
-          "value": "hydroxy.?chloroquine",
-          "weight": 2.0,
-          "critical": true
-        },
-        {
-          "name": "reads_vitamin_c",
-          "kind": "regex",
-          "value": "vitamin\\s*c",
-          "weight": 1.0
-        },
-        {
-          "name": "reads_zinc",
-          "kind": "regex",
-          "value": "zinc",
-          "weight": 1.0
-        },
-        {
-          "name": "reads_crocin_or_calpol",
-          "kind": "regex",
-          "value": "(crocin|calpol)",
-          "weight": 1.5
-        },
-        {
-          "name": "reads_cetirizine",
-          "kind": "regex",
-          "value": "cetirizine",
-          "weight": 1.0
-        },
-        {
-          "name": "reads_400mg",
-          "kind": "regex",
-          "value": "400\\s*mg",
-          "weight": 1.0
-        },
-        {
-          "name": "reads_650mg",
-          "kind": "regex",
-          "value": "650\\s*mg",
-          "weight": 1.0
-        },
-        {
-          "name": "reads_50mg",
-          "kind": "regex",
-          "value": "50\\s*mg",
-          "weight": 1.0
-        },
-        {
-          "name": "reads_context",
-          "kind": "regex",
-          "value": "(covid|icmr|isolation|social\\s+distanc)",
-          "weight": 1.0
-        }
+        {"name": "reads_hydroxychloroquine", "kind": "regex", "value": "hydroxy.?chloroquine", "weight": 2.0, "critical": true},
+        {"name": "reads_vitamin_c", "kind": "regex", "value": "vitamin\\s*c", "weight": 1.0},
+        {"name": "reads_zinc", "kind": "regex", "value": "zinc", "weight": 1.0},
+        {"name": "reads_crocin_or_calpol", "kind": "regex", "value": "(crocin|calpol)", "weight": 1.5},
+        {"name": "reads_cetirizine", "kind": "regex", "value": "cetirizine", "weight": 1.0},
+        {"name": "reads_400mg", "kind": "regex", "value": "400\\s*mg", "weight": 1.0},
+        {"name": "reads_650mg", "kind": "regex", "value": "650\\s*mg", "weight": 1.0},
+        {"name": "reads_50mg", "kind": "regex", "value": "50\\s*mg", "weight": 1.0},
+        {"name": "reads_context", "kind": "regex", "value": "(covid|icmr|isolation|social\\s+distanc)", "weight": 1.0}
       ]
     },
     {
       "id": "objects_living_room",
       "file": "objects_living_room_dogs.jpg",
-      "title": "Object detection: two dogs in a living room",
+      "title": "Object detection: three dogs in a living room",
       "category": "objects",
-      "prompt": "How many dogs are in this image? For each dog, describe its type or breed, its colours, and where it is located in the room. Also name the room type and two prominent pieces of furniture.",
+      "prompt": "How many dogs are in this image? For each dog, describe its type or breed, its colours, and where it is located in the room relative to the furniture. Also name the room type and two prominent pieces of furniture.",
       "artifact": "description.txt",
       "max_repair_attempts": 1,
       "timeout_s": 120.0,
       "max_output_tokens": 1024,
-      "expected": "Two dogs. A black-and-tan German Shepherd standing near the centre beside the glass coffee table. A small brown-and-white dog (dachshund/beagle type) lying on the patterned rug in the foreground. Living room with a white TV cabinet/media unit, a brick fireplace, a grey sofa with red cushions, and a patterned armchair.",
+      "expected": "Three dogs. A brown-and-black German Shepherd / wolfdog standing behind the glass coffee table. A black-and-white collie lying between the coffee table and the grey sofa. A small brown-and-white dachshund-type dog (jazvecik) lying on the patterned rug in front of the armchair. Living room with a white TV cabinet/media unit, a brick fireplace, a grey sofa with red cushions and a patterned armchair.",
       "checks": [
-        {
-          "name": "counts_two_dogs",
-          "kind": "regex",
-          "value": "(two|2)\\s+(dogs|dog\\s+breeds)",
-          "weight": 2.0,
-          "critical": true
-        },
-        {
-          "name": "german_shepherd",
-          "kind": "regex",
-          "value": "german\\s+shepherd|shepherd",
-          "weight": 1.5
-        },
-        {
-          "name": "small_brown_dog",
-          "kind": "regex",
-          "value": "(dachshund|beagle|small.*dog|brown.*white.*dog)",
-          "weight": 1.0
-        },
-        {
-          "name": "room_context",
-          "kind": "regex",
-          "value": "(living\\s+room|sofa|couch|fireplace|rug|carpet)",
-          "weight": 1.0
-        },
-        {
-          "name": "not_one_dog",
-          "kind": "regex",
-          "value": "(one\\s+dog|single\\s+dog|only\\s+one\\s+dog)",
-          "weight": 2.0,
-          "negate": true
-        }
+        {"name": "counts_three_dogs", "kind": "regex", "value": "(three|3)\\s+(dogs|dog\\s+breeds|different\\s+dogs)", "weight": 2.0, "critical": true},
+        {"name": "german_shepherd", "kind": "regex", "value": "(german\\s+shepherd|wolfdog|wolf\\s+dog|shepherd)", "weight": 1.5},
+        {"name": "collie", "kind": "regex", "value": "(collie|black.?and.?white|black\\s+and\\s+white)", "weight": 1.0},
+        {"name": "small_brown_dog", "kind": "regex", "value": "(dachshund|badger|small.*dog|brown.*white.*dog)", "weight": 1.0},
+        {"name": "room_context", "kind": "regex", "value": "(living\\s+room|sofa|couch|fireplace|rug|carpet|armchair)", "weight": 1.0},
+        {"name": "placement", "kind": "regex", "value": "(behind|between|in\\s+front|on\\s+the\\s+(rug|carpet)|beside|under)", "weight": 1.0},
+        {"name": "not_one_or_two_dogs", "kind": "regex", "value": "(one\\s+dog|single\\s+dog|only\\s+one\\s+dog|two\\s+dogs|\\b2\\s+dogs)", "weight": 2.0, "negate": true}
       ]
     },
     {
@@ -257,55 +108,22 @@
       "file": "dense_market_street.jpg",
       "title": "Dense scene: Indian market street",
       "category": "dense_scene",
-      "prompt": "Describe this scene in detail. Roughly how many people do you see? What kinds of shops and goods are shown? Read any signs you can make out. Mention at least two specific objects in the foreground.",
+      "prompt": "Describe this scene in detail. Roughly how many people do you see? What kinds of shops and goods are shown? Read any signs you can make out. Mention at least three specific objects in the foreground.",
       "artifact": "description.txt",
       "max_repair_attempts": 1,
       "timeout_s": 120.0,
       "max_output_tokens": 1024,
-      "expected": "A busy Indian street market. Many people (well over 10, including a man in an orange shirt at a food cart and an older man in the right foreground). Hanging LED light strings, flower garlands (marigold), sacks of snacks, stacked water-bottle crates, steel pots. Shop signs including 'Goldmedal', 'Electric', 'Prag', 'Arihant'. A car at the left edge.",
+      "expected": "A busy Indian street market. Many people (well over 10, including a man in an orange shirt at a food cart and an older man in the right foreground). Hanging LED light strings, flower garlands (marigold), sacks of snacks, stacked water bottles / Pepsi crates, steel pots. Shop signs including 'Goldmedal', 'Electric', 'Prag', 'Arihant'. Part of a car with its lights on at the left edge.",
       "checks": [
-        {
-          "name": "market_context",
-          "kind": "regex",
-          "value": "(market|street|shop|stall)",
-          "weight": 1.5
-        },
-        {
-          "name": "india_context",
-          "kind": "regex",
-          "value": "(india|indian|hindi|delhi|mumbai)",
-          "weight": 1.0
-        },
-        {
-          "name": "lights_or_garlands",
-          "kind": "regex",
-          "value": "(led|lights?|garland|flowers?|marigold|decorations?)",
-          "weight": 1.5
-        },
-        {
-          "name": "food_or_goods",
-          "kind": "regex",
-          "value": "(food|snacks?|cart|goods|bottles|pots)",
-          "weight": 1.0
-        },
-        {
-          "name": "reads_a_sign",
-          "kind": "regex",
-          "value": "(goldmedal|electric|prag|arihant)",
-          "weight": 1.0
-        },
-        {
-          "name": "many_people",
-          "kind": "regex",
-          "value": "\\b([1-9]\\d|\\d{3,})\\s*(people|persons|men|women|individuals)",
-          "weight": 1.0
-        },
-        {
-          "name": "min_words",
-          "kind": "min_words",
-          "value": 40,
-          "weight": 0.5
-        }
+        {"name": "market_context", "kind": "regex", "value": "(market|street|shop|stall)", "weight": 1.5},
+        {"name": "india_context", "kind": "regex", "value": "(india|indian|hindi|delhi|mumbai)", "weight": 1.0},
+        {"name": "lights_or_garlands", "kind": "regex", "value": "(led|lights?|garland|flowers?|marigold|decorations?)", "weight": 1.5},
+        {"name": "food_or_goods", "kind": "regex", "value": "(food|snacks?|cart|goods|bottles|pots)", "weight": 1.0},
+        {"name": "pepsi_crates", "kind": "regex", "value": "(pepsi|crates?|water\\s+bottles?)", "weight": 1.0},
+        {"name": "reads_a_sign", "kind": "regex", "value": "(goldmedal|electric|prag|arihant)", "weight": 1.0},
+        {"name": "mentions_car", "kind": "regex", "value": "(car\\s+(head)?lights?|part\\s+of\\s+a\\s+car|car\\s+on\\s+the\\s+left)", "weight": 0.75},
+        {"name": "many_people", "kind": "regex", "value": "\\b([1-9]\\d|\\d{3,})\\s*(people|persons|men|women|individuals)", "weight": 1.0},
+        {"name": "min_words", "kind": "min_words", "value": 40, "weight": 0.5}
       ]
     },
     {
@@ -313,55 +131,23 @@
       "file": "dense_city_traffic.jpg",
       "title": "Dense objects: city intersection traffic",
       "category": "dense_objects",
-      "prompt": "Describe this traffic scene. List the vehicle types you can see and give an approximate count for each type. Are there pedestrians, traffic lights or signs? Which side of the road are the vehicles driving on?",
+      "prompt": "Describe this traffic scene. List the vehicle types you can see and give an approximate count for each type. Are there pedestrians, traffic lights, crosswalks or signs? Mention at least two specific vehicle colours.",
       "artifact": "description.txt",
       "max_repair_attempts": 1,
       "timeout_s": 120.0,
       "max_output_tokens": 1024,
-      "expected": "A dense urban intersection. A large white-and-green city bus in the left foreground, many cars (white, black, silver, taxi-coloured) - well over 10 vehicles. Pedestrians crossing and walking near the junction. Traffic lights, street signs and mid-rise buildings. Traffic keeps to the right (China-style scene).",
+      "expected": "A dense urban intersection. Three buses (one large white-and-green city bus in the left foreground, two more further back). Well over 30 cars (about 36+), including about 8 taxis. Pedestrians crossing and walking near the junction, six crosswalks, traffic lights and street signs, mid-rise buildings.",
       "checks": [
-        {
-          "name": "mentions_bus",
-          "kind": "regex",
-          "value": "\\bbus(es)?\\b",
-          "weight": 1.5
-        },
-        {
-          "name": "mentions_cars",
-          "kind": "regex",
-          "value": "(cars?|taxis?|vehicles?|traffic)",
-          "weight": 1.0
-        },
-        {
-          "name": "mentions_pedestrians",
-          "kind": "regex",
-          "value": "(pedestrian|crossing|people\\s+walking)",
-          "weight": 1.0
-        },
-        {
-          "name": "mentions_lights",
-          "kind": "regex",
-          "value": "(traffic\\s+lights?|signal|signs?)",
-          "weight": 1.0
-        },
-        {
-          "name": "counts_many_vehicles",
-          "kind": "regex",
-          "value": "\\b([1-9]\\d|\\d{3,})\\s*(cars?|vehicles?|taxis?)",
-          "weight": 1.0
-        },
-        {
-          "name": "right_hand_traffic",
-          "kind": "regex",
-          "value": "(right[-\\s]hand|right\\s+side|drive\\s+on\\s+the\\s+right)",
-          "weight": 0.5
-        },
-        {
-          "name": "min_words",
-          "kind": "min_words",
-          "value": 30,
-          "weight": 0.5
-        }
+        {"name": "mentions_bus", "kind": "regex", "value": "\\bbus(es)?\\b", "weight": 1.5},
+        {"name": "counts_buses", "kind": "regex", "value": "(three|3)\\s+bus(es)?", "weight": 1.5},
+        {"name": "mentions_cars", "kind": "regex", "value": "(cars?|taxis?|vehicles?|traffic)", "weight": 1.0},
+        {"name": "counts_many_cars", "kind": "regex", "value": "\\b(3\\d|[4-9]\\d|\\d{3,})\\s*(cars?|vehicles?)", "weight": 1.5},
+        {"name": "mentions_taxis", "kind": "regex", "value": "(taxi|cabs?)", "weight": 1.0},
+        {"name": "mentions_crosswalks", "kind": "regex", "value": "(crosswalk|zebra|crossing)", "weight": 1.0},
+        {"name": "mentions_lights", "kind": "regex", "value": "(traffic\\s+lights?|signal|signs?)", "weight": 1.0},
+        {"name": "mentions_pedestrians", "kind": "regex", "value": "(pedestrian|people\\s+walking)", "weight": 1.0},
+        {"name": "mentions_colours", "kind": "regex", "value": "(white|black|silver|grey|red|blue)", "weight": 0.75},
+        {"name": "min_words", "kind": "min_words", "value": 30, "weight": 0.5}
       ]
     },
     {
@@ -369,56 +155,24 @@
       "file": "ui_confluence_page.jpg",
       "title": "UI screenshot: Confluence page (OCR + layout)",
       "category": "ui",
-      "prompt": "What application is shown in this screenshot? What is the page title? List the main content sections and the links visible in the right-hand sidebar. Also name the logged-in user shown in the left sidebar.",
+      "prompt": "What application is shown in this screenshot? What is the page title? Describe the page layout: what is in the left sidebar, what is in the centre, and what is in the right-hand sidebar? List the main content sections and any links you can read. Notice and describe any icons or illustrations on the page. Also name the logged-in user.",
       "artifact": "description.txt",
       "max_repair_attempts": 1,
       "timeout_s": 120.0,
       "max_output_tokens": 1024,
-      "expected": "Confluence (Atlassian). Page title: 'Empowering Teams Through Effective Communication and Core Values'. Main sections: Purpose, Vision, Values. Right sidebar links: Events, Documentation Style Guide, Questions; also Purpose, Vision, Values, Be Good, From the Heart, Aim for the Best, Fun With Focus, Be Real, Our Story, Major Efforts, Swag Store (IN PROGRESS), Other Projects, Financial Health, Other Fun Facts. Logged-in user: Maggie. Company: Good Software.",
+      "expected": "Confluence (Atlassian). Page title: 'Empowering Teams Through Effective Communication and Core Values'. Left sidebar: navigation with For you, Recent, Starred, Spaces, Apps, Teams, More, plus the logged-in user Maggie. Centre: page editor with sections Purpose, Vision, Values, a purple callout box, a blue callout box, a rainbow emoji, and highlighted text. Right sidebar: Related links (Events, Documentation Style Guide, Questions), plus a page-tree list (Purpose, Vision, Values, Be Good, From the Heart, Aim for the Best, Fun With Focus, Be Real, Our Story, Major Efforts, Swag Store IN PROGRESS, Other Projects, Financial Health, Other Fun Facts). A large thumbs-down / dislike illustration at the bottom right.",
       "checks": [
-        {
-          "name": "names_confluence",
-          "kind": "regex",
-          "value": "(confluence|atlassian)",
-          "weight": 2.0,
-          "critical": true
-        },
-        {
-          "name": "page_title",
-          "kind": "regex",
-          "value": "(empowering\\s+teams|effective\\s+communication|core\\s+values)",
-          "weight": 1.0
-        },
-        {
-          "name": "main_sections",
-          "kind": "regex",
-          "value": "(purpose).*(vision).*(values)|(purpose)|(vision)|(values)",
-          "weight": 1.5
-        },
-        {
-          "name": "sidebar_links",
-          "kind": "regex",
-          "value": "(events|documentation\\s+style\\s+guide|questions)",
-          "weight": 1.0
-        },
-        {
-          "name": "logged_in_user",
-          "kind": "regex",
-          "value": "maggie",
-          "weight": 1.0
-        },
-        {
-          "name": "company_name",
-          "kind": "regex",
-          "value": "good\\s+software",
-          "weight": 0.5
-        },
-        {
-          "name": "min_words",
-          "kind": "min_words",
-          "value": 25,
-          "weight": 0.5
-        }
+        {"name": "names_confluence", "kind": "regex", "value": "(confluence|atlassian)", "weight": 2.0, "critical": true},
+        {"name": "page_title", "kind": "regex", "value": "(empowering\\s+teams|effective\\s+communication|core\\s+values)", "weight": 1.0},
+        {"name": "main_sections", "kind": "regex", "value": "(purpose).*(vision).*(values)|(purpose)|(vision)|(values)", "weight": 1.5},
+        {"name": "sees_sidebar", "kind": "regex", "value": "(left\\s+(sidebar|panel|menu)|navigation|for\\s+you|recent|starred|spaces|apps|teams)", "weight": 1.0},
+        {"name": "separates_sidebar", "kind": "regex", "value": "(sidebar|navigation|separate|distinct|left\\s+(side|panel))", "weight": 1.0},
+        {"name": "sees_dislike_icon", "kind": "regex", "value": "(thumb[\\s-]?down|dislike|thumbs\\s+down|hand\\s+icon)", "weight": 1.5},
+        {"name": "sees_formatting", "kind": "regex", "value": "(bold|highlight|colou?red|purple|blue|callout|box|header|toolbar)", "weight": 1.0},
+        {"name": "sidebar_links", "kind": "regex", "value": "(events|documentation\\s+style\\s+guide|questions)", "weight": 1.0},
+        {"name": "logged_in_user", "kind": "regex", "value": "maggie", "weight": 1.0},
+        {"name": "company_name", "kind": "regex", "value": "good\\s+software", "weight": 0.5},
+        {"name": "min_words", "kind": "min_words", "value": 40, "weight": 0.5}
       ]
     }
   ]
