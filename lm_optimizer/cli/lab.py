@@ -1140,7 +1140,13 @@ def _run_sandbox_one(
                     import base64
                     img_path = Path(definition.image_path)
                     if img_path.exists():
-                        images = [base64.b64encode(img_path.read_bytes()).decode("ascii")]
+                        mime = (
+                            "image/png"
+                            if img_path.suffix.lower() == ".png"
+                            else "image/jpeg"
+                        )
+                        b64 = base64.b64encode(img_path.read_bytes()).decode("ascii")
+                        images = [f"data:{mime};base64,{b64}"]
                 return await _chat(
                     client,
                     lease.model,

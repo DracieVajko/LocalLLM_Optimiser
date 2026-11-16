@@ -796,7 +796,7 @@ class LMStudioClient:
         if images:
             content_parts = [{"type": "text", "content": input_text}]
             for img in images:
-                content_parts.append({"type": "image", "content": img})
+                content_parts.append({"type": "image", "data_url": img})
             body: dict = {
                 "model": model,
                 "input": content_parts,

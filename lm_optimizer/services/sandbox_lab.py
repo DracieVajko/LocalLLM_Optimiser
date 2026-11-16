@@ -813,6 +813,64 @@ SANDBOX_TASKS: dict[str, SandboxTask] = {
 BUILTIN_TASKS: dict[str, SandboxTask] = SANDBOX_TASKS
 
 
+# --- Vision benchmark manifest ---------------------------------------------
+
+
+def _load_vision_tasks(base: Path | None = None) -> dict[str, SandboxTask]:
+    """Build vision tasks from ``benchmarks/vision/manifest.json``.
+
+    The manifest keeps image files, prompts, expected answers and checks in
+    one data file, so adding a new vision test is a data change, not a code
+    change. Each task id is prefixed with ``vision_``.
+    """
+    import json
+
+    root = base or Path(__file__).resolve().parents[2] / "benchmarks" / "vision"
+    manifest_path = root / "manifest.json"
+    if not manifest_path.exists():
+        return {}
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+    tasks: dict[str, SandboxTask] = {}
+    for item in manifest.get("images", []):
+        image = root / str(item.get("file", ""))
+        if not image.is_file():
+            continue
+        checks: list[SandboxCheck] = []
+        for spec in item.get("checks", []):
+            checks.append(
+                SandboxCheck(
+                    str(spec["name"]),
+                    str(spec.get("kind", "regex")),
+                    spec.get("value"),
+                    weight=float(spec.get("weight", 1.0)),
+                    critical=bool(spec.get("critical", False)),
+                    negate=bool(spec.get("negate", False)),
+                )
+            )
+        task = SandboxTask(
+            id=f"vision_{item['id']}",
+            kind=SandboxTaskKind.VISION,
+            title=str(item.get("title", item["id"])),
+            prompt=str(item["prompt"]),
+            checks=checks,
+            max_repair_attempts=int(item.get("max_repair_attempts", 1)),
+            timeout_s=float(item.get("timeout_s", 120.0)),
+            max_output_tokens=int(item.get("max_output_tokens", 512)),
+            artifacts=(str(item.get("artifact", "description.txt")),),
+            image_path=str(image),
+        )
+        tasks[task.id] = task
+    return tasks
+
+
+VISION_TASKS: dict[str, SandboxTask] = _load_vision_tasks()
+SANDBOX_TASKS.update(VISION_TASKS)
+
+
 def get_task_by_id(task_id: str) -> SandboxTask | None:
     """Resolve a built-in sandbox task by stable id (None when unknown)."""
     return SANDBOX_TASKS.get(task_id)
