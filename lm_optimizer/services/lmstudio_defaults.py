@@ -309,6 +309,63 @@ def _existing_index(root: Path) -> dict[str, Path]:
     return index
 
 
+def _concrete_model_exists(home: Path, root: Path, defaults_path: Path) -> bool:
+    """True when the defaults file maps to a GGUF that is still on disk."""
+    try:
+        relative = defaults_path.relative_to(root).as_posix()
+    except ValueError:
+        return False
+    concrete = relative.removesuffix(".json")
+    if not concrete.endswith(".gguf"):
+        return False
+    return (home / "models" / concrete).is_file()
+
+
+def _candidate_defaults_paths(
+    entries: list[tuple[str, dict[str, Any]]], model_id: str, root: Path, home: Path
+) -> list[Path]:
+    """Ordered, existing defaults-file candidates for a model identifier.
+
+    A base group id (for example ``vendor/model``) can exist only as variant
+    entries (``vendor/model@q2_k``). LM Studio still lists the group and loads
+    one of those concrete files, so the variants are honest candidates.
+    """
+    exact = [concrete for concrete, _ in entries if concrete == model_id]
+    by_ui = [
+        concrete
+        for concrete, meta in entries
+        if str(meta.get("uiIdentifier") or "") == model_id
+    ]
+    variants = sorted(
+        (
+            (concrete, meta)
+            for concrete, meta in entries
+            if str(meta.get("uiIdentifier") or "").startswith(model_id + "@")
+        ),
+        key=lambda item: int(item[1].get("lastLoadedTimestamp") or 0),
+        reverse=True,
+    )
+    candidates: list[Path] = []
+    for concrete in [*exact, *by_ui, *(concrete for concrete, _ in variants)]:
+        candidate = _defaults_file_for(root, concrete)
+        if candidate not in candidates:
+            candidates.append(candidate)
+    existing = [candidate for candidate in candidates if candidate.exists()]
+    if len(existing) > 1:
+        # A base group id can match several concrete variants. LM Studio
+        # applies the defaults of the file it actually loads, so prefer a
+        # candidate whose GGUF is still on disk; stale model-data entries
+        # from deleted quants must not win.
+        on_disk = [
+            candidate
+            for candidate in existing
+            if _concrete_model_exists(home, root, candidate)
+        ]
+        if on_disk:
+            return on_disk + [c for c in candidates if c not in on_disk]
+    return existing + [c for c in candidates if c not in existing]
+
+
 def resolve_defaults_path(model_id: str, *, home: Path | None = None) -> Path:
     """Resolve the per-model defaults file, creating nothing on disk.
 
@@ -331,20 +388,9 @@ def resolve_defaults_path(model_id: str, *, home: Path | None = None) -> Path:
     root = _defaults_root(home)
     entries = _model_data(home)
 
-    exact = [concrete for concrete, _ in entries if concrete == model_id]
-    by_ui = [
-        concrete
-        for concrete, meta in entries
-        if str(meta.get("uiIdentifier") or "") == model_id
-    ]
-    candidates: list[Path] = []
-    for concrete in [*exact, *by_ui]:
-        candidate = _defaults_file_for(root, concrete)
-        if candidate not in candidates:
-            candidates.append(candidate)
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
+    existing = _candidate_defaults_paths(entries, model_id, root, home)
+    if existing:
+        return existing[0]
 
     index = _existing_index(root)
     direct = index.get(model_id)
@@ -353,10 +399,6 @@ def resolve_defaults_path(model_id: str, *, home: Path | None = None) -> Path:
     direct = index.get(Path(model_id).name)
     if direct is not None:
         return direct
-
-    if candidates:
-        # A known model whose defaults file does not exist yet.
-        return candidates[0]
 
     if "/" in model_id or "\\" in model_id:
         candidate = _defaults_file_for(root, model_id)

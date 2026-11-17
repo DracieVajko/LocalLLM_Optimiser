@@ -142,6 +142,26 @@ def test_chooses_existing_file_when_identifier_matches_multiple(tmp_path):
     assert resolve_defaults_path("vendor/model", home=home) == expected
 
 
+def test_prefers_variant_whose_model_file_still_exists(tmp_path):
+    deleted = "vendor/Model-GGUF/Model-Q4_K_M.gguf"
+    present = "vendor/Model-GGUF/Model-Q8_0.gguf"
+    home = _lmstudio_home(
+        tmp_path,
+        [
+            [deleted, {"uiIdentifier": "vendor/model"}],
+            [present, {"uiIdentifier": "vendor/model"}],
+        ],
+    )
+    # The deleted variant still has a stale defaults file; only the present
+    # variant has a GGUF on disk and therefore can be the loaded model.
+    _write_defaults(home, deleted + ".json", _document())
+    expected = _write_defaults(home, present + ".json", _document())
+    model_dir = home / "models" / "vendor" / "Model-GGUF"
+    model_dir.mkdir(parents=True)
+    (model_dir / "Model-Q8_0.gguf").write_bytes(b"GGUF")
+    assert resolve_defaults_path("vendor/model", home=home) == expected
+
+
 def test_new_model_uses_concrete_path_and_creates_missing_file(tmp_path):
     concrete = "vendor/New-GGUF/New-Q4_K_M.gguf"
     home = _lmstudio_home(tmp_path, [[concrete, {"uiIdentifier": "vendor/new"}]])
