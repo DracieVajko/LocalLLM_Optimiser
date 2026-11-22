@@ -61,6 +61,7 @@ class ValidatorKind(str, Enum):
     JSON_SCHEMA = "json_schema"
     PYTHON_COMPILES = "python_compiles"
     PYTHON_DEFINES = "python_defines"
+    PYTHON_BEHAVIOUR = "python_behaviour"
     JSON_KEYS = "json_keys"
     RETRIEVAL_KEY = "retrieval_key"
     MIN_WORDS = "min_words"
@@ -137,6 +138,10 @@ class Validator:
             }
             missing = [n for n in names if n not in defined]
             return not missing, f"missing={missing}" if missing else "defined"
+        if self.kind is ValidatorKind.PYTHON_BEHAVIOUR:
+            from lm_optimizer.services.code_runner import run_find_duplicates
+
+            return run_find_duplicates(text)
         if self.kind is ValidatorKind.JSON_KEYS:
             try:
                 doc = json.loads(_strip_fences(text).strip())
@@ -550,6 +555,7 @@ def default_tasks() -> list[QualityTask]:
             validators=[
                 Validator(ValidatorKind.PYTHON_COMPILES),
                 Validator(ValidatorKind.PYTHON_DEFINES, ["find_duplicates"]),
+                Validator(ValidatorKind.PYTHON_BEHAVIOUR, "find_duplicates"),
             ],
             hard_gates=[HardGate(HardGateKind.OUTPUT_NOT_EMPTY)],
             max_tokens=512,

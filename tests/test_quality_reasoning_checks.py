@@ -20,7 +20,8 @@ GOOD = (
     "Therefore the next number in the sequence is 72. This step-by-step "
     "reasoning shows the add pattern clearly and checks the arithmetic. "
     "Since the second differences are constant at two, this is a quadratic "
-    "sequence and the rule is safe to extend one more time for the answer."
+    "sequence and the rule is safe to extend one more time. "
+    "The next number is 72."
 )
 BAD = "I do not know."
 

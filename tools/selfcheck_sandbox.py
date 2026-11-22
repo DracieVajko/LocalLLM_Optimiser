@@ -239,8 +239,8 @@ FIXTURES: list[tuple[str, str, str, str, tuple[float, float]]] = [
     ("email_write", "perfect_email", "email.txt", PERFECT_EMAIL, (0.95, 1.0)),
     ("email_write", "placeholder_email", "email.txt",
      PERFECT_EMAIL.replace("Alex Doe", "[Your Name]"), (0.0, 0.80)),
-    ("blender_skyblock", "perfect_script", "scene.blend", PERFECT_BLEND_PY, (0.0, 0.2)),
-    ("blender_skyblock", "prose_dump", "scene.blend",
+    ("blender_city", "perfect_script", "scene.blend", PERFECT_BLEND_PY, (0.0, 0.2)),
+    ("blender_city", "prose_dump", "scene.blend",
      "We need answer user's request. Need produce Blender Python script. "
      "bpy.ops.mesh is the cube op; keyframe_insert on the camera; "
      "save_as_mainfile at the end; frame_start=1 frame_end=120; "

@@ -34,8 +34,22 @@ const ResultsPage = {
         } catch (e) {
             console.error('Results init failed:', e);
         }
-        const ok = await this.loadRun();
+    const ok = await this.loadRun();
         if (!ok) return; // error card already rendered; never a spinner
+        await this.loadAvailableModels();
+
+        // Warn before navigating away while a run is active.
+        // Status is a plain string in the API contract; never read `.value`.
+        const run = this.state.run;
+        const statusStr = String(run?.status ?? '').toLowerCase();
+        const activeStates = new Set(['running', 'resumed', 'paused', 'pending']);
+        if (run && activeStates.has(statusStr)) {
+            window.addEventListener('beforeunload', (e) => {
+                e.preventDefault();
+                e.returnValue = 'An optimization run is in progress. Leaving this page will stop live progress updates.';
+            });
+        }
+
         try {
             this.render();
             this.loadGenerationProfiles();
@@ -205,20 +219,43 @@ const ResultsPage = {
         const run = this.state.run;
         const passed = this.state.configurations.filter(c => c.status === 'passed');
         const failed = this.state.configurations.filter(c => c.status !== 'passed');
+        // WP-4 / scoring v7: never derive a winner from passed configs when
+        // the backend did not confirm best_config_id with a measured composite
+        // score. A missing score is NOT zero — it is "not measured".
         const bestConfig = run.best_config_id
             ? this.state.configurations.find(c => c.id === run.best_config_id)
-            : passed.sort((a, b) => (b.score || 0) - (a.score || 0))[0] || null;
+            : null;
+        const hasValidatedWinner = !!bestConfig && bestConfig.score != null;
         const oom = this.state.configurations.filter(c => c.status === 'oom').length;
         const timeouts = this.state.configurations.filter(c => c.status === 'timeout').length;
         const qualityRejected = this.state.configurations.filter(c => c.status === 'quality_failed').length;
         const loadFailures = failed.length - oom - timeouts - qualityRejected;
 
-        // ZERO-PASS: explicit failure state, no Apply offer.
+        // Branch on run status first: a running/paused run is not "unsuccessful".
+        const isRunning = run.status === 'running' || run.status === 'paused';
         if (!bestConfig) {
+            if (isRunning) {
+                return `
+                <div class="card border-blue-300">
+                    <div class="card-header"><h1 class="text-2xl font-bold text-blue-700">Optimization in progress</h1>
+                    <p class="text-sm text-gray-500 font-mono">${run.model?.id || ''}</p>
+                    <p class="text-xs text-gray-400 font-mono">scoring v${run.scoring_version || run.benchmark_params?.scoring_version || '?'}</p></div>
+                    <div class="card-body">
+                        <p>Run is <span class="badge badge-info">${run.status}</span> — waiting for configurations to complete.</p>
+                        <p class="mt-2 text-sm">Reason: load_failures=${loadFailures}, oom=${oom}, timeouts=${timeouts}, quality_rejected=${qualityRejected}</p>
+                        <div class="flex flex-wrap gap-2 mt-2">
+                            <span class="badge badge-info">${run.profile}</span>
+                            <span class="badge ${UI.getStatusBadge(run.status)}">${run.status}</span>
+                        </div>
+                        <p class="mt-2 text-xs text-gray-500">Apply is disabled: no validated configuration yet.</p>
+                    </div>
+                </div>`;
+            }
             return `
             <div class="card border-red-300">
                 <div class="card-header"><h1 class="text-2xl font-bold text-red-700">Optimization unsuccessful</h1>
-                <p class="text-sm text-gray-500 font-mono">${run.model?.id || ''}</p></div>
+                <p class="text-sm text-gray-500 font-mono">${run.model?.id || ''}</p>
+                <p class="text-xs text-gray-400 font-mono">scoring v${run.scoring_version || run.benchmark_params?.scoring_version || '?'}</p></div>
                 <div class="card-body">
                     <p>No valid configurations were successfully benchmarked.</p>
                     <p class="mt-2 text-sm">Reason: load_failures=${loadFailures}, oom=${oom}, timeouts=${timeouts}, quality_rejected=${qualityRejected}</p>
@@ -274,12 +311,6 @@ const ResultsPage = {
                             </svg>
                             Save as LM Studio default
                         </button>
-                        <button id="load-exact-btn" class="btn btn-outline" title="Apply the exact winning configuration to LM Studio (same as save-default, immediate load)">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                            </svg>
-                            Load with exact config
-                        </button>
                         <button id="export-btn" class="btn btn-outline">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m4 4V4"></path>
@@ -291,14 +322,16 @@ const ResultsPage = {
 
                 <div class="card-body mt-4">
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        ${this.renderMetricCard('Generation Speed', (bestConfig?.avg_generation_tok_s?.toFixed(1) + ' tok/s') || '—', '🚀')}
-                        ${this.renderMetricCard('Prompt Speed', (bestConfig?.avg_prompt_tok_s?.toFixed(0) + ' tok/s') || '—', '⚡')}
-                        ${this.renderMetricCard('TTFT', (bestConfig?.avg_ttft_ms?.toFixed(0) + ' ms') || '—', '⏱️')}
-                        ${this.renderMetricCard('Quality', bestConfig?.quality?.overall?.toFixed(3) || '—', '✨')}
+                        ${this.renderMetricCard('Generation Speed', this.fmt(bestConfig?.avg_generation_tok_s, 1, ' tok/s') || '—', '🚀')}
+                        ${this.renderMetricCard('Prompt Speed', this.fmt(bestConfig?.avg_prompt_tok_s, 0, ' tok/s') || '—', '⚡')}
+                        ${this.renderMetricCard('TTFT', this.fmt(bestConfig?.avg_ttft_ms, 0, ' ms') || '—', '⏱️')}
+                        ${this.renderMetricCard('Quality', this.fmt(bestConfig?.quality?.overall, 3, '') || '—', '✨')}
+                        ${bestConfig?.quality?.checks_passed != null ? `<p class="text-xs text-gray-500 col-span-full text-center">Quality checks: ${bestConfig.quality.checks_passed}/${bestConfig.quality.checks_total ?? '?'} passed</p>` : ''}
                     </div>
 
                     ${this.renderBestConfigDetails(bestConfig)}
                     ${this.renderPhaseABStrip(bestConfig)}
+                    ${this.renderScoreBreakdown(bestConfig)}
                     ${this.renderAlternatives(bestConfig)}
                     <div class="mt-4 p-3 bg-gray-50 rounded" id="gen-profiles">
                         <h4 class="font-medium mb-1">GENERATION PROFILES</h4>
@@ -325,6 +358,46 @@ const ResultsPage = {
             ${raw ? `<div class="text-sm"><span class="text-gray-500">Raw fastest${raw.id === bestConfig?.id ? ' (= winner)' : ' (rejected for quality)'}:</span> <span class="font-mono">${raw.context_length} ctx, ${tok(raw)}</span></div>` : ''}
             <div class="text-sm"><span class="text-gray-500">Quality-safe winner:</span> <span class="font-mono">${bestConfig?.context_length} ctx, ${tok(bestConfig)}</span></div>
             ${pb ? `<div class="text-sm mt-1"><span class="text-gray-500">Phase B:</span> <span class="font-mono">GPU-only ${pb.gpu_only_max ?? '—'} / system ${pb.system_max ?? '—'} / final ${pb.final_capacity ?? '—'}</span></div>` : ''}
+        </div>`;
+    },
+
+    // "Why this won": the normalized score components, their weights, and
+    // explicitly which components were not measured (weight redistributed).
+    renderScoreBreakdown(bestConfig) {
+        const bd = bestConfig?.score_breakdown;
+        if (!bd || typeof bd !== 'object') return '';
+        const weights = bestConfig?.score_weights || this.state.run?.profile_weights || {};
+        const label = (key) => ({
+            generation_speed: 'Generation speed',
+            prompt_speed: 'Prompt speed',
+            prompt_processing: 'Prompt processing',
+            ttft: 'TTFT',
+            quality: 'Quality',
+            stability: 'Stability',
+            context: 'Context',
+            context_capacity: 'Context capacity',
+            memory_efficiency: 'Memory efficiency',
+        }[key] || key.replace(/_/g, ' '));
+        const rows = Object.keys(bd).map(key => {
+            const value = bd[key];
+            const w = weights[key] ?? weights[key === 'prompt_speed' ? 'prompt_processing' : key] ?? null;
+            const measured = value != null;
+            return `<tr>
+                <td class="py-1">${label(key)}</td>
+                <td class="py-1 font-mono text-right">${measured ? Number(value).toFixed(3) : '<span class="text-amber-600">not measured</span>'}</td>
+                <td class="py-1 font-mono text-right text-gray-500">${w != null ? (Number(w) * 100).toFixed(1) + '%' : '—'}</td>
+            </tr>`;
+        }).join('');
+        return `<div class="mt-4 p-3 bg-gray-50 rounded" id="score-breakdown">
+            <div class="flex items-center justify-between">
+                <h4 class="font-medium">WHY THIS WON — SCORE BREAKDOWN</h4>
+                <span class="text-xs font-mono text-gray-500">composite ${bestConfig.score != null ? Number(bestConfig.score).toFixed(3) : 'not measured'} · run-relative</span>
+            </div>
+            <table class="table mt-2 text-sm">
+                <thead><tr><th class="text-left">Component</th><th class="text-right">Normalized</th><th class="text-right">Weight</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+            <p class="text-xs text-gray-500 mt-2">Normalized scores use min–max bounds inside this run only; they are not absolute model quality and cannot be compared across runs. Components marked "not measured" were excluded and their weight was redistributed.</p>
         </div>`;
     },
 
@@ -358,11 +431,12 @@ const ResultsPage = {
     renderAlternatives(best) {
         const passed = this.state.configurations.filter(c => c.status === 'passed');
         if (!passed.length) return '';
-        const by = (fn) => passed.slice().sort((a, b) => fn(b) - fn(a))[0];
-        const speed = by(c => c.avg_generation_tok_s || 0);
-        const ctx = by(c => c.context_length || 0);
-        const qual = by(c => c.quality?.overall || 0);
-        const mem = passed.slice().sort((a, b) => (a.peak_vram_gb || 0) - (b.peak_vram_gb || 0))[0];
+        // Missing measurements must not be treated as 0 (scoring v7).
+        const by = (fn) => passed.slice().filter(c => fn(c) != null).sort((a, b) => fn(b) - fn(a))[0] || null;
+        const speed = by(c => c.avg_generation_tok_s);
+        const ctx = by(c => c.context_length);
+        const qual = by(c => c.quality?.overall);
+        const mem = passed.filter(c => c.peak_vram_gb != null).slice().sort((a, b) => a.peak_vram_gb - b.peak_vram_gb)[0] || null;
         const tip = (c) => {
             const k = c.config || {};
             return `${c.context_length} ctx · flash ${k.flash_attention ? 'ON' : 'OFF'} · KV ${k.offload_kv_cache_to_gpu ? 'GPU' : 'CPU'} · batch ${k.eval_batch_size || 'auto'} · parallel ${k.parallel || 'auto'} · quality ${c.quality?.overall?.toFixed(3) ?? '—'}`;
@@ -379,6 +453,13 @@ const ResultsPage = {
         row.scrollIntoView({ behavior: 'smooth', block: 'center' });
         row.classList.add('flash-highlight');
         setTimeout(() => row.classList.remove('flash-highlight'), 2000);
+    },
+
+    // fmt: format a possibly-null number with fixed decimals and unit.
+    // Returns '—' for null/undefined (missing), never 'undefined'.
+    fmt(value, digits, unit = '') {
+        if (value == null) return '—';
+        return value.toFixed(digits) + unit;
     },
 
     renderMetricCard(label, value, icon) {
@@ -412,10 +493,10 @@ const ResultsPage = {
     renderTabs() {
         return `
             <div class="card">
-                <div class="tabs" id="results-tabs">
-                    <button class="tab active" data-tab="charts">📈 Charts</button>
-                    <button class="tab" data-tab="pareto">📊 Pareto Frontier</button>
-                    <button class="tab" data-tab="comparison">⚖️ Comparison</button>
+                <div class="tabs" id="results-tabs" role="tablist">
+                    <button class="tab active" data-tab="charts" role="tab" aria-selected="true" id="tab-charts">📈 Charts</button>
+                    <button class="tab" data-tab="pareto" role="tab" aria-selected="false" id="tab-pareto">📊 Pareto Frontier</button>
+                    <button class="tab" data-tab="comparison" role="tab" aria-selected="false" id="tab-comparison">⚖️ Comparison</button>
                 </div>
                 <div class="card-body">
                     <div id="tab-panels">${this.renderChartTab()}</div>
@@ -436,6 +517,13 @@ const ResultsPage = {
                 <div class="chart-container">
                     <canvas id="main-chart"></canvas>
                 </div>
+                <p class="text-xs text-gray-500">Point colour encodes <strong>context length</strong> (cool = small window, warm = large window). Hover a point for exact values; full numbers are in the Configurations table.</p>
+                <div class="flex justify-end gap-2 mt-2">
+                    <button class="btn btn-outline btn-sm" onclick="ResultsPage.exportChart('main-chart')" title="Export chart as PNG">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        Export PNG
+                    </button>
+                </div>
             </div>
         `;
     },
@@ -443,7 +531,7 @@ const ResultsPage = {
     renderParetoTab() {
         return `
             <div class="space-y-4">
-                <p class="text-gray-600">Configurations on the Pareto frontier represent optimal trade-offs. No other configuration is better in all metrics.</p>
+                <p class="text-gray-600">Configurations on the Pareto frontier represent optimal trade-offs between the metrics plotted below (context length vs generation speed). No other configuration is better on both axes.</p>
                 <div class="chart-container">
                     <canvas id="pareto-chart"></canvas>
                 </div>
@@ -500,6 +588,9 @@ const ResultsPage = {
                                 <th>Prompt tok/s</th>
                                 <th>TTFT</th>
                                 <th>VRAM</th>
+                                <th>RAM</th>
+                                <th>Stab.</th>
+                                <th>MemEff.</th>
                                 <th>Quality</th>
                                 <th>Score</th>
                             </tr>
@@ -509,10 +600,10 @@ const ResultsPage = {
                                 <tr>
                                     <td><input type="checkbox" class="config-checkbox" value="${c.id}"></td>
                                     <td class="font-mono">${c.context_length}</td>
-                                    <td>${c.gpu_ratio ? (c.gpu_ratio * 100).toFixed(0) + '%' : 'Auto'}</td>
-                                    <td>${c.flash_attention ? 'ON' : 'OFF'}</td>
-                                    <td>${c.offload_kv_cache_to_gpu ? 'GPU' : 'CPU'}</td>
-                                    <td>${c.eval_batch_size || 'Auto'}</td>
+                                    <td>${c.config?.gpu_ratio != null ? (c.config.gpu_ratio * 100).toFixed(0) + '%' : 'Auto'}</td>
+                                    <td>${c.config?.flash_attention ? 'ON' : 'OFF'}</td>
+                                    <td>${c.config?.offload_kv_cache_to_gpu ? 'GPU' : 'CPU'}</td>
+                                    <td>${c.config?.eval_batch_size ?? 'Auto'}</td>
                                     <td class="font-mono font-medium">${c.avg_generation_tok_s?.toFixed(1)}</td>
                                     <td class="font-mono">${c.avg_prompt_tok_s?.toFixed(0)}</td>
                                     <td class="font-mono">${c.avg_ttft_ms?.toFixed(0)} ms</td>
@@ -587,6 +678,9 @@ const ResultsPage = {
                                         <td class="font-mono">${c.avg_prompt_tok_s?.toFixed(0) || '—'}</td>
                                         <td class="font-mono">${c.avg_ttft_ms?.toFixed(0) || '—'} ms</td>
                                         <td class="font-mono">${c.peak_vram_gb?.toFixed(1) || '—'} GB</td>
+                                        <td class="font-mono">${c.peak_ram_gb?.toFixed(1) || '—'} GB</td>
+                                        <td class="font-mono">${c.stability_score?.toFixed(2) || '—'}</td>
+                                        <td class="font-mono">${c.memory_efficiency?.toFixed(2) || '—'}</td>
                                         <td>${c.quality?.overall?.toFixed(3) || '—'}</td>
                                         <td class="font-mono font-medium">${c.score != null ? c.score.toFixed(3) : '—'}</td>
                                         <td><span class="badge ${this.getStatusBadge(c.status)}">${c.status}</span></td>
@@ -601,13 +695,13 @@ const ResultsPage = {
                                                 ${(c.metrics || []).map(m => `
                                                     <div class="mt-1 border-t pt-1">
                                                         <span class="font-mono text-xs font-medium">${m.test_name}</span>
-                                                        <span class="text-xs text-gray-500">tok/s ${m.generation_tok_s != null ? m.generation_tok_s.toFixed(1) : '—'} · in ${m.prompt_tokens ?? '—'} / out ${m.completion_tokens ?? '—'} tok · ${m.success ? 'ok' : 'fail: ' + (m.error || '')}</span>
+                                                        <span class="text-xs text-gray-500">tok/s ${m.generation_tok_s != null ? m.generation_tok_s.toFixed(1) : '—'} · in ${m.prompt_tokens ?? '—'} / out ${m.completion_tokens ?? '—'} tok · ${m.success ? 'ok' : 'fail: ' + escapeHtml(String(m.error || ''))}</span>
                                                         <div class="text-xs font-medium mt-1">Prompt</div>
-                                                        <pre class="font-mono text-xs bg-gray-50 p-2 rounded overflow-auto max-h-40">${String(m.prompt || '(prompt not stored for this run)').slice(0, 4000)}</pre>
+                                                        <pre class="font-mono text-xs bg-gray-50 p-2 rounded overflow-auto max-h-40">${escapeHtml(String(m.prompt || '(prompt not stored for this run)').slice(0, 4000))}</pre>
                                                         <div class="text-xs font-medium mt-1">Thinking</div>
-                                                        <pre class="font-mono text-xs bg-gray-50 p-2 rounded overflow-auto max-h-40">${String(m.thinking_text || 'n/a (old run or non-reasoning model)').slice(0, 4000)}</pre>
+                                                        <pre class="font-mono text-xs bg-gray-50 p-2 rounded overflow-auto max-h-40">${escapeHtml(String(m.thinking_text || 'n/a (old run or non-reasoning model)').slice(0, 4000))}</pre>
                                                         <div class="text-xs font-medium mt-1">Output</div>
-                                                        <pre class="font-mono text-xs bg-gray-50 p-2 rounded overflow-auto max-h-40">${String(m.output_text || '—').slice(0, 2000)}</pre>
+                                                        <pre class="font-mono text-xs bg-gray-50 p-2 rounded overflow-auto max-h-40">${escapeHtml(String(m.output_text || '—').slice(0, 2000))}</pre>
                                                         <button class="btn btn-outline btn-sm cfg-full-output-btn" data-cfg="${c.id}" data-test="${m.test_name}">Full output + quality</button>
                                                         <div class="cfg-full-output" data-full-out="${c.id}:${m.test_name}"></div>
                                                     </div>`).join('')}
@@ -668,8 +762,11 @@ const ResultsPage = {
 
     // ==================== JUDGE UI ====================
 
-    openJudgeModal() {
+    async openJudgeModal() {
         UI.openModal(this.renderJudgeModal(), '🤖 Ask Judge');
+        // Attach events only after the modal is in the DOM, otherwise the
+        // selectors find nothing and the modal's controls stay dead.
+        await new Promise(resolve => setTimeout(resolve, 0));
         this.attachJudgeModalEvents();
     },
 
@@ -782,7 +879,7 @@ const ResultsPage = {
         
         const formatTask = (task) => {
             if (!task) return '<span class="text-gray-500">—</span>';
-            return `<strong>${task.winner || '—'}</strong> ${task.runner_up ? `<span class="text-gray-500 ml-1">(runner-up: ${task.runner_up})</span>` : ''} ${task.reasoning ? `<p class="text-xs text-gray-500 mt-1">${task.reasoning}</p>` : ''}`;
+            return `<strong>${escapeHtml(task.winner || '—')}</strong> ${task.runner_up ? `<span class="text-gray-500 ml-1">(runner-up: ${escapeHtml(task.runner_up)})</span>` : ''} ${task.reasoning ? `<p class="text-xs text-gray-500 mt-1">${escapeHtml(task.reasoning)}</p>` : ''}`;
         };
 
         return `
@@ -794,12 +891,12 @@ const ResultsPage = {
                     </span>
                 </div>
 
-                <div class="tabs tabs-border" id="verdict-tabs">
-                    <button class="tab active" data-verdict-tab="overall">Overall</button>
-                    <button class="tab" data-verdict-tab="per-model">Per-Model</button>
-                    <button class="tab" data-verdict-tab="by-task">By Task</button>
-                    <button class="tab" data-verdict-tab="avoid">Avoid</button>
-                    <button class="tab" data-verdict-tab="raw">Raw JSON</button>
+                <div class="tabs tabs-border" id="verdict-tabs" role="tablist">
+                    <button class="tab active" data-verdict-tab="overall" role="tab" aria-selected="true" id="verdict-tab-overall">Overall</button>
+                    <button class="tab" data-verdict-tab="per-model" role="tab" aria-selected="false" id="verdict-tab-per-model">Per-Model</button>
+                    <button class="tab" data-verdict-tab="by-task" role="tab" aria-selected="false" id="verdict-tab-by-task">By Task</button>
+                    <button class="tab" data-verdict-tab="avoid" role="tab" aria-selected="false" id="verdict-tab-avoid">Avoid</button>
+                    <button class="tab" data-verdict-tab="raw" role="tab" aria-selected="false" id="verdict-tab-raw">Raw JSON</button>
                 </div>
 
                 <div id="verdict-tab-panels" class="space-y-4">
@@ -809,21 +906,27 @@ const ResultsPage = {
                             <div class="card-header"><h4 class="font-semibold">Overall Winner</h4></div>
                             <div class="card-body">
                                 ${verdict.overall_winner ? `
-                                    <p><strong>Model:</strong> ${verdict.overall_winner.model_id || '—'}</p>
-                                    <p><strong>Config:</strong> ${verdict.overall_winner.config_id || '—'}</p>
-                                    <p><strong>Reasoning:</strong> ${verdict.overall_winner.reasoning || '—'}</p>
+                                    <p><strong>Model:</strong> ${escapeHtml(verdict.overall_winner.model_id || '—')}</p>
+                                    <p><strong>Config:</strong> ${escapeHtml(verdict.overall_winner.config_id || '—')}</p>
+                                    <p><strong>Reasoning:</strong> ${escapeHtml(verdict.overall_winner.reasoning || '—')}</p>
                                 ` : '<p class="text-gray-500">No overall winner determined.</p>'}
                             </div>
                         </div>
-                        ${verdict.per_model_winner ? `
+                        ${(() => {
+                            const raw = verdict.per_model_winner;
+                            if (!raw) return '';
+                            // API may return one object or a list; render both.
+                            const list = Array.isArray(raw) ? raw : [raw];
+                            return `
                         <div class="card mt-4">
                             <div class="card-header"><h4 class="font-semibold">Per-Model Winners</h4></div>
                             <div class="card-body">
-                                <p><strong>Model:</strong> ${verdict.per_model_winner.model_id || '—'}</p>
-                                <p><strong>Config:</strong> ${verdict.per_model_winner.config_id || '—'}</p>
-                                <p><strong>Reasoning:</strong> ${verdict.per_model_winner.reasoning || '—'}</p>
+                                ${list.map(w => `<p><strong>Model:</strong> ${escapeHtml(w.model_id || '—')}</p>
+                                <p><strong>Config:</strong> ${escapeHtml(w.config_id || '—')}</p>
+                                <p><strong>Reasoning:</strong> ${escapeHtml(w.reasoning || '—')}</p>`).join('<hr class="my-2">')}
                             </div>
-                        </div>` : ''}
+                        </div>`;
+                        })()}
                         <div class="card mt-4">
                             <div class="card-header"><h4 class="font-semibold">Metadata</h4></div>
                             <div class="card-body">
@@ -893,10 +996,10 @@ const ResultsPage = {
                         <div class="card">
                             <div class="card-header flex justify-between">
                                 <h4 class="font-semibold">Raw Verdict JSON</h4>
-                                <button class="btn btn-outline btn-sm" onclick="navigator.clipboard.writeText(JSON.stringify(${JSON.stringify(verdict).replace(/"/g, '\\"')}, null, 2))">Copy JSON</button>
+                                <button class="btn btn-outline btn-sm" id="copy-verdict-json-btn">Copy JSON</button>
                             </div>
                             <div class="card-body">
-                                <pre class="font-mono text-xs bg-gray-50 p-4 rounded overflow-auto max-h-96">${JSON.stringify(verdict, null, 2)}</pre>
+                                <pre class="font-mono text-xs bg-gray-50 p-4 rounded overflow-auto max-h-96">${escapeHtml(JSON.stringify(verdict, null, 2))}</pre>
                             </div>
                         </div>
                     </div>
@@ -947,7 +1050,7 @@ const ResultsPage = {
             const resp = await fetch('/api/models');
             if (resp.ok) {
                 const data = await resp.json();
-                this.state.availableModels = data.data || data;
+                this.state.availableModels = data.models || data.data || data;
             }
         } catch (e) {
             console.warn('Failed to load models for judge modal:', e);
@@ -970,14 +1073,21 @@ const ResultsPage = {
                 const isApi = e.target.value === 'api';
                 document.getElementById('judge-api-settings').classList.toggle('hidden', !isApi);
                 const modelSelect = document.getElementById('judge-model-select');
+                // Keep the backend and the model in sync: Local must not stay
+                // on a cloud model, API must not stay on "heuristic".
                 if (isApi) {
-                    // For API, allow any model name
                     modelSelect.disabled = false;
                     if (modelSelect.value === 'heuristic') {
                         modelSelect.value = 'anthropic/claude-3.5-sonnet';
                     }
                 } else {
                     modelSelect.disabled = false;
+                    // Local judge: never keep a cloud model id selected.
+                    if (modelSelect.value.includes('/')) {
+                        const local = Array.from(modelSelect.options)
+                            .find(o => o.value && !o.value.includes('/'));
+                        modelSelect.value = local ? local.value : 'heuristic';
+                    }
                 }
             });
         });
@@ -987,6 +1097,16 @@ const ResultsPage = {
         if (topNSlider) {
             topNSlider.addEventListener('input', (e) => {
                 document.getElementById('judge-top-n-label').textContent = e.target.value;
+            });
+        }
+
+        // Select-all for judge config checkboxes (separate from the main table).
+        const selectAllJudge = document.getElementById('select-all-judge-configs');
+        if (selectAllJudge) {
+            selectAllJudge.addEventListener('change', (e) => {
+                document.querySelectorAll('.judge-config-checkbox').forEach(cb => {
+                    cb.checked = e.target.checked;
+                });
             });
         }
 
@@ -1009,7 +1129,9 @@ const ResultsPage = {
 
     switchVerdictTab(tabName) {
         document.querySelectorAll('#verdict-tabs .tab').forEach(t => {
-            t.classList.toggle('active', t.dataset.verdictTab === tabName);
+            const active = t.dataset.verdictTab === tabName;
+            t.classList.toggle('active', active);
+            t.setAttribute('aria-selected', String(active));
         });
         document.querySelectorAll('.verdict-panel').forEach(p => {
             p.classList.toggle('hidden', p.id !== `verdict-panel-${tabName}`);
@@ -1077,24 +1199,37 @@ const ResultsPage = {
     },
 
     async pollJudgeResult(judgeId) {
+        const maxAttempts = 150; // 150 x 2 s = 5 min
+        let attempts = 0;
         const poll = async () => {
+            attempts += 1;
+            if (attempts > maxAttempts) {
+                UI.showToast('Judge still running after 5 minutes — check Judge History later.', 'warning');
+                return;
+            }
             try {
                 const resp = await fetch(`/api/judge/${judgeId}`);
-                if (!resp.ok) throw new Error('Poll failed');
+                if (resp.status === 404) {
+                    UI.showToast('Judge result not found (404) — stopping polling.', 'error');
+                    return;
+                }
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
                 const data = await resp.json();
-                
+
                 if (data.status === 'completed') {
                     UI.closeModal();
                     this.showVerdictModal(data.verdict, data);
                     UI.showToast('Judge evaluation complete', 'success');
                 } else if (data.status === 'failed') {
-                    UI.showToast('Judge failed: ' + data.error_message, 'error');
+                    UI.showToast('Judge failed: ' + (data.error_message || 'unknown error'), 'error');
                 } else {
                     // Still pending, poll again in 2 seconds
                     setTimeout(poll, 2000);
                 }
             } catch (e) {
                 console.error('Poll error:', e);
+                // Transient network error: retry with a longer delay, but still
+                // count the attempt so a dead endpoint cannot poll forever.
                 setTimeout(poll, 5000);
             }
         };
@@ -1108,6 +1243,17 @@ const ResultsPage = {
             document.querySelectorAll('#verdict-tabs .tab').forEach(tab => {
                 tab.addEventListener('click', () => this.switchVerdictTab(tab.dataset.verdictTab));
             });
+            const copyBtn = document.getElementById('copy-verdict-json-btn');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', async () => {
+                    try {
+                        await navigator.clipboard.writeText(JSON.stringify(verdict, null, 2));
+                        UI.showToast('Verdict JSON copied', 'success');
+                    } catch (e) {
+                        UI.showToast('Copy failed: ' + ((e && e.message) || e), 'error');
+                    }
+                });
+            }
         }, 0);
     },
 
@@ -1142,7 +1288,9 @@ const ResultsPage = {
 
     switchVerdictTab(tabName) {
         document.querySelectorAll('#verdict-tabs .tab').forEach(t => {
-            t.classList.toggle('active', t.dataset.verdictTab === tabName);
+            const active = t.dataset.verdictTab === tabName;
+            t.classList.toggle('active', active);
+            t.setAttribute('aria-selected', String(active));
         });
         document.querySelectorAll('.verdict-panel').forEach(p => {
             p.classList.toggle('hidden', p.id !== `verdict-panel-${tabName}`);
@@ -1153,11 +1301,6 @@ const ResultsPage = {
         // Tab switching
         document.querySelectorAll('#results-tabs .tab').forEach(tab => {
             tab.addEventListener('click', () => this.switchTab(tab.dataset.tab));
-        });
-
-        // Chart type buttons
-        document.querySelectorAll('.chart-type-btn').forEach(btn => {
-            btn.addEventListener('click', () => this.switchChart(btn.dataset.chart));
         });
 
         // Judge: always available; empty selection means "evaluate all".
@@ -1207,29 +1350,8 @@ const ResultsPage = {
             saveDefaultBtn.addEventListener('click', () => this.saveLmStudioDefault());
         }
 
-        // Load with exact winning config (applies exact best config, not defaults)
-        const loadExactBtn = document.getElementById('load-exact-btn');
-        if (loadExactBtn) {
-            loadExactBtn.addEventListener('click', async () => {
-                const bestConfig = this.state.run?.best_config;
-                if (!bestConfig || !this.state.run) {
-                    UI.showToast('No winning config to apply', 'error');
-                    return;
-                }
-                UI.showLoading('Applying exact winning config...');
-                try {
-                    await API.applyConfiguration({
-                        model_id: this.state.run.model?.id || '',
-                        config: bestConfig,
-                    });
-                    UI.hideLoading();
-                    UI.showToast('Exact winning config applied successfully', 'success');
-                } catch (err) {
-                    UI.hideLoading();
-                    UI.showToast(err.message || 'Failed to apply exact config', 'error');
-                }
-            });
-        }
+        // (Removed duplicate "Load with exact config" button: Apply Best Config
+        // already sends the exact winning configuration.)
 
         // Export
         const exportBtn = document.getElementById('export-btn');
@@ -1282,6 +1404,11 @@ const ResultsPage = {
             });
         });
 
+        // Full output + quality buttons inside the debug row.
+        document.querySelectorAll('.cfg-full-output-btn').forEach(btn => {
+            btn.addEventListener('click', () => this.loadFullOutput(btn));
+        });
+
     },
 
     async loadGenerationProfiles() {
@@ -1305,7 +1432,7 @@ const ResultsPage = {
             ).join('');
         } catch (e) {
             box.innerHTML = '<h4 class="font-medium mb-1">GENERATION PROFILES</h4>'
-                + `<p class="text-xs text-gray-500">Unavailable: ${String((e && e.message) || e).slice(0, 160)}</p>`;
+                + `<p class="text-xs text-gray-500">Unavailable: ${escapeHtml(String((e && e.message) || e).slice(0, 160))}</p>`;
         }
     },
 
@@ -1329,18 +1456,20 @@ const ResultsPage = {
                 : '';
             slot.innerHTML = `<p class="text-xs text-gray-500">${q} · in ${m.prompt_tokens ?? '—'} / out ${m.completion_tokens ?? '—'} tok</p>${warn}`
                 + `<div class="text-xs font-medium mt-1">Thinking</div>`
-                + `<pre class="font-mono text-xs bg-gray-50 p-2 rounded overflow-auto max-h-96">${String(m.thinking_text || 'n/a').slice(0, 20000)}</pre>`
+                + `<pre class="font-mono text-xs bg-gray-50 p-2 rounded overflow-auto max-h-96">${escapeHtml(String(m.thinking_text || 'n/a').slice(0, 20000))}</pre>`
                 + `<div class="text-xs font-medium mt-1">Output</div>`
-                + `<pre class="font-mono text-xs bg-gray-50 p-2 rounded overflow-auto max-h-96">${String(m.output_text || '—').slice(0, 20000)}</pre>`;
+                + `<pre class="font-mono text-xs bg-gray-50 p-2 rounded overflow-auto max-h-96">${escapeHtml(String(m.output_text || '—').slice(0, 20000))}</pre>`;
             slot.dataset.loaded = '1';
         } catch (e) {
-            slot.innerHTML = `<p class="text-xs text-red-600">Failed: ${String((e && e.message) || e).slice(0, 200)}</p>`;
+            slot.innerHTML = `<p class="text-xs text-red-600">Failed: ${escapeHtml(String((e && e.message) || e).slice(0, 200))}</p>`;
         }
     },
 
     switchTab(tabName) {
         document.querySelectorAll('#results-tabs .tab').forEach(t => {
-            t.classList.toggle('active', t.dataset.tab === tabName);
+            const active = t.dataset.tab === tabName;
+            t.classList.toggle('active', active);
+            t.setAttribute('aria-selected', String(active));
         });
 
         const panel = document.getElementById('tab-panels');
@@ -1408,6 +1537,21 @@ const ResultsPage = {
         this.renderChart();
     },
 
+    async exportChart(canvasId) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+        try {
+            const dataUrl = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = `optimization-chart-${canvasId}-${new Date().toISOString().slice(0, 10)}.png`;
+            link.href = dataUrl;
+            link.click();
+            UI.showToast('Chart exported as PNG', 'success');
+        } catch (e) {
+            UI.showToast('Chart export failed: ' + (e && e.message || e), 'error');
+        }
+    },
+
     renderChart() {
         const ctx = document.getElementById('main-chart');
         if (!ctx) return;
@@ -1417,7 +1561,15 @@ const ResultsPage = {
         }
 
         const data = this.prepareChartData();
-        if (!data.length) return;
+        if (!data.length) {
+            const canvas = document.getElementById('main-chart');
+            if (canvas && canvas.parentElement) {
+                const passed = this.state.configurations.filter(c => c.status === 'passed').length;
+                const failed = this.state.configurations.length - passed;
+                canvas.parentElement.innerHTML = `<p class="text-sm text-gray-500 py-8 text-center">No chart data: ${passed} passed, ${failed} failed configuration(s). Charts need at least one passed configuration with measured metrics.</p>`;
+            }
+            return;
+        }
 
         try {
             Charts.destroyChart('main-chart');
@@ -1464,10 +1616,10 @@ const ResultsPage = {
                 prompt_tok_s: c.avg_prompt_tok_s,
                 ttft_ms: c.avg_ttft_ms,
                 peak_vram_gb: c.peak_vram_gb,
-                gpu_ratio: c.gpu_ratio,
-                flash_attention: c.flash_attention,
-                offload_kv_cache_to_gpu: c.offload_kv_cache_to_gpu,
-                eval_batch_size: c.eval_batch_size,
+                gpu_ratio: c.config?.gpu_ratio,
+                flash_attention: c.config?.flash_attention,
+                offload_kv_cache_to_gpu: c.config?.offload_kv_cache_to_gpu,
+                eval_batch_size: c.config?.eval_batch_size,
                 quality: c.quality?.overall,
                 score: c.score,
                 config: c,
@@ -1630,7 +1782,7 @@ const ResultsPage = {
                             ${configs.map(c => `
                                 <th class="text-center">
                                     <div class="font-mono text-sm">${c.context_length} ctx</div>
-                                    <div class="text-xs text-gray-400">GPU ${c.gpu_ratio ? (c.gpu_ratio * 100).toFixed(0) + '%' : 'Auto'}</div>
+                                    <div class="text-xs text-gray-400">GPU ${c.config?.gpu_ratio != null ? (c.config.gpu_ratio * 100).toFixed(0) + '%' : 'Auto'}</div>
                                 </th>
                             `).join('')}
                         </tr>
@@ -1649,10 +1801,11 @@ const ResultsPage = {
     },
 
     renderComparisonRow(label, configs, path, format) {
+        const decimals = format ? parseInt(format.match(/\d+/)?.[0] || '2') : 2;
         const values = configs.map(c => {
             const val = path.split('.').reduce((obj, key) => obj?.[key], c);
             if (val == null) return '—';
-            return format ? val.toFixed(format.replace('.', '')) : val;
+            return val.toFixed(decimals);
         });
 
         return `
@@ -1680,3 +1833,4 @@ window.addEventListener('lm-theme-changed', () => {
         if (active && ResultsPage.renderChart) ResultsPage.renderChart();
     } catch (e) { /* theme-only refresh, never fatal */ }
 });
+window.ResultsPage = ResultsPage;

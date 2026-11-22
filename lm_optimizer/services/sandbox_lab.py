@@ -58,6 +58,14 @@ class SandboxCheck:
     weight: float = 1.0
     critical: bool = False
     negate: bool = False
+    #: Human-facing hint shown to the model during repair. Must never reveal
+    #: the check name, the expected value, the regex, counts or any fact about
+    #: the image. Empty -> generic line is used instead.
+    hint: str = ""
+    #: Internal diagnostic detail from the last score_attempt run. Never shown
+    #: to the model (build_repair_feedback ignores it); kept for error messages
+    #: and debugging only.
+    detail: str = ""
 
 
 @dataclass
@@ -77,6 +85,7 @@ class SandboxTask:
     image_path: str = ""
     max_output_tokens: int = 2048
     network_allowed: bool = False
+    experimental: bool = False
 
 
 # --- 13.1 Web task: company marketing site ---------------------------------
@@ -295,6 +304,35 @@ BLENDER_CITY_TASK = SandboxTask(
     kind=SandboxTaskKind.BLENDER,
     title="Dense low-poly city from a map excerpt",
     prompt=(
+        "Target environment: Blender 5.3, the `bpy` Python API, run headless as\n"
+        "`blender --background --python build_scene.py`. Blender 5.x notes that\n"
+        "matter here: `bpy.context.scene.collection` is read-only, so create a\n"
+        "new collection and link it; the camera op is\n"
+        "`bpy.ops.object.camera_add`, the light op `bpy.ops.object.light_add`,\n"
+        "and saving is `bpy.ops.wm.save_as_mainfile(filepath='scene.blend')`.\n"
+        "Do NOT use pre-5.x idioms (e.g. assigning `scene.collection.name`).\n\n"
+        "Working skeleton (verified on Blender 5.3 - extend it, do not replace\n"
+        "the collection handling):\n"
+        "```python\n"
+        "import bpy\n"
+        "for o in list(bpy.data.objects):\n"
+        "    bpy.data.objects.remove(o, do_unlink=True)\n"
+        "root = bpy.data.collections.new('City')\n"
+        "bpy.context.scene.collection.children.link(root)\n"
+        "def cube(name, loc, scale, coll):\n"
+        "    bpy.ops.mesh.primitive_cube_add(size=1, location=loc)\n"
+        "    ob = bpy.context.object\n"
+        "    ob.name = name\n"
+        "    ob.scale = scale\n"
+        "    for c in list(ob.users_collection):\n"
+        "        c.objects.unlink(ob)\n"
+        "    coll.objects.link(ob)\n"
+        "    return ob\n"
+        "bpy.ops.object.camera_add(location=(30, -30, 25))\n"
+        "bpy.context.scene.camera = bpy.context.object\n"
+        "bpy.ops.object.light_add(type='SUN', location=(10, 10, 30))\n"
+        "bpy.ops.wm.save_as_mainfile(filepath='scene.blend')\n"
+        "```\n\n"
         "Build a dense low-poly city in Blender from the map excerpt below. "
         "Each character is one 4 m cell and the grid is 12 x 12 cells.\n\n"
         "MAP (rows top to bottom):\n"
@@ -354,8 +392,8 @@ BLENDER_CITY_TASK = SandboxTask(
         SandboxCheck("city_footprint", "custom", None, weight=1.0),
     ],
     max_repair_attempts=1,
-    timeout_s=300.0,
-    max_output_tokens=8192,
+    timeout_s=600.0,
+    max_output_tokens=4096,
     network_allowed=False,
     allowed_executables=("blender",),
     artifacts=("build_scene.py", "scene.blend"),
@@ -406,11 +444,58 @@ EMAIL_TASK = SandboxTask(
         SandboxCheck("email_min_words", "min_words", 30, weight=1.0),
     ],
     max_repair_attempts=1,
-    timeout_s=180.0,
+    timeout_s=300.0,
     max_output_tokens=1024,
     network_allowed=False,
     allowed_executables=(),
     artifacts=("email.txt",),
+)
+
+MULTILINGUAL_TASK = SandboxTask(
+    id="language_puzzle",
+    kind=SandboxTaskKind.TEXT,
+    title="Multi-language word puzzles (declension, tenses, morphology)",
+    prompt=(
+        "You are a linguist. Answer each of the following 12 questions. "
+        "For each, give ONLY the correct form, no explanation.\n\n"
+        "1. Slovak declension: genitive singular of 'diet (child).\n"
+        "2. Slovak declension: instrumental plural of 'mesto' (city).\n"
+        "3. English: past tense of 'run'.\n"
+        "4. English: third-person singular present of 'go'.\n"
+        "5. German: genitive singular of 'das Kind' (the child).\n"
+        "6. French: passe compose of 'aller' (to go) for 'je'.\n"
+        "7. Spanish: preterito perfecto of 'hablar' (to speak) for 'yo'.\n"
+        "8. Italian: passato prossimo of 'andare' (to go) for 'io'.\n"
+        "9. Russian: genitive singular of 'kniga' (book).\n"
+        "10. Chinese: measure word (classifier) for 'book'.\n"
+        "11. Japanese: past tense of 'taberu' (to eat).\n"
+        "12. Arabic: plural of 'kitab' (book).\n\n"
+        "Output format: numbered list 1-12, one answer per line. "
+        "No extra text."
+    ),
+    checks=[
+        SandboxCheck("has_answers", "regex", r"1\.\s*\S", weight=1.0, critical=True),
+        SandboxCheck("answer_diet", "regex", r"1\.\s*det", weight=1.5, critical=True),
+        SandboxCheck("answer_mesto", "regex", r"2\.\s*mestami", weight=1.5, critical=True),
+        SandboxCheck("answer_run", "regex", r"3\.\s*ran\b", weight=1.5, critical=True),
+        SandboxCheck("answer_go", "regex", r"4\.\s*goes\b", weight=1.5, critical=True),
+        SandboxCheck("answer_kind", "regex", r"5\.\s*des\s+Kindes", weight=1.5, critical=True),
+        SandboxCheck("answer_aller", "regex", r"6\.\s*suis\s+all", weight=1.5, critical=True),
+        SandboxCheck("answer_hablar", "regex", r"7\.\s*he\s+hablado", weight=1.5, critical=True),
+        SandboxCheck("answer_andare", "regex", r"8\.\s*sono\s+andato", weight=1.5, critical=True),
+        SandboxCheck("answer_kniga", "regex", r"9\.\s*knigi", weight=1.5, critical=True),
+        SandboxCheck("answer_chinese", "regex", r"10\.\s*ben", weight=1.5, critical=True),
+        SandboxCheck("answer_taberu", "regex", r"11\.\s*tabeta", weight=1.5, critical=True),
+        SandboxCheck("answer_kitab", "regex", r"12\.\s*kutub", weight=1.5, critical=True),
+        SandboxCheck("no_placeholders", "regex", r"\[[^\]]+\]", weight=2.0, negate=True),
+        SandboxCheck("min_words", "min_words", 12, weight=1.0),
+    ],
+    max_repair_attempts=1,
+    timeout_s=120.0,
+    max_output_tokens=512,
+    network_allowed=False,
+    allowed_executables=(),
+    artifacts=("language.txt",),
 )
 
 CALENDAR_TASK = SandboxTask(
@@ -630,7 +715,7 @@ LONG_CONTEXT_TASK = SandboxTask(
     checks=[
         SandboxCheck("min_length", "min_words", 1500, weight=2.0, critical=True),
         SandboxCheck("has_headings", "regex", r"#{1,3}\s+\w", weight=1.0, critical=True),
-        SandboxCheck("no_repeated_paragraphs", "custom", None, weight=2.0, critical=True),
+        SandboxCheck("no_repeated_paragraphs", "custom", None, weight=2.0, critical=False),
         SandboxCheck("coherent_ending", "custom", None, weight=1.5, critical=True),
     ],
     max_repair_attempts=1,
@@ -655,13 +740,14 @@ VISION_DESCRIBE_TASK = SandboxTask(
         SandboxCheck("mentions_texture", "regex", r"(dirt|soil|ground|texture|surface|brown|earth)", weight=2.0, critical=True),
         SandboxCheck("no_hallucination", "regex", r"(cat|dog|person|car|building|sky|ocean|mountain)", weight=2.0, negate=True),
     ],
-    max_repair_attempts=1,
+    max_repair_attempts=0,
     timeout_s=120.0,
     max_output_tokens=512,
     network_allowed=False,
     allowed_executables=(),
     artifacts=("description.txt",),
     image_path="benchmarks/deepseek_agent/minecraft_world/textures/pixel_perfection/source/default_dirt.png",
+    experimental=True,
 )
 
 DEEP_RESEARCH_REPORT_TASK = SandboxTask(
@@ -695,12 +781,12 @@ DEEP_RESEARCH_REPORT_TASK = SandboxTask(
         SandboxCheck("single_file_html", "regex", r"<!DOCTYPE\s+html|<html\b", weight=1.0, critical=True),
         SandboxCheck("has_title", "regex", r"<title>\s*\S+", weight=1.0),
         SandboxCheck("has_report_headings", "regex", r"(<h2|<h3)", weight=1.5),
-        SandboxCheck("min_words", "min_words", 800, weight=1.5),
+        SandboxCheck("min_words", "min_words", 300, weight=1.5),
         SandboxCheck("cites_primary", "regex", r"primary_official", weight=2.0, critical=True),
         SandboxCheck("cites_technical", "regex", r"technical_secondary", weight=1.5),
         SandboxCheck("cites_conflicting", "regex", r"conflicting_source", weight=1.5),
         SandboxCheck("no_irrelevant_source", "regex", r"cassette", weight=2.0, negate=True),
-        SandboxCheck("no_repeated_paragraphs", "custom", None, weight=1.5, critical=True),
+        SandboxCheck("no_repeated_paragraphs", "custom", None, weight=1.5, critical=False),
         SandboxCheck("coherent_ending", "custom", None, weight=1.0),
         SandboxCheck("mentions_uncertainty", "regex", r"(not\s+(stated|provided|mentioned|specified|answered|covered|given|clear)|no\s+(information|mention|data|answer|evidence)|uncertain|limitation|unclear|unknown|insufficient)", weight=1.0),
         SandboxCheck("has_references", "regex", r"(references|bibliography|sources)", weight=1.0),
@@ -805,6 +891,7 @@ SANDBOX_TASKS: dict[str, SandboxTask] = {
         MINECRAFT_WORLD_TASK,
         LONG_CONTEXT_TASK,
         VISION_DESCRIBE_TASK,
+        MULTILINGUAL_TASK,
     )
 }
 
@@ -862,6 +949,7 @@ def _load_vision_tasks(base: Path | None = None) -> dict[str, SandboxTask]:
             max_output_tokens=int(item.get("max_output_tokens", 512)),
             artifacts=(str(item.get("artifact", "description.txt")),),
             image_path=str(image),
+            experimental=True,
         )
         tasks[task.id] = task
     return tasks
@@ -1072,13 +1160,16 @@ def build_repair_feedback(
     attempt: int,
     stdout: str = "",
     stderr: str = "",
-    failing_checks: list[str] | None = None,
+    failing_checks: list[SandboxCheck] | None = None,
     screenshot: str | None = None,
 ) -> str:
     """Feedback for the next repair attempt (spec 13.4).
 
-    The model gets the failure EVIDENCE and the remaining budget - never the
-    solution.
+    The model gets the failure EVIDENCE (stdout/stderr/screenshot) and the
+    remaining budget - never the solution. Each failing criterion is
+    described only by its ``hint`` (or a generic line when no hint is set).
+    The check name, value, regex, expected counts or any fact about the image
+    are never printed, so the model cannot be fed the answer.
     """
     remaining = max(0, task.max_repair_attempts - attempt)
     lines = [
@@ -1087,7 +1178,10 @@ def build_repair_feedback(
         "Failing acceptance criteria:",
     ]
     for check in failing_checks or []:
-        lines.append(f"  - {check}")
+        hint = (check.hint or "").strip()
+        if not hint:
+            hint = "A required element is missing or wrong."
+        lines.append(f"  - {hint}")
     if stdout.strip():
         lines += ["", "stdout (tail):", stdout.strip()[-1500:]]
     if stderr.strip():
@@ -1097,10 +1191,10 @@ def build_repair_feedback(
     lines += [
         "",
         f"Remaining repair attempts: {remaining}.",
-        "Fix the failing criteria. Do not rewrite unrelated parts.",
+        "Fix the failing criteria.",
     ]
     if remaining == 0:
-        lines.append("This is the LAST attempt - make it count.")
+        lines.append("This is the LAST attempt.")
     return "\n".join(lines)
 
 
@@ -1111,17 +1205,17 @@ def score_attempt(
     stderr: str = "",
     exit_code: int | None = 0,
     custom_results: dict[str, tuple[bool, str]] | None = None,
-) -> tuple[float, list[str], list[str]]:
+) -> tuple[float, list[SandboxCheck], list[SandboxCheck]]:
     """Evaluate one attempt against the task's checks.
 
-    Returns (score, failing_check_names, critical_failures). A critical
-    failure zeroes the score: it vetoes the attempt instead of merely
-    lowering the aggregate.
+    Returns (score, failing_checks, critical_checks). A critical failure
+    zeroes the score: it vetoes the attempt instead of merely lowering the
+    aggregate.
     """
     total = 0.0
     weight_sum = 0.0
-    failing: list[str] = []
-    critical: list[str] = []
+    failing: list[SandboxCheck] = []
+    critical: list[SandboxCheck] = []
 
     def _strip_md_fences(text: str) -> str:
         """Strip ```...``` markdown fences from text, returning inner content."""
@@ -1311,20 +1405,25 @@ def score_attempt(
             combined = "\n".join(files.values())
             text = re.sub(r"<[^>]+>", " ", combined)
             paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+            # Short fragments (headings, captions, credits) are not real paragraphs
+            # and must not be counted as repeats.
+            candidates = [p for p in paragraphs if len(p.split()) >= 20]
             seen = set()
             repeats = 0
-            for p in paragraphs:
-                key = " ".join(p.split()[:12]).lower()
+            for p in candidates:
+                key = " ".join(p.lower().split()[:20])
                 if key in seen:
                     repeats += 1
                 seen.add(key)
             tail = text[-200:].strip().lower()
             head = text[:200].strip().lower()
             looped = tail == head and len(text) > 400
-            ok = repeats == 0 and not looped
+            # Allow up to ~10% of paragraphs to repeat (boilerplate / footers).
+            allowed = max(1, len(candidates) // 10)
+            ok = repeats <= allowed and not looped
             detail = (
-                f"paragraphs={len(paragraphs)} repeats={repeats} "
-                f"looped_tail={looped}"
+                f"paragraphs={len(candidates)} repeats={repeats} "
+                f"allowed={allowed} looped_tail={looped}"
             )
         elif check.name == "coherent_ending":
             combined = "\n".join(files.values())
@@ -1357,9 +1456,10 @@ def score_attempt(
         total += check.weight if ok else 0.0
         weight_sum += check.weight
         if not ok:
-            failing.append(f"{check.name} ({detail})")
+            check.detail = detail
+            failing.append(check)
             if check.critical:
-                critical.append(f"{check.name} ({detail})")
+                critical.append(check)
     score = (total / weight_sum) if weight_sum else 0.0
     if critical:
         # A critical check is a veto, not a partial deduction: an artifact

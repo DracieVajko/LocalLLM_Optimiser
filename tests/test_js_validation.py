@@ -129,8 +129,9 @@ def test_sandbox_js_check_fails_when_the_validator_is_unavailable(monkeypatch):
         task, {"scene.js": VALID_MODULE}
     )
     assert score == 0.0
-    assert any("js_parses" in name for name in critical)
-    assert any("not validated" in name for name in critical)
+    critical_names = [check.name for check in critical]
+    assert "js_parses" in critical_names
+    assert any("not validated" in check.detail for check in critical)
 
 
 def test_sandbox_js_check_reports_the_syntax_error(monkeypatch):
@@ -142,4 +143,4 @@ def test_sandbox_js_check_reports_the_syntax_error(monkeypatch):
         task, {"scene.js": BROKEN_MODULE}
     )
     assert score == 0.0
-    assert any("js_parses" in name for name in critical)
+    assert "js_parses" in [check.name for check in critical]

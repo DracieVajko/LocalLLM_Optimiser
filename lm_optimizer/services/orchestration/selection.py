@@ -77,10 +77,21 @@ def _ctx_of(c: ConfigurationResult) -> int:
 
 
 def _score_of(c: ConfigurationResult) -> float:
+    """Weighted score, or 0.0 when unmeasured.
+
+    A scoreless config is NOT a zero-quality config; callers that rank on
+    this must also check :func:`_score_measured` so an unmeasured candidate
+    can never beat a measured one.
+    """
     try:
         return float(c.score or 0.0)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _score_measured(c: ConfigurationResult) -> bool:
+    """True when the config has a composite score (quality was measured)."""
+    return getattr(c, "score", None) is not None
 
 
 def _cid(c: ConfigurationResult) -> str:
@@ -176,6 +187,21 @@ def select_by_score(
     result" is honored). Within the band, the profile secondary decides.
     """
     cfg = config or SelectionConfig()
+    cur_measured = _score_measured(current_best)
+    new_measured = _score_measured(challenger)
+    if not new_measured and cur_measured:
+        return False, {
+            "reason": "challenger score not measured (quality missing); cannot win",
+            "profile": profile,
+            "band": False,
+            "score_not_measured": True,
+        }
+    if new_measured and not cur_measured:
+        return True, {
+            "reason": "incumbent score not measured; measured challenger wins",
+            "profile": profile,
+            "band": False,
+        }
     cur_score = _score_of(current_best)
     new_score = _score_of(challenger)
     if new_score > cur_score:

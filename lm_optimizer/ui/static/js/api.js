@@ -7,13 +7,22 @@ export const API = {
     // In-flight GET dedup: concurrent identical polls share one fetch, so a
     // runaway loop (or N tabs in one page context) cannot multiply traffic.
     _inflight: new Map(),
+    // Double-submit guard: mutating endpoints can only have one in-flight
+    // request at a time, so double-clicking "Start Optimization" can't fire twice.
+    _submitting: new Set(),
 
     async request(endpoint, options = {}) {
         const method = (options.method || 'GET').toUpperCase();
         const key = method === 'GET' ? `${method} ${endpoint}` : null;
         if (key && this._inflight.has(key)) return this._inflight.get(key);
+        // Double-submit guard for mutating endpoints.
+        if (method !== 'GET' && this._submitting.has(endpoint)) {
+            throw new Error('Request already in flight: ' + endpoint);
+        }
+        if (method !== 'GET') this._submitting.add(endpoint);
         const pending = this._requestInner(endpoint, options).finally(() => {
             if (key && this._inflight.get(key) === pending) this._inflight.delete(key);
+            if (method !== 'GET') this._submitting.delete(endpoint);
         });
         if (key) this._inflight.set(key, pending);
         return pending;
@@ -52,7 +61,21 @@ export const API = {
 
         if (!response.ok) {
             const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-            const err = new Error(error.detail || `HTTP ${response.status}`);
+            // FastAPI 422 detail is an array of {loc, msg, type}; never
+            // surface "[object Object]" to the user.
+            let detail = error.detail;
+            if (Array.isArray(detail)) {
+                detail = detail.map(item => {
+                    if (item && typeof item === 'object') {
+                        const loc = Array.isArray(item.loc) ? item.loc.join('.') : '';
+                        return loc ? `${loc}: ${item.msg || 'invalid'}` : (item.msg || 'invalid');
+                    }
+                    return String(item);
+                }).join('; ');
+            } else if (detail && typeof detail === 'object') {
+                detail = detail.message || JSON.stringify(detail);
+            }
+            const err = new Error(detail || `HTTP ${response.status}`);
             err.status = response.status;
             throw err;
         }
@@ -69,6 +92,7 @@ export const API = {
         return this.request('/connect', {
             method: 'POST',
             body: { url },
+            timeoutMs: 30000,
         });
     },
 
@@ -88,7 +112,7 @@ export const API = {
     },
 
     async getModel(modelId) {
-        return this.request(`/models/${modelId}`);
+        return this.request(`/models/${encodeURIComponent(modelId)}`, { timeoutMs: 30000 });
     },
 
     // Optimization
@@ -96,6 +120,7 @@ export const API = {
         return this.request('/optimize', {
             method: 'POST',
             body: request,
+            timeoutMs: 60000,
         });
     },
 
@@ -180,6 +205,7 @@ export const API = {
         return this.request('/judge', {
             method: 'POST',
             body: JSON.stringify(request),
+            timeoutMs: 120000,
         });
     },
 
@@ -193,7 +219,7 @@ export const API = {
 
     async saveLmStudioDefault(runId, dryRun = false) {
         const query = dryRun ? '?dry_run=true' : '';
-        return this.request(`/runs/${runId}/save-default${query}`, { method: 'POST' });
+        return this.request(`/runs/${runId}/save-default${query}`, { method: 'POST', timeoutMs: 60000 });
     },
 
     // Apply Configuration
@@ -201,6 +227,7 @@ export const API = {
         return this.request('/apply', {
             method: 'POST',
             body: request,
+            timeoutMs: 60000,
         });
     },
 
@@ -210,7 +237,7 @@ export const API = {
 
     // Presets
     async getPresets(modelId = null) {
-        const params = modelId ? `?model_id=${modelId}` : '';
+        const params = modelId ? `?model_id=${encodeURIComponent(modelId)}` : '';
         return this.request(`/presets${params}`);
     },
 

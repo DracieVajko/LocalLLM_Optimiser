@@ -19,9 +19,10 @@ class BenchmarkCase:
 class BenchmarkMetrics:
     """Metrics from a single benchmark test.
 
-    Note: estimated_ttft_ms is an *estimate* derived from total generation
-    time when streaming is not available (ttft ~ 10% of total time).
-    It is NOT a directly measured time-to-first-token. See docs/OPTIMIZATION_METHOD.md.
+    ``estimated_ttft_ms`` is only an estimate when the backend does not expose
+    native timing; ``ttft_source`` records which case applies ("measured" or
+    "estimated"). ``prompt_tok_s_source`` does the same for prompt throughput.
+    Never present an estimated value as measured. See docs/OPTIMIZATION_METHOD.md.
     """
 
     test_name: str
@@ -47,6 +48,11 @@ class BenchmarkMetrics:
     # Cache provenance (WP R2-1): True when this metric was served from cache
     # rather than a fresh measurement. Never present cached data as measured.
     from_cache: bool = False
+
+    # Provenance for derived metrics (P2 audit): "measured" when the value
+    # comes from native server stats, "estimated" when derived heuristically.
+    ttft_source: str = "estimated"
+    prompt_tok_s_source: str = "estimated"
 
     # MTP / Speculative Decoding metrics (P0)
     # Only populated when speculative decoding / MTP is active and server

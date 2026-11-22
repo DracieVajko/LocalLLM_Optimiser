@@ -22,6 +22,37 @@ logger = get_logger(__name__)
 QUALITY_GATE_FLOOR = 0.90
 
 
+_ONES = {
+    "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+    "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14,
+    "fifteen": 15, "sixteen": 16, "seventeen": 17, "eighteen": 18,
+    "nineteen": 19,
+}
+_TENS = {
+    "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50,
+    "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90,
+}
+
+
+def _word_to_number(text: str) -> int | None:
+    """Best-effort conversion of English number words to an int."""
+    text = text.lower().replace("-", " ")
+    tokens = text.split()
+    total = 0
+    found = False
+    for tok in tokens:
+        if tok in _ONES:
+            total += _ONES[tok]
+            found = True
+        elif tok in _TENS:
+            total += _TENS[tok]
+            found = True
+    if not found:
+        return None
+    return total
+
+
 def _checks_from_scores(scores: dict) -> tuple[int, int]:
     total = len(scores)
     passed = sum(1 for v in scores.values() if v >= 0.9)
@@ -107,7 +138,8 @@ def _think_tags_balanced(text: str) -> bool:
 class QualityConfig:
     """Correctness / quality evaluation configuration (heuristic checks)."""
 
-    minimum_score: float = 0.97
+    minimum_score: float = 0.97  # target quality (aspiration for ranking)
+    hard_gate_threshold: float = 0.90  # hard pass/fail floor
 
 
 class QualityEvaluator:
@@ -254,31 +286,49 @@ class QualityEvaluator:
         )
 
     def _evaluate_coding(self, output: str, prompt_def: BenchmarkCase) -> QualityScore:
-        """Evaluate code output (fences stripped: judge the code, not the wrapper)."""
+        """Evaluate code output (fences stripped: judge the code, not the wrapper).
+
+        Static keyword hunts (``"O(n)"``, ``"sorted"``) are gone: they passed
+        an O(n^2) function that merely said "O(n)" in its docstring.  Syntax
+        is checked with ``ast.parse`` and the algorithm is run for real.
+        """
         details = {}
         scores = {}
         code = _strip_fences(output)
         if code != output.strip():
             details["fences_stripped"] = True
 
-        has_def = "def find_duplicates" in code
-        scores["task_completion"] = 1.0 if has_def else 0.0
-        details["has_function_def"] = has_def
+        from lm_optimizer.services.code_runner import code_structure, run_find_duplicates
 
-        has_complexity = any(kw in code.lower() for kw in ["o(n)", "o(1)", "linear", "constant"])
-        scores["factual_consistency"] = 1.0 if has_complexity else 0.7
-        details["mentions_complexity"] = has_complexity
+        structure = code_structure(code)
+        details["syntax"] = structure.detail
+        details["parses"] = structure.parses
+        details["has_function_def"] = structure.has_function
 
-        has_sort = any(kw in code for kw in ["sort", "sorted", "ascending"])
-        details["mentions_sort"] = has_sort
+        scores["task_completion"] = 1.0 if structure.has_function else 0.0
 
-        no_extra = not any(kw in code for kw in ["class ", "if __name__"])
-        scores["format_compliance"] = 1.0 if no_extra else 0.7
-        details["clean_output"] = no_extra
+        # Hidden behavioural + performance tests: static checks cannot tell a
+        # correct algorithm from ``return []`` or O(n^2). Run the function.
+        if structure.has_function and structure.parses:
+            behaviour_ok, behaviour_detail = run_find_duplicates(code)
+        else:
+            behaviour_ok, behaviour_detail = False, structure.detail
+        details["hidden_tests"] = behaviour_detail
+        scores["coding_correctness"] = 1.0 if behaviour_ok else 0.0
 
-        scores["no_truncation"] = 1.0 if _ends_properly(code) else 0.5
-        scores["no_malformed"] = 1.0
-        scores["coding_correctness"] = scores["task_completion"]
+        # No factual claim to grade; code correctness carries the weight.
+        scores["factual_consistency"] = 1.0
+        details["factual_consistency"] = "not_applicable"
+
+        # AST shape: imports, docstring and the single function only.
+        scores["format_compliance"] = 1.0 if structure.clean_module else 0.7
+        details["clean_output"] = structure.clean_module
+
+        scores["no_truncation"] = 1.0 if structure.parses else 0.0
+        scores["no_malformed"] = 1.0 if structure.parses else 0.0
+
+        # A wrong algorithm or unparseable code is a hard failure.
+        critical = (not behaviour_ok) or (not structure.parses)
 
         overall = sum(scores.values()) / len(scores)
         passed, total = _checks_from_scores(scores)
@@ -289,6 +339,7 @@ class QualityEvaluator:
             details=details,
             checks_passed=passed,
             checks_total=total,
+            critical_checks_failed=critical,
             **scores,
         )
 
@@ -298,16 +349,49 @@ class QualityEvaluator:
         scores = {}
 
         min_tokens = getattr(prompt_def, "min_tokens", prompt_def.max_tokens // 4)
-        output_tokens = len(output.split())
-        scores["task_completion"] = min(1.0, output_tokens / max(min_tokens, 1))
+        # Strip a leading <think>...</think> block before any extraction.
+        cleaned_output = re.sub(
+            r"^\s*<think>.*?</think>\s*", "", output, count=1, flags=re.DOTALL | re.IGNORECASE
+        )
+        output_tokens = len(cleaned_output.split())
+        # task_completion: non-empty, not truncated, length >= 0.25 * min_tokens.
+        # Length can never lower a correct answer below the gate.
+        ends_ok = _ends_properly(cleaned_output)
+        length_ok = output_tokens >= max(1, int(0.25 * min_tokens))
+        scores["task_completion"] = 1.0 if (cleaned_output.strip() and length_ok) else (0.5 if cleaned_output.strip() else 0.0)
         details["output_tokens"] = output_tokens
+        details["length_ok"] = length_ok
 
         if prompt_def.category == "reasoning":
-            has_pattern = any(
-                kw in output.lower() for kw in ["difference", "pattern", "add", "sequence", "72"]
-            )
-            scores["factual_consistency"] = 1.0 if has_pattern else 0.5
-            details["has_reasoning"] = has_pattern
+            expected = getattr(prompt_def, "expected_answer", None)
+            # Extract final answer = last integer in the last sentence/line that
+            # contains answer|therefore|next number|is.
+            answer_correct = False
+            if expected is not None:
+                # Split into sentences/lines.
+                lines = re.split(r"(?<=[.!?])\s+|\n", cleaned_output)
+                candidate_lines = [
+                    ln for ln in lines
+                    if re.search(r"answer|therefore|next number|\bis\b", ln, re.IGNORECASE)
+                ]
+                if candidate_lines:
+                    last_line = candidate_lines[-1]
+                    nums = re.findall(r"-?\d+", last_line)
+                    if nums:
+                        try:
+                            answer_correct = int(nums[-1]) == int(expected)
+                        except (ValueError, TypeError):
+                            answer_correct = False
+                    else:
+                        # Try word numbers.
+                        word_val = _word_to_number(last_line)
+                        if word_val is not None:
+                            answer_correct = word_val == int(expected)
+                # Reject when a different final integer is stated after the expected.
+                # (already handled: we only look at the last candidate line)
+            scores["factual_consistency"] = 1.0 if answer_correct else 0.0
+            details["answer_correct"] = answer_correct
+            details["expected_answer"] = expected
         elif prompt_def.category == "context":
             keywords = ["solar", "wind", "hydro", "geothermal", "biomass"]
             found = sum(1 for kw in keywords if kw in output.lower())
@@ -335,12 +419,22 @@ class QualityEvaluator:
         passed, total = _checks_from_scores(scores)
         details["checks"] = f"{passed}/{total}"
         confident = prompt_def.category in ("instruction", "reasoning", "context")
+        # For reasoning tasks, a wrong final answer is a critical failure.
+        critical = False
+        if prompt_def.category == "reasoning":
+            expected = getattr(prompt_def, "expected_answer", None)
+            if expected is not None and not details.get("answer_correct", False):
+                critical = True
+        # Also use the base: task_completion 0 or factual_consistency 0
+        if scores.get("task_completion", 1.0) <= 0.0 or scores.get("factual_consistency", 1.0) <= 0.0:
+            critical = True
         return QualityScore(
             overall=overall,
             confident=confident,
             details=details,
             checks_passed=passed,
             checks_total=total,
+            critical_checks_failed=critical,
             **scores,
         )
 
@@ -373,14 +467,18 @@ class QualityEvaluator:
         """Aggregate quality scores across tests."""
         if not scores:
             return QualityScore(
-                overall=1.0,
-                task_completion=1.0,
-                factual_consistency=1.0,
-                format_compliance=1.0,
-                coding_correctness=1.0,
-                no_truncation=1.0,
-                no_malformed=1.0,
+                overall=0.0,
+                task_completion=0.0,
+                factual_consistency=0.0,
+                format_compliance=0.0,
+                coding_correctness=0.0,
+                no_truncation=0.0,
+                no_malformed=0.0,
                 confident=False,
+                details={"reason": "No results measured (NOT_MEASURED)"},
+                checks_passed=0,
+                checks_total=0,
+                critical_checks_failed=True,
             )
 
         confident_scores = [s for s in scores.values() if s.confident]
@@ -404,6 +502,9 @@ class QualityEvaluator:
             details={"per_test": {k: v.overall for k, v in scores.items()}},
             checks_passed=total_passed,
             checks_total=total_checks,
+            critical_checks_failed=any(
+                getattr(s, "critical_checks_failed", False) for s in scores.values()
+            ),
         )
 
     def passes_threshold(self, quality: QualityScore) -> bool:
@@ -416,5 +517,5 @@ class QualityEvaluator:
         """
         if getattr(quality, "critical_checks_failed", False):
             return False
-        threshold = min(self.config.minimum_score, QUALITY_GATE_FLOOR)
+        threshold = min(self.config.minimum_score, self.config.hard_gate_threshold)
         return quality.overall >= threshold

@@ -613,7 +613,16 @@ select.input {
 .dark .bg-amber-50 { background-color: #45300a !important; }
 .dark .bg-red-50 { background-color: #3f1d1d !important; }
 .dark .bg-green-50 { background-color: #052e22 !important; }
+.dark .bg-green-100 { background-color: #064e3b !important; }
+.dark .bg-yellow-50 { background-color: #3a2e08 !important; }
+.dark .bg-yellow-100 { background-color: #4a3a0a !important; }
+.dark .bg-amber-100 { background-color: #4a3208 !important; }
+.dark .bg-blue-100 { background-color: #1e3a5f !important; }
+.dark .bg-red-100 { background-color: #4a1d1d !important; }
 .dark .border-gray-200 { border-color: #374151 !important; }
+.dark .border-green-200 { border-color: #065f46 !important; }
+.dark .border-yellow-200 { border-color: #92600e !important; }
+.dark .border-blue-200 { border-color: #1e40af !important; }
 .dark .border-blue-100 { border-color: #1e40af !important; }
 .dark .border-amber-200 { border-color: #92600e !important; }
 .dark .border-red-300 { border-color: #7f1d1d !important; }
@@ -630,6 +639,9 @@ select.input {
 .dark .text-red-700 { color: #fca5a5 !important; }
 .dark .text-red-600 { color: #fca5a5 !important; }
 .dark .text-green-600 { color: #6ee7b7 !important; }
+.dark .text-green-300 { color: #6ee7b7 !important; }
+.dark .text-yellow-800 { color: #fcd34d !important; }
+.dark .text-amber-800 { color: #fcd34d !important; }
 .dark .text-amber-700 { color: #fcd34d !important; }
 
 /* App classes */
@@ -669,6 +681,180 @@ select.input {
 .dark .nav-link { color: #d1d5db; }
 .dark #chart-tooltip { background-color: #f3f4f6 !important; color: #111827; }
 
+/* ================= Animations ================= */
+@keyframes slideInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideInDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+@keyframes pulseDot {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.4; }
+}
+
+/* Page content fades in on load */
+.fade-in-content {
+    animation: fadeIn 0.35s ease both;
+}
+
+/* Modal slide-in */
+.modal-overlay {
+    animation: fadeIn 0.2s ease both;
+}
+.modal-content {
+    animation: slideInDown 0.25s ease both;
+}
+
+/* Toast slide-up */
+.toast {
+    animation: slideInUp 0.25s ease both;
+}
+
+/* Subtle pulse for live status dots */
+.status-dot.pulse {
+    animation: pulseDot 2s infinite;
+}
+
+/* ================= Dropdown menu ================= */
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+.dropdown-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 160px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    z-index: 40;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-6px);
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+}
+.dropdown.open .dropdown-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+.dropdown-menu a,
+.dropdown-menu button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    color: #374151;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+}
+.dropdown-menu a:hover,
+.dropdown-menu button:hover {
+    background-color: #f3f4f6;
+    color: #111827;
+}
+.dropdown-menu.divided > * + * {
+    border-top: 1px solid #e5e7eb;
+}
+
+/* Dark mode dropdown */
+.dark .dropdown-menu {
+    background-color: #1f2937;
+    border-color: #374151;
+}
+.dark .dropdown-menu a,
+.dark .dropdown-menu button {
+    color: #e5e7eb;
+}
+.dark .dropdown-menu a:hover,
+.dark .dropdown-menu button:hover {
+    background-color: #374151;
+    color: #f9fafb;
+}
+.dark .dropdown-menu.divided > * + * {
+    border-top-color: #374151;
+}
+
+/* ================= Centered dashboard section ================= */
+.dashboard-center {
+    max-width: 800px;
+    margin: 0 auto;
+}
+.dashboard-center .grid > .card {
+    min-height: 260px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ================= Tidy polish ================= */
+/* Stronger empty states */
+.empty-state {
+    padding: 4rem 1.5rem;
+}
+.empty-state-icon {
+    width: 3.5rem;
+    height: 3.5rem;
+    margin: 0 auto 1.25rem;
+    color: #9ca3af;
+}
+
+/* Button focus ring for keyboard navigation */
+.btn:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+}
+.btn:focus-visible:not(:disabled) {
+    z-index: 1;
+}
+
+/* Disabled state consistency */
+.btn:disabled,
+.btn[disabled] {
+    opacity: 0.55;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Table readability: subtle zebra + sticky header feel */
+.table tbody tr:nth-child(even) {
+    background-color: #fafbfc;
+}
+.dark .table tbody tr:nth-child(even) {
+    background-color: #1a1c24;
+}
+
+/* Form label emphasis */
+.form-label {
+    font-weight: 600;
+}
+
+/* Cards with actions align header actions to the right */
+.card-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+/* Status badge slightly larger for readability */
+.status-badge {
+    font-size: 0.875rem;
+    padding: 0.3rem 0.75rem;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .container {
@@ -686,3 +872,85 @@ select.input {
         font-size: 0.8125rem;
     }
 }
+
+/* ================= Premium polish ================= */
+/* Soft custom shadows for cards — lighter than default Tailwind shadows */
+.card {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05);
+  transition: box-shadow 200ms ease, transform 150ms ease;
+}
+.card:hover {
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.06);
+}
+.dark .card { background: #1f2937; border-color: #374151; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
+.dark .card:hover { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3); }
+
+/* Premium button micro-interactions */
+.btn {
+  border-radius: 0.5rem;
+  font-weight: 500;
+  transition: all 150ms ease-out;
+}
+.btn:not(:disabled):hover { transform: translateY(-1px); }
+.btn:not(:disabled):active { transform: translateY(0); }
+
+/* Tabs — active state gets a bottom accent, inactive is muted */
+.tab {
+  color: #9ca3af;
+  border-bottom: 2px solid transparent;
+  padding-bottom: 0.5rem;
+  transition: color 150ms, border-color 150ms;
+}
+.tab:hover { color: #374151; }
+.tab.active { color: #2563eb; border-bottom-color: #2563eb; font-weight: 600; }
+
+/* Section labels — small uppercase muted labels */
+.section-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+}
+
+/* Truncate helper for long model/run IDs */
+.truncate-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Keyboard key styling */
+.kbd {
+  display: inline-block;
+  padding: 0.125rem 0.375rem;
+  font-size: 0.75rem;
+  font-family: 'JetBrains Mono', monospace;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 0.25rem;
+  color: #111827;
+}
+.dark .kbd {
+  background: #374151;
+  border-color: #4b5563;
+  color: #e5e7eb;
+}
+
+/* Empty states — more prominent */
+.empty-state {
+  padding: 5rem 1.5rem;
+  text-align: center;
+}
+.empty-state-icon {
+  width: 4rem;
+  height: 4rem;
+  margin: 0 auto 1.5rem;
+  color: #9ca3af;
+}
+
+/* Dark mode overrides for premium cards/shadows */
+.dark .btn:not(:disabled):hover { transform: translateY(-1px); }

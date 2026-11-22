@@ -125,10 +125,17 @@ export const Charts = {
             xKey, yKey, xLabel, yLabel, colorKey, pointRadius = 6,
         } = options;
 
-        // Normalize color values for gradient
-        const colorValues = data.map(d => d[colorKey]).filter(v => v != null);
-        const minColor = Math.min(...colorValues);
-        const maxColor = Math.max(...colorValues);
+        // Normalize color values for gradient. Guard against empty or
+        // all-null color data so the chart never renders NaN colors.
+        const colorValues = data.map(d => d[colorKey]).filter(v => v != null && Number.isFinite(v));
+        let minColor, maxColor, useGradient;
+        if (colorValues.length > 0) {
+            minColor = Math.min(...colorValues);
+            maxColor = Math.max(...colorValues);
+            useGradient = minColor !== maxColor;
+        } else {
+            useGradient = false;
+        }
 
         const datasets = [{
             label: '',
@@ -138,8 +145,12 @@ export const Charts = {
                 config: d,
                 colorValue: d[colorKey],
             })),
-            backgroundColor: data.map(d => this.getColorForValue(d[colorKey], minColor, maxColor)),
-            borderColor: data.map(d => this.getColorForValue(d[colorKey], minColor, maxColor, 1)),
+            backgroundColor: data.map(d => useGradient
+                ? this.getColorForValue(d[colorKey], minColor, maxColor)
+                : this.colors.primary),
+            borderColor: data.map(d => useGradient
+                ? this.getColorForValue(d[colorKey], minColor, maxColor, 1)
+                : this.colors.primary),
             pointRadius,
             pointHoverRadius: pointRadius + 2,
         }];
@@ -237,7 +248,7 @@ export const Charts = {
             { label: 'Batch', value: config.eval_batch_size || 'Auto' },
             { label: 'Gen tok/s', value: config.generation_tok_s ? config.generation_tok_s.toFixed(1) : '—' },
             { label: 'VRAM', value: config.peak_vram_gb ? `${config.peak_vram_gb.toFixed(1)} GB` : '—' },
-            { label: 'Quality', value: config.quality_score ? config.quality_score.toFixed(3) : '—' },
+            { label: 'Quality', value: config.quality ? config.quality.toFixed(3) : '—' },
         ];
 
         tooltip.innerHTML = `

@@ -22,6 +22,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from lm_optimizer.scoring.version import SCORING_VERSION
+
 DEFAULT_HISTORY = Path("results") / "sandbox_runs.jsonl"
 
 #: Root that workdirs must live under before they may be deleted.
@@ -116,6 +118,7 @@ def fingerprint(
     prompt: str,
     settings: dict[str, Any],
     origin: str = "local",
+    task_version: str = "",
 ) -> str:
     """Stable id for one identical test (model + task + prompt + settings)."""
     payload = {
@@ -123,6 +126,7 @@ def fingerprint(
         "task": task,
         "origin": "frontier" if str(origin).lower() == "frontier" else "local",
         "prompt_sha": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
+        "task_version": task_version,
         "settings": {key: (settings or {}).get(key) for key in SETTINGS_KEYS},
     }
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
@@ -278,6 +282,16 @@ def record_run(
     run_key = None
     prompt_sha = ""
     clean_settings = None
+    # First-pass score: the score of attempt 0 (before any repair). Stored
+    # next to final_score/penalized_score so scoreboards can report the
+    # headline metric without conflating repaired runs with first-try ones.
+    first_pass_score = None
+    if measured:
+        attempts = result.get("attempts") or []
+        for attempt in attempts:
+            if attempt.get("attempt") == 0:
+                first_pass_score = attempt.get("score")
+                break
     if prompt is not None and settings is not None:
         clean_settings = {key: (settings or {}).get(key) for key in SETTINGS_KEYS}
         prompt_sha = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
@@ -293,6 +307,8 @@ def record_run(
         "repair_count": result.get("repair_count", 0),
         "final_score": result.get("final_score") if measured else None,
         "penalized_score": result.get("penalized_score") if measured else None,
+        "first_pass_score": first_pass_score,
+        "scoring_version": SCORING_VERSION,
         "artifacts": list(result.get("artifacts") or []),
         "critical_failures": list(result.get("critical_failures") or []),
         "error": str(result.get("error") or "")[:300],
@@ -316,6 +332,19 @@ def record_run(
             # History maintenance must never fail a run that succeeded.
             record["superseded"] = 0
     return record
+
+
+def scoring_version_of(row: dict[str, Any]) -> int:
+    """Classify a history row's scoring version.
+
+    Rows written before the version stamp existed carry no ``scoring_version``
+    field and are legacy: ``scoring_version = 0``. Legacy and versioned rows
+    must never be averaged together.
+    """
+    try:
+        return int(row.get("scoring_version", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _group_key(row: dict[str, Any]) -> tuple:

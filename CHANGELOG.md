@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed — WebUI review (31 defects)
+- **Results**: no winner is inferred from `score || 0`; a validated winner requires `best_config_id` plus a measured composite. Running/paused runs no longer render as "unsuccessful".
+- **Results**: prompt, thinking, model output and judge verdicts are HTML-escaped (XSS fix).
+- **Results**: comparison rows parse `.3f`-style formats correctly; a shared `fmt()` distinguishes `0` from "not measured"; missing metrics show `—`, never `undefined tok/s`.
+- **Results**: score breakdown ("why this won") shows components, weights, excluded measurements, scoring version and the run-relative caveat; first-pass-aware sandbox history columns added.
+- **Results**: config shape is read from `c.config.*` consistently (table, charts, Pareto cards, tooltips); chart Quality tooltip reads `quality`; chart buttons bind once.
+- **Results**: Ask Judge reads `data.models`, copy-JSON has a real listener, polling stops on 404/after a bounded number of attempts, per-model winners accept an object or a list, Local backend never keeps a cloud model.
+- **History**: listeners bind once; filters and refresh re-render and re-attach every table/bulk handler; `const rel` reassignment crash fixed; sandbox detail uses `run-id` and a valid `<table>`; re-run carries the original advanced settings.
+- **Settings**: single event binding, API token no longer echoed into the page, numeric-looking tokens stay strings, hardware overrides prefill and can be cleared, unimplemented reset/export/import are disabled with a reason.
+- **Dashboard/WebSocket**: `wss://` on HTTPS, intentional disconnect no longer reconnects, `r` no longer blocks Ctrl/Cmd+R, history/settings use real navigation, beforeunload skips the intentional results redirect, optimize-all waits for a terminal status and carries advanced settings.
+- **Model detail**: reads `?optimize=`, TTFT falls back to `avg_ttft_ms`, correct median for even samples, error state with retry instead of a permanent "Loading…".
+- **Sandbox**: previews use `sandbox="allow-scripts"` (no same-origin), duel polling reports elapsed time and tolerates transient errors, A and B must differ.
+- **Global**: unified navigation on all pages with automatic active state, mobile hamburger menu, pinned CDN versions, missing dark-mode colour classes, shared HTML escaping, unclosed table markup fixed.
+
 ### Changed
 - **One web implementation**: removed the deprecated `ui/web.py` plus its legacy `optimizer/engine.py`, `storage/checkpoint.py` and `benchmark/runner.py` stack. `api/main.py` is the only web app and `services/optimizer.py` the only orchestrator; the two import cycles they caused are gone.
 - **No GPUtil dependency**: GPU discovery now uses `nvidia-smi` (and `rocm-smi` on Linux); the unmaintained GPUtil package was removed from `pyproject.toml`.
@@ -14,6 +28,32 @@ All notable changes to this project will be documented in this file.
 - **Test markers**: root `conftest.py` marks `lm_optimizer/tests/` as `unit` and `tests/` as `integration`, so `pytest -m unit` / `-m integration` split the 1,500+ suite reliably.
 
 ### Added
+- **Scoring version stamp** (WP-0): new `lm_optimizer/scoring/version.py`
+  `SCORING_VERSION = 5`, stamped onto every new `sandbox_runs.jsonl` row,
+  `quality_json.details` and `runs.benchmark_params_json`. Legacy rows without
+  the field are classed `scoring_version = 0` and must never be averaged with
+  versioned rows. Add `tests/test_scoring_version.py`.
+- **Repair loop no longer leaks the answer** (WP-1): `SandboxCheck.hint` and
+  generic feedback; vision tasks get `max_repair_attempts=0`; `first_pass_score`
+  stored alongside `final_score`/`penalized_score`; answer-bearing check names
+  renamed to neutral ids (e.g. `counts_twelve` -> `counts_target`). Add
+  `tests/test_repair_feedback_no_leak.py`.
+- **Reasoning correctness** (WP-2): `medium_reasoning` now grades the actual
+  answer (extracted from the final sentence) instead of word count + keyword
+  hunt. Added `expected_answer` to `BenchmarkPrompt`/`BenchmarkCase`, 4 new
+  reasoning items, `answer_correct` critical check, think-tag stripping. Add
+  `tests/test_quality_reasoning_correctness.py`.
+- **Fill-ramp ladder** (context explorer Phase 2/3): new `fill_ramp.py` with
+  `fill_ramp_ratios`, `max_usable_fill`, `ramp_stopped_reason` for gradual
+  lorem-ipsum fill testing. Add `tests/test_fill_ramp.py`.
+- **Coding task grades the code** (WP-3): the prompt no longer demands
+  impossible O(1) extra space; `code_runner` writes `solution.py` and loads it
+  from a separate `runner.py`, so `from __future__` and module docstrings work;
+  hidden 200k-element performance cases reject O(n^2); syntax is checked with
+  `ast.parse`; the module shape (imports, docstring, one function) is an AST
+  check. Removed the `has_complexity`/`has_sort` keyword hunts and the dead
+  `stop_sequences` (`stop` is rejected by the server). `SCORING_VERSION` -> 6.
+  Add `tests/test_code_runner_hidden.py`.
 - **Context-speed ladder**: every speed run now ends with a doubling ladder (2k, 4k, 8k, 16k, 32k, 64k, 128k, 256k, clamped to the model limit) measured on the fastest config. Each rung is a real load + short speed probe; the first load failure ends the ladder. Results persist on the winner and in phase params, and resume continues from the last measured rung. Skip explicitly with `--skip-phases context_speed`.
 - **Per-model depth questions**: `optimize` and `auto` ask once per selected model (quick / standard / full / benchmark / skip) instead of a chain of yes/no prompts. `auto` also accepts `--model-detail pattern=level` for unattended runs and `--no-ask-tests`.
 - **User speed threshold for max context**: `--min-context-speed` (Phase B) stops the optional absolute-maximum context search when a rung falls below the given tok/s or fails to load; prompted on a TTY when omitted.

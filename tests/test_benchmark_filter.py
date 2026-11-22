@@ -9,13 +9,17 @@ from lm_optimizer.benchmark.suite import (
 
 
 def test_get_benchmark_suite_returns_all():
-    """Test that get_benchmark_suite returns all 5 prompts."""
+    """Test that get_benchmark_suite returns the 5 base prompts + 4 reasoning items."""
     suite = get_benchmark_suite()
-    assert len(suite) == 5
+    assert len(suite) == 9
     names = {p.name for p in suite}
     assert names == {
         "short_instruction",
         "medium_reasoning",
+        "reasoning_word_problem",
+        "reasoning_ordering",
+        "reasoning_combinatorics",
+        "reasoning_unit_conversion",
         "long_context",
         "coding_task",
         "structured_output",
@@ -40,13 +44,13 @@ def test_create_benchmark_cases_multiple_categories():
 def test_create_benchmark_cases_empty_category_returns_all():
     """Test that empty category set returns all tests."""
     cases = create_benchmark_cases(4096, include_categories=set())
-    assert len(cases) == 5
+    assert len(cases) == 9
 
 
 def test_create_benchmark_cases_none_category_returns_all():
     """Test that None category returns all tests (backward compat)."""
     cases = create_benchmark_cases(4096, include_categories=None)
-    assert len(cases) == 5
+    assert len(cases) == 9
 
 
 def test_create_benchmark_cases_invalid_category_returns_empty():
@@ -63,19 +67,15 @@ def test_reasoning_sweep_creates_5_variants_per_base():
         include_categories={"reasoning"},
         reasoning_sweep=True,
     )
-    # Should have 5 variants of medium_reasoning
-    assert len(cases) == 5
+    # 5 reasoning items, each at 5 temperature levels.
+    assert len(cases) == 25
     # All should be reasoning category
     assert all(c.category == "reasoning" for c in cases)
-    # Names should include reasoning level
+    # Names should include reasoning level for every base item.
+    levels = ("off", "low", "medium", "high", "xhigh")
+    bases = {p.name for p in get_benchmark_suite() if p.category == "reasoning"}
     names = {c.name for c in cases}
-    expected = {
-        "medium_reasoning_off",
-        "medium_reasoning_low",
-        "medium_reasoning_medium",
-        "medium_reasoning_high",
-        "medium_reasoning_xhigh",
-    }
+    expected = {f"{base}_{level}" for base in bases for level in levels}
     assert names == expected
 
 
@@ -91,16 +91,12 @@ def test_reasoning_sweep_replaces_battery():
         include_categories=None,  # ignored: sweep restricts to reasoning
         reasoning_sweep=True,
     )
-    # 5 temperature levels (off/low/medium/high/xhigh) of the reasoning test.
-    assert len(cases) == 5
+    # 5 temperature levels (off/low/medium/high/xhigh) of every reasoning test.
+    assert len(cases) == 25
+    levels = ("off", "low", "medium", "high", "xhigh")
+    bases = {p.name for p in get_benchmark_suite() if p.category == "reasoning"}
     names = {c.name for c in cases}
-    expected = {
-        "medium_reasoning_off",
-        "medium_reasoning_low",
-        "medium_reasoning_medium",
-        "medium_reasoning_high",
-        "medium_reasoning_xhigh",
-    }
+    expected = {f"{base}_{level}" for base in bases for level in levels}
     assert names == expected
     assert all(c.category == "reasoning" for c in cases)
 

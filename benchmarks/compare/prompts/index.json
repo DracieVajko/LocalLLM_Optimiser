@@ -2,7 +2,12 @@
   "email_write": {
     "artifact": "email.txt",
     "prompt_file": "email_write.txt",
-    "title": "Professional follow-up email"
+    "title": "Professional follow-up email (multi-part)"
+  },
+  "language_puzzle": {
+    "artifact": "language.txt",
+    "prompt_file": "language_puzzle.txt",
+    "title": "Multi-language word puzzles (declension, tenses, morphology)"
   },
   "minecraft_world": {
     "artifact": "index.html",

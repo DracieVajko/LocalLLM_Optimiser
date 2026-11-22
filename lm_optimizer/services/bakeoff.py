@@ -195,6 +195,15 @@ async def _run_task(
     threads: str | int | None = None,
 ) -> dict:
     definition = SANDBOX_TASKS[task_id]
+
+    import hashlib as _hashlib
+
+    def _task_version(tid: str) -> str:
+        d = SANDBOX_TASKS[tid]
+        h = _hashlib.sha256(
+            (d.prompt + str([(c.name, c.kind, c.value, c.weight, c.critical, c.negate) for c in d.checks])).encode()
+        ).hexdigest()[:12]
+        return h
     settings = task_settings(
         thinking=thinking,
         reasoning_effort=reasoning_effort,
@@ -205,7 +214,7 @@ async def _run_task(
         kv_quant=kv_quant,
         threads=threads,
     )
-    run_key = fingerprint(model, task_id, definition.prompt, settings, origin)
+    run_key = fingerprint(model, task_id, definition.prompt, settings, origin, task_version=_task_version(task_id))
     # The model must receive exactly the reasoning value the fingerprint assumes.
     reasoning_value = settings["reasoning_effort"] if settings["thinking"] else "off"
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -302,7 +311,7 @@ async def _run_task(
         "ts": datetime.now().isoformat(timespec="seconds"),
         "model": model,
         "task": task_id,
-        "thinking": thinking,
+        "task_version": _task_version(task_id),
         "context": None,
         "run_key": run_key,
         "settings": settings,
@@ -381,6 +390,40 @@ async def _run_model(
         print(f"[load] ok {lease.load_s:.1f}s{suffix}", flush=True)
         try:
             for task_id in tasks:
+                # Vision tasks are not applicable to models without a vision
+                # projector (mmproj-*.gguf). Record an explicit row instead of
+                # silently skipping, so coverage and means stay honest.
+                if task_id.startswith("vision_"):
+                    try:
+                        from lm_optimizer.services.model_eligibility import has_vision
+
+                        if not has_vision(lease.model):
+                            row = {
+                                "ts": datetime.now().isoformat(timespec="seconds"),
+                                "model": lease.model,
+                                "task": task_id,
+                                "task_version": _task_version(task_id),
+                                "thinking": thinking,
+                                "context": context,
+                                "status": "not_applicable",
+                                "final_score": None,
+                                "final_success": False,
+                                "gen_s": 0.0,
+                                "tok_s": 0.0,
+                                "thinking_chars": 0,
+                                "tokens": 0,
+                                "total_s": 0.0,
+                                "load_s": load_s,
+                                "error": "model has no vision projector (mmproj)",
+                            }
+                            rows.append(row)
+                            print(
+                                f"[task] {task_id}: not_applicable (no vision projector)",
+                                flush=True,
+                            )
+                            continue
+                    except Exception as exc:  # noqa: BLE001
+                        print(f"[task] eligibility check failed: {exc}", flush=True)
                 print(f"[task] {lease.model} :: {task_id}", flush=True)
                 row = await _run_task(
                     client,
@@ -430,6 +473,8 @@ def _write_summary(rows: list[dict], root: Path) -> Path:
             score_text = "-" if score is None else score
             if row.get("status") == "not_measured":
                 score_text = "not measured"
+            if row.get("status") == "not_applicable":
+                score_text = "n/a (no vision)"
             lines.append(
                 f"| {model} | {row.get('task')} | {score_text} | "
                 f"{row.get('final_success')} | {row.get('load_s')} | "
@@ -439,21 +484,85 @@ def _write_summary(rows: list[dict], root: Path) -> Path:
     lines.append("")
     lines.append("## Model totals (load once + all tasks)")
     lines.append("")
-    lines.append("| model | load_s | gen_s | total_s | tokens | tok/s | mean_score | scored |")
-    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
+    lines.append("| model | load_s | gen_s | total_s | tokens | tok/s | mean_score | scored | applicable |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
     for model, model_rows in by_model.items():
+        applicable_rows = [r for r in model_rows if r.get("status") != "not_applicable"]
+        # Experimental tasks (vision_*) are reported separately and excluded
+        # from the primary mean, per R4-5 Option B.
+        primary_rows = [
+            r for r in applicable_rows
+            if not getattr(
+                SANDBOX_TASKS.get(r.get("task", "")), "experimental", False
+            )
+        ]
+        experimental_rows = [
+            r for r in applicable_rows
+            if getattr(
+                SANDBOX_TASKS.get(r.get("task", "")), "experimental", False
+            )
+        ]
         loads = [r.get("load_s") for r in model_rows if r.get("load_s") is not None]
         load_s = loads[0] if loads else None
-        gen_s = round(sum(r.get("gen_s") or 0.0 for r in model_rows), 1)
-        tokens = sum(r.get("tokens") or 0 for r in model_rows)
-        scores = [r["final_score"] for r in model_rows if r.get("final_score") is not None]
+        gen_s = round(sum(r.get("gen_s") or 0.0 for r in primary_rows), 1)
+        tokens = sum(r.get("tokens") or 0 for r in primary_rows)
+        scores = [r["final_score"] for r in primary_rows if r.get("final_score") is not None]
         toks = round(tokens / gen_s, 2) if gen_s else 0.0
         mean = round(statistics.fmean(scores), 3) if scores else None
         total = round((load_s or 0.0) + gen_s, 1)
         lines.append(
             f"| {model} | {load_s if load_s is not None else 'n/a'} | {gen_s} | {total} | "
-            f"{tokens} | {toks} | {mean if mean is not None else '-'} | {len(scores)}/{len(model_rows)} |"
+            f"{tokens} | {toks} | {mean if mean is not None else '-'} | "
+            f"{len(scores)}/{len(primary_rows)} | {len(applicable_rows)}/{len(model_rows)} |"
         )
+    lines.append("")
+    lines.append("")
+    # Experimental (vision) block — separate from primary mean.
+    exp_models = {r.get("model") for r in sandbox_rows if getattr(SANDBOX_TASKS.get(r.get("task", "")), "experimental", False)}
+    if exp_models:
+        lines.append("## Experimental (vision) — excluded from primary mean")
+        lines.append("")
+        lines.append("| model | vision tasks | passed | mean score |")
+        lines.append("|---|---:|---:|---:|")
+        for model in sorted(exp_models):
+            exp_rows = [r for r in (latest.get((model, t)) for t in tasks) if r and getattr(SANDBOX_TASKS.get(r.get("task", "")), "experimental", False)]
+            if not exp_rows:
+                continue
+            passed = sum(1 for r in exp_rows if r.get("final_success"))
+            scores = [r["final_score"] for r in exp_rows if r.get("final_score") is not None]
+            mean = round(statistics.fmean(scores), 3) if scores else None
+            lines.append(f"| {model} | {len(exp_rows)} | {passed} | {mean if mean is not None else '-'} |")
+        lines.append("")
+
+    lines.append("## Fit (per model)")
+    lines.append("")
+    lines.append("| model | tok/s | vision | text score | vision score |")
+    lines.append("|---|---:|---|---:|---:|")
+    for model, model_rows in by_model.items():
+        applicable = [r for r in model_rows if r.get("status") != "not_applicable"]
+        vision_rows = [r for r in applicable if str(r.get("task", "")).startswith("vision_")]
+        text_rows = [r for r in applicable if not str(r.get("task", "")).startswith("vision_")]
+        vision_scores = [r["final_score"] for r in vision_rows if r.get("final_score") is not None]
+        text_scores = [r["final_score"] for r in text_rows if r.get("final_score") is not None]
+        vision_mean = round(statistics.fmean(vision_scores), 3) if vision_scores else None
+        text_mean = round(statistics.fmean(text_scores), 3) if text_scores else None
+        gen_s = round(sum(r.get("gen_s") or 0.0 for r in applicable), 1)
+        tokens = sum(r.get("tokens") or 0 for r in applicable)
+        toks = round(tokens / gen_s, 2) if gen_s else 0.0
+        vision_flag = "yes" if any(r.get("status") != "not_applicable" and str(r.get("task", "")).startswith("vision_") for r in model_rows) else "no"
+        # refine vision flag using model_eligibility
+        try:
+            from lm_optimizer.services.model_eligibility import has_vision
+
+            vision_flag = "yes" if has_vision(model) else "no"
+        except Exception:  # noqa: BLE001
+            pass
+        lines.append(
+            f"| {model} | {toks} | {vision_flag} | "
+            f"{text_mean if text_mean is not None else '-'} | "
+            f"{vision_mean if vision_mean is not None else '-'} |"
+        )
+    lines.append("")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
 
@@ -517,6 +626,25 @@ async def run_bakeoff(
         all_rows.extend(rows)
     path = _write_summary(all_rows, root)
     print(f"\nsummary: {path}")
+
+    # Keep the leaderboard current: every completed sweep regenerates it.
+    try:
+        import importlib.util
+
+        sb_path = Path(__file__).resolve().parents[2] / "tools" / "generate_scoreboard.py"
+        if sb_path.exists():
+            spec = importlib.util.spec_from_file_location("generate_scoreboard", sb_path)
+            if spec and spec.loader:
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                sb_text = module.generate_scoreboard()
+                (Path("results") / "SCOREBOARD_AUTO.md").write_text(
+                    sb_text, encoding="utf-8"
+                )
+                print(f"scoreboard: results/SCOREBOARD_AUTO.md")
+    except Exception as exc:  # noqa: BLE001 - a failed report never fails a sweep
+        print(f"scoreboard refresh skipped: {exc}")
+
     return 0
 
 

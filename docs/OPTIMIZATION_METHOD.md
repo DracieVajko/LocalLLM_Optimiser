@@ -189,8 +189,15 @@ temperature is a per-test measurement control, never a tuned parameter):
 | 1 | `short_instruction` | instruction | 3–4 sentence explanation | hash table howto | 256 | 0.3 | 0.3 / 0.3 | keywords, completeness, truncation |
 | 2 | `medium_reasoning` | reasoning | sequence 2,6,12,20… → next + steps | math chain | 768 | 0.3 | 0.1 / 0.3 | final answer present, structure |
 | 3 | `long_context` | context | read document, summarize + trends | renewable-energy doc QA | 1024 | 0.3 | 0.3 / 0.9 | keyword coverage, no truncation |
-| 4 | `coding_task` | coding | `find_duplicates` O(n)/O(1), sorted | code spec | 768 | 0.1 | 0.1 / 0.1 | code structure, signature, order |
+| 4 | `coding_task` | coding | `find_duplicates` O(n) time (extra memory allowed), sorted | code spec | 768 | 0.1 | 0.1 / 0.1 | AST parse + shape, hidden behavioural cases, 200k-element performance cases |
 | 5 | `structured_output` | format | exact JSON schema, realistic data | strict JSON | 256 | 0.0 | 0.0 / 0.0 | JSON validity, keys, types |
+
+`coding_task` runs the model's function in a subprocess: `solution.py` is
+loaded by a separate `runner.py` with `importlib`, so `from __future__` and
+module docstrings work. Correctness cases run first, then two 200,000-element
+performance cases with a 2 s budget; an O(n²) implementation fails. This is
+crash/hang isolation (timeout, minimal environment, temp cwd), **not a
+security sandbox** - the model code runs with the user's rights.
 
 Per test the report records: tokens in/out, generation + prompt tok/s,
 estimated TTFT, temperature actually used, per-test quality checks, and the

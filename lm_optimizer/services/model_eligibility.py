@@ -298,3 +298,62 @@ def partition_models(
             skipped.append((m, verdict))
 
     return eligible, skipped, summary
+
+# --- Vision capability detection (added for R4-4) ---
+
+
+def _vision_tokens(s: str) -> list[str]:
+    import re
+
+    return re.findall(r"[a-z0-9]+", s.lower())
+
+
+def _vision_model_dir(model_id: str):
+    from pathlib import Path
+
+    from lm_optimizer.services.lmstudio_defaults import _model_data, default_home
+
+    home = default_home()
+    models_root = home / "models"
+    candidates = []
+    try:
+        entries = _model_data(home)
+    except Exception:  # noqa: BLE001
+        entries = []
+    needle = model_id.split("/")[-1].split("@")[0].lower()
+    model_tokens = _vision_tokens(needle)
+    for concrete, meta in entries:
+        ui = str(meta.get("uiIdentifier") or "")
+        ui_tokens = _vision_tokens(ui) if ui else []
+        concrete_tokens = _vision_tokens(concrete)
+        if model_tokens and all(
+            t in ui_tokens or t in concrete_tokens for t in model_tokens
+        ):
+            candidate = models_root / concrete
+            if candidate.is_file():
+                candidates.append(candidate.parent)
+            elif candidate.is_dir():
+                candidates.append(candidate)
+    if not candidates and models_root.is_dir():
+        for gguf in models_root.rglob("*.gguf"):
+            path_tokens = _vision_tokens(str(gguf))
+            if model_tokens and all(t in path_tokens for t in model_tokens):
+                candidates.append(gguf.parent)
+    for c in candidates:
+        if any(c.glob("mmproj*.gguf")):
+            return c
+    for c in candidates:
+        if any(c.glob("*.gguf")):
+            return c
+    return candidates[0] if candidates else None
+
+
+def has_vision(model_id: str) -> bool:
+    d = _vision_model_dir(model_id)
+    if d is None:
+        return False
+    return any(d.glob("mmproj*.gguf"))
+
+
+def model_capabilities(model_id: str) -> dict[str, bool]:
+    return {"vision": has_vision(model_id)}

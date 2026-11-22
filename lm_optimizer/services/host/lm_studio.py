@@ -17,6 +17,7 @@ Live-verified contract (2026-09-19, LM Studio bundled server, `lms` commit 69d94
 """
 
 import asyncio
+import os
 import time
 import uuid
 from dataclasses import dataclass
@@ -424,6 +425,7 @@ class LMStudioClient:
                 model_type=item.get("type"),
                 key=lm_key,
                 selected_variant=selected_variant,
+                file_hash=self._compute_file_hash(item) if os.environ.get("COMPUTE_MODEL_HASHES") else None,
             )
             models.append(model)
 
@@ -453,25 +455,39 @@ class LMStudioClient:
         }
         return instances
 
-    def _detect_moe(self, item: dict) -> bool:
-        """Detect if model is Mixture of Experts."""
-        arch = (item.get("architecture") or "").lower()
-        model_type = (item.get("type") or "").lower()
-        name = (item.get("display_name") or item.get("key") or "").lower()
+    def _compute_file_hash(self, item: dict) -> str | None:
+        """Compute SHA-256 of the model's GGUF file (best-effort, may be slow)."""
+        import hashlib
+        from pathlib import Path
 
-        moe_indicators = [
-            "moe",
-            "mixtral",
-            "grok",
-            "deepseek-moe",
-            "qwen-moe",
-            "phi-moe",
-            "gpt-oss",
-            "gpt_oss",
-        ]
-        return any(
-            indicator in arch or indicator in model_type or indicator in name
-            for indicator in moe_indicators
+        # Try to find the concrete file via lmstudio_defaults
+        try:
+            from lm_optimizer.services.lmstudio_defaults import _model_data, default_home
+
+            home = default_home()
+            models_root = home / "models"
+            ui = str(item.get("key") or item.get("id") or "")
+            for concrete, meta in _model_data(home):
+                if str(meta.get("uiIdentifier") or "") == ui or concrete == ui:
+                    candidate = models_root / concrete
+                    if candidate.is_file():
+                        h = hashlib.sha256()
+                        with candidate.open("rb") as f:
+                            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                                h.update(chunk)
+                        return h.hexdigest()
+        except Exception:  # noqa: BLE001
+            pass
+        return None
+    def _detect_moe(self, item: dict) -> bool:
+        """Detect if model is Mixture of Experts (shared resolver)."""
+        from lm_optimizer.services.moe_detection import is_moe_model
+
+        return is_moe_model(
+            architecture=item.get("architecture"),
+            model_type=item.get("type"),
+            name=item.get("display_name") or item.get("key"),
+            model_id=item.get("key") or item.get("id"),
         )
 
     async def get_model(self, model_id: str) -> ModelIdentity | None:

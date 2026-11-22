@@ -14,7 +14,16 @@ python tools/compare_models.py --provider chatgpt --task email_write --clipboard
 Prompt:
 
 ```text
-Write a concise professional follow-up email to a client after a project kickoff. Include a Subject line, a greeting, a 2-3 sentence body with the next step and a concrete deadline, and a closing. Output only the email, with no placeholders such as [name].
+You are an executive assistant. A client meeting just happened. Here is the meeting transcript:
+
+Alice (client): 'We need the new dashboard by end of Q3. The current version is too slow and the export feature is broken.'
+Bob (PM): 'Understood. We'll prioritize the dashboard and fix the export. Can we have a demo by next Friday?'
+Alice: 'Yes, that works. Also, please send us the updated timeline.'
+Bob: 'Will do. I'll send it by Wednesday.'
+
+TASK 1: Write a 3-5 sentence summary of the meeting (key decisions and next steps). Output it under a heading '## Summary'.
+
+TASK 2: Write a professional follow-up email to Alice based on the summary. Include a Subject line, a greeting, a body with the next step and a concrete deadline, and a closing. Output it under a heading '## Email'. Output only the two sections, no extra text.
 ```
 
 ## minecraft_world
@@ -113,6 +122,37 @@ python tools/compare_models.py --provider chatgpt --task blender_city --clipboar
 Prompt:
 
 ```text
+Target environment: Blender 5.3, the `bpy` Python API, run headless as
+`blender --background --python build_scene.py`. Blender 5.x notes that
+matter here: `bpy.context.scene.collection` is read-only, so create a
+new collection and link it; the camera op is
+`bpy.ops.object.camera_add`, the light op `bpy.ops.object.light_add`,
+and saving is `bpy.ops.wm.save_as_mainfile(filepath='scene.blend')`.
+Do NOT use pre-5.x idioms (e.g. assigning `scene.collection.name`).
+
+Working skeleton (verified on Blender 5.3 - extend it, do not replace
+the collection handling):
+```python
+import bpy
+for o in list(bpy.data.objects):
+    bpy.data.objects.remove(o, do_unlink=True)
+root = bpy.data.collections.new('City')
+bpy.context.scene.collection.children.link(root)
+def cube(name, loc, scale, coll):
+    bpy.ops.mesh.primitive_cube_add(size=1, location=loc)
+    ob = bpy.context.object
+    ob.name = name
+    ob.scale = scale
+    for c in list(ob.users_collection):
+        c.objects.unlink(ob)
+    coll.objects.link(ob)
+    return ob
+bpy.ops.object.camera_add(location=(30, -30, 25))
+bpy.context.scene.camera = bpy.context.object
+bpy.ops.object.light_add(type='SUN', location=(10, 10, 30))
+bpy.ops.wm.save_as_mainfile(filepath='scene.blend')
+```
+
 Build a dense low-poly city in Blender from the map excerpt below. Each character is one 4 m cell and the grid is 12 x 12 cells.
 
 MAP (rows top to bottom):
@@ -140,6 +180,19 @@ Requirements:
 - A sun light and one camera framing the city from above at an angle.
 - Give the scene and the main collections clear names.
 - Save the scene as scene.blend. Do NOT render anything: no preview.png, no frames directory, no images of any kind, and do not call bpy.ops.render.
+
+Blender API reference (use EXACTLY these calls, do not invent new ones):
+- Add a mesh: bpy.ops.mesh.primitive_cube_add(size=1, location=(x,y,z))
+- Add a plane: bpy.ops.mesh.primitive_plane_add(size=N, location=(x,y,z))
+- Add a cylinder: bpy.ops.mesh.primitive_cylinder_add(radius=R, depth=D, location=(x,y,z))
+- Add a camera: bpy.ops.object.camera_add(location=(x,y,z))
+- Add a sun light: bpy.ops.object.light_add(type='SUN', location=(x,y,z))
+- Select all: bpy.ops.object.select_all(action='SELECT')
+- Delete selected: bpy.ops.object.delete()
+- Save: bpy.ops.wm.save_as_mainfile(filepath='scene.blend')
+- Set object name: obj.name = 'Name'
+- Link to collection: bpy.context.scene.collection.children.link(collection)
+- Create collection: bpy.data.collections.new('Name')
 
 Output ONLY the complete Python script in a markdown code fence starting with ```python and ending with ```. Do not include any other text.
 ```

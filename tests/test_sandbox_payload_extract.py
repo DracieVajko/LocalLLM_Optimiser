@@ -72,8 +72,8 @@ def test_web_search_accepts_real_python_without_fence():
         "        print('findings: none')\n"
     )
     score, failing, critical = score_attempt(task, {"web_search.py": code})
-    assert "is_python_code" not in " ".join(failing)
-    assert "is_python_code" not in " ".join(critical)
+    assert "is_python_code" not in [check.name for check in failing]
+    assert "is_python_code" not in [check.name for check in critical]
     assert score > 0.9
 
 
@@ -84,5 +84,5 @@ def test_web_search_rejects_prose_without_fence():
     score, failing, critical = score_attempt(
         task, {"web_search.py": "Here is the plan: search, fetch, parse."}
     )
-    assert "is_python_code" in " ".join(critical)
+    assert "is_python_code" in [check.name for check in critical]
     assert score < 0.9

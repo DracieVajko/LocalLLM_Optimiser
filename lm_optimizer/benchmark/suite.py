@@ -19,6 +19,8 @@ class BenchmarkPrompt:
     max_tokens: int = 512
     temperature: float = 0.7
     stop_sequences: list[str] | None = None
+    #: Expected numeric answer for reasoning tasks (None for others).
+    expected_answer: int | None = None
 
 
 # Fixed benchmark suite - same prompts used for all configurations
@@ -39,12 +41,73 @@ BENCHMARK_SUITE: list[BenchmarkPrompt] = [
         category="reasoning",
         prompt=(
             "You are given a sequence: 2, 6, 12, 20, 30, 42, 56. "
-            "What is the next number in the sequence? Explain your reasoning step by step."
+            "What is the next number in the sequence? Explain your reasoning step by step, "
+            "then end with 'The next number is <n>.'"
         ),
         expected_tokens=200,
         min_tokens=100,
         max_tokens=768,
         temperature=0.3,
+        expected_answer=72,
+    ),
+    # Reasoning item 2: arithmetic word problem
+    BenchmarkPrompt(
+        name="reasoning_word_problem",
+        category="reasoning",
+        prompt=(
+            "A store sells apples for $2 each and oranges for $3 each. "
+            "Maria buys 4 apples and 5 oranges. How much does she spend in total? "
+            "Explain your reasoning, then end with 'The answer is <n>.'"
+        ),
+        expected_tokens=150,
+        min_tokens=50,
+        max_tokens=512,
+        temperature=0.3,
+        expected_answer=23,
+    ),
+    # Reasoning item 3: ordering
+    BenchmarkPrompt(
+        name="reasoning_ordering",
+        category="reasoning",
+        prompt=(
+            "Three runners A, B, C finish a race. A is faster than B, "
+            "and B is faster than C. What position (1st, 2nd, or 3rd) "
+            "does runner B finish in? Answer with just the number. "
+            "End with 'The answer is <n>.'"
+        ),
+        expected_tokens=150,
+        min_tokens=50,
+        max_tokens=512,
+        temperature=0.3,
+        expected_answer=2,
+    ),
+    # Reasoning item 4: small combinatorics
+    BenchmarkPrompt(
+        name="reasoning_combinatorics",
+        category="reasoning",
+        prompt=(
+            "How many ways can you arrange 3 distinct books on a shelf? "
+            "Explain, then end with 'The answer is <n>.'"
+        ),
+        expected_tokens=150,
+        min_tokens=50,
+        max_tokens=512,
+        temperature=0.3,
+        expected_answer=6,
+    ),
+    # Reasoning item 5: unit conversion
+    BenchmarkPrompt(
+        name="reasoning_unit_conversion",
+        category="reasoning",
+        prompt=(
+            "Convert 5 kilometers to meters. "
+            "Explain, then end with 'The answer is <n>.'"
+        ),
+        expected_tokens=100,
+        min_tokens=30,
+        max_tokens=256,
+        temperature=0.3,
+        expected_answer=5000,
     ),
     # Test C: Long context (adjustable based on context length)
     BenchmarkPrompt(
@@ -85,17 +148,15 @@ BENCHMARK_SUITE: list[BenchmarkPrompt] = [
         prompt=(
             "Write a Python function `find_duplicates(nums: list[int]) -> list[int]` that returns "
             "all duplicate integers in a list. The function should:\n"
-            "1. Run in O(n) time complexity\n"
-            "2. Use O(1) extra space (excluding output)\n"
-            "3. Handle negative numbers\n"
-            "4. Return duplicates in ascending order\n\n"
+            "1. Run in O(n) time (extra memory is allowed)\n"
+            "2. Handle negative numbers\n"
+            "3. Return duplicates in ascending order\n\n"
             "Provide only the function definition with docstring."
         ),
         expected_tokens=200,
         min_tokens=100,
         max_tokens=768,
         temperature=0.1,
-        stop_sequences=["```"],
     ),
     # Test E: Structured output (JSON)
     BenchmarkPrompt(
@@ -118,7 +179,6 @@ BENCHMARK_SUITE: list[BenchmarkPrompt] = [
         min_tokens=50,
         max_tokens=256,
         temperature=0.0,
-        stop_sequences=["}"],
     ),
 ]
 
@@ -134,6 +194,7 @@ class BenchmarkCase:
     temperature: float
     stop_sequences: list[str] | None
     context_length: int
+    expected_answer: int | None = None
 
 
 def create_benchmark_cases(
@@ -185,11 +246,7 @@ def create_benchmark_cases(
                 body = doc_text[doc_start:doc_end]
                 repeats = max(1, target_chars // len(body) if body else 1)
                 repeated = body * repeats
-                # Insert the needle in the middle (harmless for the summary
-                # question, useful for recall checks).
-                needle = "NOTE: the harbour access code is 7-TANGO."
-                mid = len(repeated) // 2
-                repeated = repeated[:mid] + "\n" + needle + "\n" + repeated[mid:]
+                # Needle insertion removed: nothing in the suite asks for it.
                 # Keep the original QUESTION text: the scorer grades the
                 # renewable-energy keywords, so replacing the question made
                 # every model score 0.584 regardless of output. The document
@@ -217,6 +274,7 @@ def create_benchmark_cases(
                     temperature=level_temp,
                     stop_sequences=bp.stop_sequences,
                     context_length=context_length,
+                    expected_answer=bp.expected_answer,
                 )
                 cases.append(case)
         else:
@@ -229,6 +287,7 @@ def create_benchmark_cases(
                 temperature=bp.temperature,
                 stop_sequences=bp.stop_sequences,
                 context_length=context_length,
+                expected_answer=bp.expected_answer,
             )
             cases.append(case)
 

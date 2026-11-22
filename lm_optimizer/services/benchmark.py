@@ -188,8 +188,52 @@ def _extract_mtp_metrics(stats: dict | None) -> dict:
     }
 
 
+def _process_ram_gb() -> float | None:
+    """Sum the working set (RSS) of LM Studio / llama-server processes.
+
+    Returns None when psutil is unavailable or no matching process is found,
+    so a missing measurement stays missing instead of being fabricated.
+    """
+    try:
+        import psutil
+    except Exception:
+        return None
+    names = ("lm studio", "lm-studio", "lmstudio", "llama-server", "llama_server")
+    total_bytes = 0
+    found = False
+    try:
+        for proc in psutil.process_iter(["name", "memory_info"]):
+            info = proc.info or {}
+            name = str(info.get("name") or "").lower()
+            if not any(n in name for n in names):
+                continue
+            mi = info.get("memory_info")
+            if mi is None:
+                try:
+                    mi = proc.memory_info()
+                except Exception:
+                    mi = None
+            if mi is None:
+                continue
+            rss = getattr(mi, "rss", None)
+            if rss is None:
+                continue
+            total_bytes += int(rss)
+            found = True
+    except Exception:
+        return None
+    if not found or total_bytes <= 0:
+        return None
+    return round(total_bytes / (1024 ** 3), 2)
+
+
 def _peak_usage(before: dict | None, after: dict | None) -> tuple[float | None, float | None]:
-    """Peak GB used = total - min(free) over snapshots; None if unmeasurable."""
+    """Peak GB used = total - min(free) over snapshots; None if unmeasurable.
+
+    When the free-memory delta cannot be computed, RAM falls back to the
+    working set of the LM Studio / llama-server processes (psutil). A missing
+    measurement stays ``None`` instead of being fabricated.
+    """
     peak_vram = peak_ram = None
     try:
         frees = [
@@ -221,6 +265,12 @@ def _peak_usage(before: dict | None, after: dict | None) -> tuple[float | None, 
             peak_ram = round(totals[0] - min(frees), 2)
     except (TypeError, ValueError):
         pass
+    # Cross-check against the LM Studio / llama-server working set only when
+    # the free-memory delta is unavailable (keeps the measurement
+    # deterministic for a known snapshot and still fills a real gap).
+    if before or after:
+        if peak_ram is None:
+            peak_ram = _process_ram_gb()
     return peak_vram, peak_ram
 
 
@@ -778,7 +828,7 @@ class BenchmarkService:
             try:
                 from lm_optimizer.services.recall_probe import run_recall_probe, RecallProbeSpec
                 if context_length >= 4096:
-                    spec = RecallProbeSpec(target_tokens=context_length)
+                    spec = RecallProbeSpec(target_tokens=min(int(0.5 * context_length), 8192))
                     recall_result = await run_recall_probe(self.client, model_id, context_length, spec)
                     generation["recall"] = {
                         "target_tokens": recall_result.target_tokens,
@@ -942,6 +992,10 @@ class BenchmarkService:
     ) -> BenchmarkMetrics:
         """Run a single benchmark case via the native chat endpoint."""
         start_time = time.perf_counter()
+        #: Start of the generation whose usage/stats are actually reported.
+        #: A structured-output nudge issues a second request; timing must then
+        #: cover only that scored request, not both.
+        measure_start = start_time
 
         try:
             response = await self.client.chat_completion(
@@ -1032,6 +1086,7 @@ class BenchmarkService:
                 from lm_optimizer.services.quality import _extract_json_object
 
                 if _extract_json_object(output_text) is None:
+                    nudge_start = time.perf_counter()
                     try:
                         nudge = await self.client.chat_completion(
                             model=model_id,
@@ -1052,11 +1107,14 @@ class BenchmarkService:
                                 + output_text
                             )
                             output_text, usage, stats = ntext, nusage, nstats
+                            # Usage/stats now describe the nudge request, so
+                            # measure only that request's duration.
+                            measure_start = nudge_start
                     except Exception as e:
                         logger.debug("Structured nudge failed", case=case.name,
                                      error=str(e))
 
-            total_time_ms = (time.perf_counter() - start_time) * 1000
+            total_time_ms = (time.perf_counter() - measure_start) * 1000
 
             prompt_tokens = usage.get("prompt_tokens", 0)
             completion_tokens = usage.get("completion_tokens", 0)
@@ -1067,18 +1125,24 @@ class BenchmarkService:
             server_tok_s = stats.get("tokens_per_second") or 0
             if ttft_s > 0:
                 estimated_ttft_ms = ttft_s * 1000
+                ttft_source = "measured"
             else:
                 estimated_ttft_ms = total_time_ms * 0.1 if prompt_tokens > 0 else total_time_ms
+                ttft_source = "estimated"
             if server_tok_s > 0 and completion_tokens > 0:
                 generation_ms = completion_tokens / server_tok_s * 1000
                 prompt_processing_ms = max(0.0, total_time_ms - generation_ms)
                 generation_tok_s = server_tok_s
+                # Prompt prefill time is still derived from total minus
+                # generation; no backend exposes a native prefill timer here.
+                prompt_tok_s_source = "estimated"
             else:
                 prompt_processing_ms = total_time_ms * (prompt_tokens / max(total_tokens, 1))
                 generation_ms = total_time_ms - prompt_processing_ms
                 generation_tok_s = (
                     (completion_tokens / (generation_ms / 1000)) if generation_ms > 0 else 0
                 )
+                prompt_tok_s_source = "estimated"
 
             prompt_tok_s = (
                 (prompt_tokens / (prompt_processing_ms / 1000)) if prompt_processing_ms > 0 else 0
@@ -1100,6 +1164,8 @@ class BenchmarkService:
                 generation_ms=generation_ms,
                 prompt_tok_s=prompt_tok_s,
                 generation_tok_s=generation_tok_s,
+                ttft_source=ttft_source,
+                prompt_tok_s_source=prompt_tok_s_source,
                 output_text=output_text,
                 thinking_text=thinking_text,
                 prompt=case.prompt,

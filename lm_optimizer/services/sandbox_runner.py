@@ -123,6 +123,32 @@ class ExecutionResult:
     error: str = ""
 
 
+def _kill_process_tree(proc: subprocess.Popen) -> None:
+    """Terminate a process and every descendant (Windows and POSIX)."""
+    try:
+        import psutil
+
+        parent = psutil.Process(proc.pid)
+        children = parent.children(recursive=True)
+        for child in children:
+            try:
+                child.kill()
+            except Exception:  # noqa: BLE001
+                pass
+        try:
+            parent.kill()
+        except Exception:  # noqa: BLE001
+            pass
+        psutil.wait_procs(children + [parent], timeout=3)
+        return
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        proc.kill()
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def run_command(
     command: str,
     workdir: Path,
@@ -151,26 +177,48 @@ def run_command(
     env = dict(os.environ)
     # Network off by default: no proxy variables, and the policy flag is
     # documented (a true network namespace is out of scope for a
-    # cross-platform helper).
+    # cross-platform helper). Emit a one-time warning so operators know the
+    # sandbox is NOT a real OS isolation boundary.
     if not policy.network_enabled:
+        logger.warning(
+            "sandbox network isolation is best-effort (proxy vars stripped only); "
+            "for untrusted model output use Windows Sandbox / VM / Docker with "
+            "--network none",
+            workdir=str(workdir),
+        )
         for key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
             env.pop(key, None)
     try:
-        proc = subprocess.run(
+        proc = subprocess.Popen(
             command,
             shell=True,
             cwd=str(workdir),
             env=env,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout_s or policy.timeout_s,
             errors="replace",
         )
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout_s or policy.timeout_s)
+        except subprocess.TimeoutExpired:
+            # Kill the whole tree: shell=True leaves grandchildren behind when
+            # only the shell is terminated.
+            _kill_process_tree(proc)
+            stdout, stderr = proc.communicate()
+            return ExecutionResult(
+                ok=False,
+                exit_code=None,
+                stdout=(stdout or "")[-policy.max_output_bytes :],
+                stderr=(stderr or "")[-policy.max_output_bytes :],
+                duration_s=time.perf_counter() - started,
+                error=f"timeout after {timeout_s or policy.timeout_s:.0f}s",
+            )
         return ExecutionResult(
             ok=proc.returncode == 0,
             exit_code=proc.returncode,
-            stdout=proc.stdout[-policy.max_output_bytes :],
-            stderr=proc.stderr[-policy.max_output_bytes :],
+            stdout=(stdout or "")[-policy.max_output_bytes :],
+            stderr=(stderr or "")[-policy.max_output_bytes :],
             duration_s=time.perf_counter() - started,
         )
     except subprocess.TimeoutExpired:
@@ -550,7 +598,9 @@ class SandboxRunner:
                     exec_result = execution
                 else:
                     # No blender executable on this host: an empty command
-                    # must never read as a successful run.
+                    # must never read as a successful run. The whole attempt is
+                    # "not measured" (not a 0.00 quality result) because the
+                    # host cannot execute the artifact.
                     exec_result = ExecutionResult(
                         ok=False,
                         exit_code=None,
@@ -561,6 +611,11 @@ class SandboxRunner:
                             "blender executable not found; install Blender "
                             "or set BLENDER_PATH"
                         ),
+                    )
+                    result.status = "not_measured"
+                    result.error = (
+                        "blender executable not found; install Blender "
+                        "or set BLENDER_PATH"
                     )
                 blend_detail = (
                     f"exit={exec_result.exit_code} stderr={exec_result.stderr[:200]}"
@@ -593,6 +648,34 @@ class SandboxRunner:
                         len(data) > 16_384,
                         f"size={len(data)} (>16KB)",
                     )
+                    # Harness-side render for scoring: if the script did not
+                    # produce a preview.png, render one from the produced .blend
+                    # so the pixel check can still judge the scene visually.
+                    preview_path = self.workdir / "preview.png"
+                    if not preview_path.exists() and looks_like_blend(data):
+                        from lm_optimizer.services.blender_locate import find_blender
+
+                        exe = find_blender()
+                        if exe:
+                            try:
+                                import subprocess
+
+                                subprocess.run(
+                                    [
+                                        exe,
+                                        str(blend_path),
+                                        "--background",
+                                        "--render-output",
+                                        str(preview_path),
+                                        "--render-frame",
+                                        "1",
+                                    ],
+                                    capture_output=True,
+                                    text=True,
+                                    timeout=120,
+                                )
+                            except Exception:  # noqa: BLE001
+                                pass
                     needs_stats = any(
                         check.name
                         in (
@@ -669,15 +752,29 @@ class SandboxRunner:
                 custom_results=custom or None,
             )
             passed = not failing and execution.ok
+            # Invariant: a passed attempt cannot carry critical failures.
+            # score_attempt zeroes the score when critical is non-empty, but a
+            # repaired success must not retain the stale critical list of the
+            # attempt it repaired (see commit 02eda70). Enforce it in code.
+            if passed and critical:
+                logger.error(
+                    "passed with critical failures - clearing",
+                    task=self.task.id,
+                    critical=critical,
+                )
+                critical = []
+            if score >= 0.999 and critical:
+                passed = False
+                score = min(score, 0.99)
             record = RepairAttempt(
                 attempt=attempt,
                 output=produced[:4000],
                 exit_code=execution.exit_code,
                 passed=passed,
                 score=score,
-                error=execution.error or ("; ".join(failing)[:300] if failing else ""),
+                error=execution.error or ("; ".join(f"{c.name} ({c.detail})" for c in failing)[:300] if failing else ""),
                 duration_s=time.perf_counter() - started,
-                failing_checks=list(failing),
+                failing_checks=[c.name for c in failing],
             )
             result.attempts.append(record)
             debug_attempts.append(
@@ -691,8 +788,8 @@ class SandboxRunner:
                     "exec_error": execution.error,
                     "stdout_tail": (execution.stdout or "")[-1500:],
                     "stderr_tail": (execution.stderr or "")[-1500:],
-                    "failing": failing,
-                    "critical": critical,
+                    "failing": [c.name for c in failing],
+                    "critical": [c.name for c in critical],
                     "score": score,
                     "passed": passed,
                     "artifacts": sorted(files.keys()),
@@ -713,7 +810,7 @@ class SandboxRunner:
                 result.first_pass_success = passed
             # Each attempt replaces the verdict: a repaired success must not
             # keep the critical failures of the attempt it repaired.
-            result.critical_failures = critical
+            result.critical_failures = [c.name for c in critical]
             if passed:
                 result.final_success = True
                 result.final_score = score
@@ -744,6 +841,7 @@ class SandboxRunner:
                             "task": self.task.id,
                             "model": self.model,
                             "command": self.command,
+                            "blender_version": _blender_version(self.command),
                             "attempts": debug_attempts,
                             "final": result.as_dict(),
                         },
@@ -800,19 +898,36 @@ class SandboxRunner:
             log_best_effort("best-effort operation failed", exc)
 
 
-def build_command_for(task: SandboxTask) -> str:
+def _blender_version(command: str) -> str | None:
+    """Best-effort Blender version string from a runner command."""
+    if not command:
+        return None
+    exe = command.split()[0].strip('\"')
+    try:
+        import subprocess
+        out = subprocess.run(
+            [exe, "--version"], capture_output=True, text=True, timeout=15
+        )
+        first = (out.stdout or "").splitlines()[0] if out.stdout else ""
+        return first.strip() or None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def build_command_for(task: SandboxTask, blender_path: str | None = None) -> str:
     """Default command that executes the produced artifact.
 
     Blender is resolved through :mod:`lm_optimizer.services.blender_locate`
     (PATH alone misses most Windows installs). An empty return means "cannot
     execute" - the runner then records the honest reason instead of a fake
-    pass.
+    pass. ``blender_path`` lets the caller override auto-detection with an
+    explicit executable (or directory) supplied by the user.
     """
     if task.kind.value == "blender":
         from lm_optimizer.services.blender_locate import find_blender
 
         primary = task.artifacts[0] if task.artifacts else "build_scene.py"
-        exe = find_blender()
+        exe = find_blender(blender_path or "")
         if not exe:
             return ""
         if " " in exe:

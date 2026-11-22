@@ -24,6 +24,8 @@ class ModelIdentity:
     key: str | None = None
     # Selected variant from LM Studio (e.g. "swift-qwen3.8-27b@q3_k_m")
     selected_variant: str | None = None
+    # SHA-256 hash of the model file (GGUF) for provenance/dedup.
+    file_hash: str | None = None
 
     def __hash__(self):
         return hash(self.id)

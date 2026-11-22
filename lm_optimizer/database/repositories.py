@@ -11,6 +11,7 @@ from datetime import datetime
 from uuid import UUID
 
 from lm_optimizer.database.manager import db_manager
+from lm_optimizer.scoring.version import SCORING_VERSION
 from lm_optimizer.domain.models import (
     DEFAULT_PROFILE_WEIGHTS,
     BenchmarkMetrics,
@@ -295,7 +296,7 @@ class RunRepository:
                         json.dumps(run.baseline_metrics) if run.baseline_metrics else None,
                         int(run.is_experimental),
                         run.experimental_reason,
-                        json.dumps(run.benchmark_params) if run.benchmark_params else None,
+                        json.dumps({**run.benchmark_params, "scoring_version": SCORING_VERSION}) if run.benchmark_params else None,
                         best_config_id,
                         pareto_json,
                         run_id,
@@ -335,7 +336,7 @@ class RunRepository:
                         json.dumps(run.baseline_metrics) if run.baseline_metrics else None,
                         int(run.is_experimental),
                         run.experimental_reason,
-                        json.dumps(run.benchmark_params) if run.benchmark_params else None,
+                        json.dumps({**run.benchmark_params, "scoring_version": SCORING_VERSION}) if run.benchmark_params else None,
                         best_config_id,
                         pareto_json,
                     ),
@@ -625,6 +626,8 @@ class ConfigurationRepository:
 
         quality_json = None
         if config.quality_score:
+            details = dict(config.quality_score.details or {})
+            details["scoring_version"] = SCORING_VERSION
             quality_json = json.dumps(
                 {
                     "overall": config.quality_score.overall,
@@ -635,7 +638,7 @@ class ConfigurationRepository:
                     "no_truncation": config.quality_score.no_truncation,
                     "no_malformed": config.quality_score.no_malformed,
                     "confident": config.quality_score.confident,
-                    "details": config.quality_score.details,
+                    "details": details,
                     "checks_passed": config.quality_score.checks_passed,
                     "checks_total": config.quality_score.checks_total,
                 }

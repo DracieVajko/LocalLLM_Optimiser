@@ -26,6 +26,7 @@ PROMPTS = COMPARE / "prompts"
 
 TASKS = (
     "email_write",
+    "language_puzzle",
     "minecraft_world",
     "company_website",
     "deep_research_report",

@@ -65,17 +65,31 @@ def _home(tmp_path: Path, *, model_id: str = "prism-ml/bonsai-27b") -> Path:
 
 
 class FakeClient:
-    def __init__(self, *, loaded_config=None, success=True, identifier="inst-1", unload_ok=True):
+    def __init__(
+        self,
+        *,
+        loaded_config=None,
+        success=True,
+        identifier="inst-1",
+        unload_ok=True,
+        error=None,
+    ):
         self.loaded_config = loaded_config
         self.success = success
         self.identifier = identifier
         self.unload_ok = unload_ok
+        self.error = error
         self.unloaded = []
         self.loaded = []
 
     async def load_model(self, model_id, load_config):
         self.loaded.append((model_id, load_config.to_api_params() if hasattr(load_config, "to_api_params") else load_config))
-        return LoadModelResponse(success=self.success, identifier=self.identifier, loaded_config=self.loaded_config)
+        return LoadModelResponse(
+            success=self.success,
+            identifier=self.identifier,
+            loaded_config=self.loaded_config,
+            error=self.error,
+        )
 
     async def unload_model(self, *, identifier=None, model_id=None):
         self.unloaded.append(identifier)
@@ -234,7 +248,41 @@ def test_save_default_verify_true_includes_verification(client, monkeypatch, tmp
     assert response.status_code == 200, response.text
     payload = response.json()
     assert "verification" in payload
-    assert payload["verification"]["verified"] is True
+    verification = payload["verification"]
+    assert verification["verified"] is True
+    assert verification["checked"]["context_length"] == {
+        "expected": 8192,
+        "actual": 8192,
+        "match": True,
+    }
+    assert verification["checked"]["flash_attention"]["match"] is True
+    assert verification["mismatches"] == {}
+    assert verification["unverified"] == []
+    assert verification["unloaded"] is True
+    assert verification["error"] is None
+
+
+def test_save_default_verify_load_failure_reports_error(client, monkeypatch, tmp_path):
+    home = _home(tmp_path)
+    monkeypatch.setattr(routes.run_repo, "get", lambda _run_id: _run())
+    monkeypatch.setenv("LM_OPTIMIZER_LMSTUDIO_HOME", str(home))
+
+    fake_client = FakeClient(success=False, error="model load failed")
+
+    async def fake_get_lm_client(echo_probe=True):
+        return fake_client
+
+    monkeypatch.setattr(routes, "get_lm_client", fake_get_lm_client)
+
+    response = client.post(f"/api/runs/{uuid4()}/save-default?verify=true")
+
+    assert response.status_code == 200, response.text
+    verification = response.json()["verification"]
+    assert verification["verified"] is False
+    assert verification["error"] == "model load failed"
+    assert verification["checked"] == {}
+    assert verification["mismatches"] == {}
+    assert verification["unloaded"] is False
 
 
 def test_save_default_verify_dry_run_skips(client, monkeypatch, tmp_path):

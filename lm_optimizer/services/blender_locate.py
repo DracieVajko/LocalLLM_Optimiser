@@ -23,6 +23,15 @@ _INSTALL_ROOTS = (
     Path("C:/Program Files/Steam/steamapps/common/Blender"),
     Path("C:/Program Files (x86)/Steam/steamapps/common/Blender"),
     Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WindowsApps",
+    # macOS
+    Path("/Applications/Blender.app/Contents/MacOS"),
+    Path("/Applications"),
+    # Linux
+    Path("/usr/bin"),
+    Path("/usr/local/bin"),
+    Path("/opt/blender"),
+    Path("/opt/Blender"),
+    Path("/snap/bin"),
 )
 
 
@@ -37,7 +46,7 @@ def find_blender(explicit: str = "") -> str | None:
         if candidate.is_file():
             return str(candidate)
         if candidate.is_dir():
-            for name in ("blender.exe", "blender"):
+            for name in ("blender.exe", "blender", "Blender", "blender-launcher.exe"):
                 if (candidate / name).is_file():
                     return str(candidate / name)
         return None
@@ -60,10 +69,10 @@ def find_blender(explicit: str = "") -> str | None:
         try:
             if not root.is_dir():
                 continue
-            for exe in sorted(root.rglob("blender.exe"), reverse=True):
-                return str(exe)
-            for exe in sorted(root.rglob("blender-launcher.exe"), reverse=True):
-                return str(exe)
+            for name in ("blender.exe", "blender-launcher.exe", "blender", "Blender"):
+                for exe in sorted(root.rglob(name), reverse=True):
+                    if exe.is_file():
+                        return str(exe)
         except OSError:
             continue
 

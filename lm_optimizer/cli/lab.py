@@ -153,9 +153,12 @@ def context_explorer(
                         # Reserve room for the question + the answer. The
                         # filler's token estimate now counts punctuation, so
                         # the budget can be used directly.
-                        reserve = 512
+                        reserve = 2048
                         for ratio in ratios:
-                            budget = max(128, int((best.ctx - reserve) * ratio))
+                            # Conservative budget: token estimate is rough and
+                            # the server counts more; leave a wide margin so a
+                            # filled context never exceeds the loaded window.
+                            budget = max(128, int((best.ctx - reserve) * ratio * 0.6))
                             filler = build_filler(budget, kind="mixed", seed=42)
                             question = "\n\nWhat is the access code for the north depot?"
                             try:
@@ -1033,6 +1036,8 @@ def _run_sandbox_one(
     threads: str | int | None = None,
     image: str = "",
     image_description: str = "",
+    blender: str = "",
+    watchdog_priority: bool = False,
 ) -> dict:
     """Execute one sandbox task for one model and return the result dict."""
     from dataclasses import replace as _replace
@@ -1084,7 +1089,7 @@ def _run_sandbox_one(
         task=definition,
         policy=policy,
         workdir=workdir,
-        command=build_command_for(definition),
+        command=build_command_for(definition, blender_path=blender or None),
         model=model,
     )
     from dataclasses import replace as _replace_cfg
@@ -1248,6 +1253,16 @@ def sandbox(
         "--image-description",
         help="Expected description of the image (used for scoring).",
     ),
+    blender: str = typer.Option(
+        "",
+        "--blender",
+        help="Path to blender executable or its install dir (overrides auto-detect; env BLENDER_PATH/BLENDER_EXE also works).",
+    ),
+    watchdog_priority: bool = typer.Option(
+        False,
+        "--watchdog-priority/--no-watchdog-priority",
+        help="Priority mode: evict foreign models. Non-priority (default): yield to them.",
+    ),
 ):
     """Run one sandbox task with the repair loop (P4).
 
@@ -1275,6 +1290,8 @@ def sandbox(
             threads=threads or None,
             image=image,
             image_description=image_description,
+            blender=blender,
+            watchdog_priority=watchdog_priority,
         )
     except ValueError as exc:
         console.print(f"[red]{exc}[/red]")
@@ -1803,6 +1820,11 @@ def score_report(
     model: str = typer.Option(
         "external", "--model", help="Provider/model label recorded in results"
     ),
+    blender: str = typer.Option(
+        "",
+        "--blender",
+        help="Path to blender executable/dir (overrides auto-detect).",
+    ),
 ):
     """Score an external report with the same checks as the sandbox task."""
     from dataclasses import replace as _replace
@@ -1838,11 +1860,10 @@ def score_report(
         task=definition,
         policy=policy,
         workdir=workdir,
-        command=build_command_for(definition),
+        command=build_command_for(definition, blender_path=blender or None),
         model=model,
     )
     content = file.read_text(encoding="utf-8", errors="replace")
-    result = runner.run(lambda feedback: content)
     payload = result.as_dict()
     record_run(
         model,

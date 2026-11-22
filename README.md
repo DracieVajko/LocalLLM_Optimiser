@@ -293,8 +293,15 @@ final validation → optional context phase) is documented in
 ## 13. Sandbox
 
 A sandbox task gives a model a prompt, an isolated working directory and a
-set of acceptance checks. On failure the model gets the failing checks (never
-the solution) and may repair its output once.
+set of acceptance checks. On failure the model gets a generic hint (never the
+check name, expected value or solution) and may repair its output once.
+Vision tasks do not get a repair attempt: a perception question has no honest
+repair path.
+
+The `coding_task` code runner is crash/hang isolation, **not a security
+sandbox**: model code runs in a subprocess with a timeout, minimal environment
+and temp cwd, but with the user's rights. Do not run untrusted models on a
+machine you would not let them modify.
 
 ```bash
 lm-optimizer lab sandbox --task company_website --model <model-id>
@@ -360,7 +367,25 @@ If LM Studio is down, the read-only pages still work and say so.
   reference - every setting, its default and what it influences - is in
   [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
 
-## 16. Troubleshooting
+## 16. Reading the numbers
+
+Four words in a report mean something narrower than they look:
+
+| Term | Means | Does **not** mean |
+| --- | --- | --- |
+| `measured` | The attempt produced an artifact that was scored | Every metric was directly timed; TTFT and prompt tok/s carry a `*_source` of `measured` or `estimated` |
+| `not_measured` | The run could not be executed (HTTP 500, empty completion, missing Blender) | The model is bad at the task; it was never scored |
+| `PARTIAL_MATCH` | Some winner settings were written but the echo did not confirm every field | The configuration is fully applied and verified |
+| Quality score | Passed deterministic heuristic checks (structure, JSON, keywords, hidden behavioural tests for coding) | The probability the answer is correct in general |
+
+* `quality` compares runs of the **same** model and profile. Do not compare it
+  between models or across optimizer versions.
+* `not_applicable` (vision without an `mmproj` projector) and `experimental`
+  (vision tasks) are excluded from the primary mean.
+* A higher recomputed final score than the selected winner is printed as a
+  `NOTE:` in the report; the winner is still the median of its validation.
+
+## 17. Troubleshooting
 
 Short answers for the most common problems; the long version is in
 [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
@@ -374,7 +399,7 @@ Short answers for the most common problems; the long version is in
 | A score is `0.0` right after a failure | The run was not measured | Check the run status (`not_measured` is not a quality score) |
 | Reports do not appear | The run is in a different working directory | Results are written relative to the current directory |
 
-## 17. Development and testing
+## 18. Development and testing
 
 ```bash
 pip install -e ".[dev]"

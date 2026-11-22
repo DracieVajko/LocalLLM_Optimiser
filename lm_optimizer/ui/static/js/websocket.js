@@ -6,10 +6,18 @@ export class WebSocketManager {
         this.reconnectAttempts = new Map();
         this.maxReconnectAttempts = 5;
         this.reconnectDelay = 2000;
+        this._intentional = new Set();
+        this._unloaded = false;
+        window.addEventListener('beforeunload', () => { this._unloaded = true; this.disconnectAll(); });
+    }
+
+    _scheme() {
+        return window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     }
 
     connect(runId, onMessage) {
-        const ws = new WebSocket(`ws://${window.location.host}/ws/optimize/${runId}`);
+        this._intentional.delete(runId);
+        const ws = new WebSocket(`${this._scheme()}//${window.location.host}/ws/optimize/${runId}`);
 
         ws.onopen = () => {
             console.log(`WebSocket connected for run ${runId}`);
@@ -27,6 +35,7 @@ export class WebSocketManager {
 
         ws.onclose = () => {
             console.log(`WebSocket disconnected for run ${runId}`);
+            if (this._intentional.has(runId) || this._unloaded) return;
             this.attemptReconnect(runId, onMessage);
         };
 
@@ -39,23 +48,32 @@ export class WebSocketManager {
     }
 
     disconnect(runId) {
+        this._intentional.add(runId);
         const ws = this.connections.get(runId);
         if (ws) {
-            ws.close();
+            try { ws.close(); } catch (e) {}
             this.connections.delete(runId);
             this.reconnectAttempts.delete(runId);
+        }
+        // clear any pending reconnect timer
+        if (this._reconnectTimers && this._reconnectTimers.has(runId)) {
+            clearTimeout(this._reconnectTimers.get(runId));
+            this._reconnectTimers.delete(runId);
         }
     }
 
     disconnectAll() {
+        this._unloaded = true;
         for (const [runId, ws] of this.connections) {
-            ws.close();
+            this._intentional.add(runId);
+            try { ws.close(); } catch (e) {}
         }
         this.connections.clear();
         this.reconnectAttempts.clear();
     }
 
     attemptReconnect(runId, onMessage) {
+        if (this._unloaded || this._intentional.has(runId)) return;
         const attempts = this.reconnectAttempts.get(runId) || 0;
 
         if (attempts >= this.maxReconnectAttempts) {
@@ -64,24 +82,15 @@ export class WebSocketManager {
         }
 
         this.reconnectAttempts.set(runId, attempts + 1);
-        const delay = this.reconnectDelay * Math.pow(1.5, attempts);
-
-        console.log(`Reconnecting in ${delay}ms (attempt ${attempts + 1})`);
-
-        setTimeout(() => {
+        const delay = this.reconnectDelay * (attempts + 1);
+        const timer = setTimeout(() => {
+            if (this._intentional.has(runId) || this._unloaded) return;
+            console.log(`Reconnecting to run ${runId} (attempt ${attempts + 1})`);
             this.connect(runId, onMessage);
         }, delay);
-    }
-
-    send(runId, message) {
-        const ws = this.connections.get(runId);
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify(message));
-        }
-    }
-
-    isConnected(runId) {
-        const ws = this.connections.get(runId);
-        return ws && ws.readyState === WebSocket.OPEN;
+        if (!this._reconnectTimers) this._reconnectTimers = new Map();
+        this._reconnectTimers.set(runId, timer);
     }
 }
+
+export default WebSocketManager;

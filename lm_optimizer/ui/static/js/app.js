@@ -12,6 +12,7 @@ const App = {
         currentRunId: null,
         wsManager: null,
         runActive: false,
+        navigatingToResults: false,
     },
 
     async init() {
@@ -32,6 +33,21 @@ const App = {
             // Load initial data
             await this.loadDashboard();
 
+            // Honor /?optimize=<model-id> from the Model Detail page.
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const preset = params.get('optimize');
+                if (preset) {
+                    const select = document.getElementById('model-select');
+                    if (select) {
+                        select.value = preset;
+                        select.dispatchEvent(new Event('change'));
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to apply ?optimize parameter:', e);
+            }
+
             // Set up navigation
             this.setupNavigation();
 
@@ -40,7 +56,7 @@ const App = {
 
             // Confirm before navigating away while a run is active.
             window.addEventListener('beforeunload', (e) => {
-                if (this.state.runActive) {
+                if (this.state.runActive && !this.state.navigatingToResults) {
                     e.preventDefault();
                     e.returnValue = 'An optimization run is in progress. Leaving this page will stop live progress updates.';
                 }
@@ -55,9 +71,9 @@ const App = {
         }
     },
 
-    // Pages with their own HTML/JS (sandbox, results, ...) must do a full
-    // browser navigation; only dashboard/history/settings render inline.
-    spaViews: ['', 'dashboard', 'history', 'settings'],
+    // Pages with their own HTML/JS (sandbox, results, history, settings, ...)
+    // must do a full browser navigation. Only dashboard renders inline.
+    spaViews: ['', 'dashboard'],
 
     setupNavigation() {
         document.querySelectorAll('.nav-link').forEach(link => {
@@ -248,15 +264,25 @@ const App = {
             this._allProgressLine(i, queue.length, m.id, results.map(r =>
                 `<div class="text-xs">${r.model}: ${r.status}</div>`).join(''));
             try {
-                const started = await API.startOptimization({ model_id: m.id, profile, quality_threshold: quality });
+                const request = { model_id: m.id, profile, quality_threshold: quality };
+                // Carry the user's advanced settings and custom weights; the
+                // queue must not silently run different settings per model.
+                try {
+                    const adv = this.getAdvancedSettings();
+                    if (adv && Object.keys(adv).length) request.advanced_settings = adv;
+                } catch (e) { /* advanced panel may not be open */ }
+                const started = await API.startOptimization(request);
                 const runId = started.id;
                 let status = 'running';
+                // Wait for a terminal status. 20 s x 180 = 1 h per model, and
+                // the next model only starts after this one is terminal (the
+                // backend has an exclusive job lock).
                 let polls = 0;
-                const maxPolls = 36; // ~12 minutes per model, then stop polling
+                const maxPolls = 180;
                 for (;;) {
                     if (this.state.stopAllRequested) break;
                     if (polls++ >= maxPolls) {
-                        status = 'poll timeout';
+                        status = 'still running after 1 h (left running)';
                         break;
                     }
                     await new Promise(res => setTimeout(res, 20000));
@@ -264,8 +290,10 @@ const App = {
                         const run = await API.getRun(runId);
                         status = (run.status || 'running').toLowerCase();
                     } catch (e) {
+                        // Transient poll error: retry rather than abandoning
+                        // the model while it is still running.
                         status = `poll error: ${(e && e.message) || e}`;
-                        break;
+                        continue;
                     }
                     if (!['running', 'resumed', 'paused', 'pending'].includes(status)) break;
                 }
@@ -442,6 +470,7 @@ const App = {
             // Navigate to results page with WebSocket
             this.state.currentRunId = response.id;
             this.state.runActive = true;
+            this.state.navigatingToResults = true;
             window.location.href = `/results/${response.id}`;
         } catch (error) {
             UI.hideLoading();

@@ -71,14 +71,27 @@ def test_lab_sandbox_tasks_endpoint(client):
         "web_search",
         "deep_research",
         "minecraft_world",
-        "blender_city",
         "deep_research_report",
         "deep_research_online",
         "deep_research_agent",
+        "long_context_generation",
+        "language_puzzle",
+        "vision_describe",
+        "vision_counting_coins",
+        "vision_data_budget_chart",
+        "vision_logic_penrose_triangle",
+        "vision_ocr_prescription",
+        "vision_objects_living_room",
+        "vision_dense_market_street",
+        "vision_dense_city_traffic",
+        "vision_ui_confluence_page",
     } == ids
     for task in tasks:
         assert task["checks"]
-        assert task["max_repair_attempts"] >= 1
+        # Vision tasks have no honest repair path (WP-1); text tasks may repair.
+        assert task["max_repair_attempts"] >= 0
+        if task["id"].startswith("vision_"):
+            assert task["max_repair_attempts"] == 0
         assert task["network_allowed"] is False
 
 

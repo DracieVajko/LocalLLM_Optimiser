@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -447,6 +447,39 @@ class SavePresetResponse(BaseModel):
     success: bool = True
 
 
+# A load-config value echoed by LM Studio: a scalar config field or None when
+# the server did not report it.
+DefaultVerificationValue = int | float | bool | str | None
+
+
+class DefaultVerificationCheck(BaseModel):
+    expected: DefaultVerificationValue
+    actual: DefaultVerificationValue
+    match: bool
+
+
+class DefaultVerificationMismatch(BaseModel):
+    expected: DefaultVerificationValue
+    actual: DefaultVerificationValue
+
+
+class DefaultVerification(BaseModel):
+    """Result of an echo-load verification of saved LM Studio defaults."""
+
+    verified: bool
+    checked: dict[str, DefaultVerificationCheck] = Field(default_factory=dict)
+    mismatches: dict[str, DefaultVerificationMismatch] = Field(default_factory=dict)
+    unverified: list[str] = Field(default_factory=list)
+    unloaded: bool = False
+    error: str | None = None
+
+
+class DefaultVerificationSkipped(BaseModel):
+    """Verification was intentionally not attempted."""
+
+    skipped: Literal["dry_run", "no_winner"]
+
+
 class SaveDefaultResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -456,3 +489,4 @@ class SaveDefaultResponse(BaseModel):
     created: bool = False
     backup_path: str | None = None
     dry_run: bool = False
+    verification: DefaultVerification | DefaultVerificationSkipped | None = None

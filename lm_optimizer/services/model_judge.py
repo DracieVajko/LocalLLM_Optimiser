@@ -258,7 +258,7 @@ class HeuristicJudge(ModelJudge):
         else:  # balanced
             # Weighted score: speed * quality
 
-            def balanced_score(c) -> dict[str, Any]:
+            def balanced_score(c) -> float:
                 speed = get_speed(c)
 
                 qual = get_quality(c)

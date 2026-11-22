@@ -106,7 +106,7 @@ def test_runner_scores_and_repairs(tmp_path):
     assert result.repair_count == 1
     # The second attempt must receive EVIDENCE, not a solution.
     assert calls[1]
-    assert "has_title" in calls[1]
+    assert "A required element is missing or wrong." in calls[1]
     assert result.penalized_score < result.final_score
 
 
@@ -191,9 +191,9 @@ def test_blender_without_executable_fails_blend_runs_with_a_reason(tmp_path):
     )
     first = result.attempts[0]
     assert first.passed is False
-    assert any("blend_runs" in c for c in result.critical_failures)
+    assert "blend_runs" in result.critical_failures
     # The reason must name the real cause, not a fake exit=0 pass.
-    assert any("blender executable not found" in c for c in result.critical_failures)
+    assert "blender executable not found" in first.error
     assert not first.passed or "exit=0" not in first.error
 
 

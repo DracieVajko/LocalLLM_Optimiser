@@ -30,6 +30,7 @@
         document.querySelectorAll('.theme-toggle').forEach(function (b) {
             b.textContent = dark ? '☀️' : '🌙';
             b.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+            b.setAttribute('aria-pressed', String(dark));
             b.title = dark ? 'Light mode' : 'Dark mode';
         });
     }
@@ -50,6 +51,7 @@
                 window.__setTheme(isDark ? 'light' : 'dark');
             });
         });
+        apply();
     });
     apply();
 

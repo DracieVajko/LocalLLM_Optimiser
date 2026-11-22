@@ -204,6 +204,16 @@ class SearchSpaceGenerator:
         max_ratio = advanced.get("max_gpu_ratio", 1.0)
         step = advanced.get("gpu_ratio_step", 0.1)
 
+        # Validate bounds and step to prevent infinite loops
+        if not isinstance(step, (int, float)) or step <= 0:
+            step = 0.1
+        if not isinstance(min_ratio, (int, float)):
+            min_ratio = 0.0
+        if not isinstance(max_ratio, (int, float)):
+            max_ratio = 1.0
+        min_ratio = max(0.0, min(1.0, min_ratio))
+        max_ratio = max(min_ratio, min(1.0, max_ratio))
+
         # Estimate model VRAM
         estimated_vram = self._estimate_model_vram(model)
 
@@ -224,10 +234,12 @@ class SearchSpaceGenerator:
         # Add stepped values
         stepped = []
         r = min_ratio
-        while r <= max_ratio + 0.001:
+        _guard = 0
+        while r <= max_ratio + 0.001 and _guard < 1000:
             if r not in valid:
                 stepped.append(round(r, 2))
             r += step
+            _guard += 1
 
         return sorted(set(valid + stepped))
 

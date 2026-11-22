@@ -76,24 +76,14 @@ class ModelDiscovery:
         return capabilities
 
     def _detect_moe(self, model_info: ModelIdentity) -> bool:
-        """Detect if model is Mixture of Experts."""
-        arch = (model_info.architecture or "").lower()
-        model_type = (getattr(model_info, "model_type", "") or "").lower()
-        name = (model_info.name or "").lower()
+        """Detect if model is Mixture of Experts (shared resolver)."""
+        from lm_optimizer.services.moe_detection import is_moe_model
 
-        moe_indicators = [
-            "moe",
-            "mixtral",
-            "grok",
-            "deepseek-moe",
-            "qwen-moe",
-            "phi-moe",
-            "gpt-oss",
-            "gpt_oss",
-        ]
-        return any(
-            indicator in arch or indicator in model_type or indicator in name
-            for indicator in moe_indicators
+        return is_moe_model(
+            architecture=model_info.architecture,
+            model_type=getattr(model_info, "model_type", None),
+            name=model_info.name,
+            model_id=getattr(model_info, "id", None),
         )
 
     def _estimate_experts(self, model_info: ModelIdentity) -> int | None:

@@ -102,8 +102,32 @@
     loadModels();
 
     async function poll(id) {
+        var started = Date.now();
+        var consecutiveErrors = 0;
         for (var i = 0; i < 180; i++) {
-            var r = await fetch('/api/sandbox/' + encodeURIComponent(id));
+            // Elapsed-time visibility: a 9-minute wait must not look frozen.
+            try {
+                if (typeof out === 'function' && i > 0) {
+                    var secs = Math.round((Date.now() - started) / 1000);
+                    out('<p class="text-xs text-gray-500">Duel running — ' + secs + ' s elapsed, polling…</p>');
+                }
+            } catch (e) { /* progress UI is best-effort */ }
+            var r;
+            try {
+                r = await fetch('/api/sandbox/' + encodeURIComponent(id));
+            } catch (e) {
+                consecutiveErrors += 1;
+                if (consecutiveErrors >= 5) throw new Error('Connection lost while waiting for duel');
+                await new Promise(function (res) { setTimeout(res, 3000); });
+                continue;
+            }
+            if (!r.ok) {
+                consecutiveErrors += 1;
+                if (consecutiveErrors >= 5) throw new Error('HTTP ' + r.status + ' while waiting for duel');
+                await new Promise(function (res) { setTimeout(res, 3000); });
+                continue;
+            }
+            consecutiveErrors = 0;
             var j = await r.json();
             if (j.status === 'done') return j;
             if (j.status === 'failed') throw new Error(j.error || 'sandbox failed');
@@ -125,7 +149,7 @@
             + esc(side.tok_s ? side.tok_s.toFixed(1) + ' tok/s' : '') + '</span></h4>'
             + '<p class="text-xs font-mono text-gray-500">results/sandbox/' + esc(side.file_path) + '</p>'
             + '<p class="mt-1"><a class="underline text-blue-600" target="_blank" rel="noopener" href="' + url + '">Open index.html</a></p>'
-            + '<iframe sandbox="" src="' + url + '" class="w-full mt-2 border rounded" style="height:420px" title="' + label + ' preview"></iframe>'
+            + '<iframe sandbox="allow-scripts" src="' + url + '" class="w-full mt-2 border rounded" style="height:420px" title="' + label + ' preview"></iframe>'
             + (base ? '' : '');
     }
 
@@ -135,6 +159,7 @@
             var b = (el('sb-b').value || '').trim();
             var p = (el('sb-prompt').value || '').trim();
             if (!a || !b) throw new Error('Both model A and B are required');
+            if (a === b) throw new Error('Model A and Model B must be different');
             if (!p) throw new Error('Prompt is required');
             out('<p class="text-sm">Duel running: A first, unload, then B...</p>');
             var r = await fetch('/api/sandbox', {
@@ -525,7 +550,7 @@
                 var safeRel = rel.replace(/\\/g, '/');
                 if (/[.](html|htm)$/i.test(a)) {
                     return '<div class="mt-2 border rounded bg-black p-1">'
-                        + '<iframe sandbox="" src="/api/sandbox/files?file_path=' + encodeURIComponent(safeRel) + '"'
+                        + '<iframe sandbox="allow-scripts" src="/api/sandbox/files?file_path=' + encodeURIComponent(safeRel) + '"'
                         + ' class="w-full border rounded" style="height:520px" title="' + esc(a) + ' preview"></iframe>'
                         + '</div>';
                 }
@@ -568,7 +593,7 @@
                     var safeRel = rel.replace(/\\/g, '/');
                     if (/[.](html|htm)$/i.test(a)) {
                         return '<div class="mt-2 border rounded bg-black p-1">'
-                            + '<iframe sandbox="" src="/api/sandbox/files?file_path=' + encodeURIComponent(safeRel) + '"'
+                            + '<iframe sandbox="allow-scripts" src="/api/sandbox/files?file_path=' + encodeURIComponent(safeRel) + '"'
                             + ' class="w-full border rounded" style="height:260px" title="' + esc(a) + ' preview"></iframe>'
                             + '</div>';
                     }

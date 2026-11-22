@@ -148,4 +148,4 @@ def test_tools_used_check_requires_real_calls() -> None:
         {"index.html": html, "trace.json": json.dumps(trace[:1])},
     )
     assert score == 0.0
-    assert any("traces_tools_used" in name for name in critical)
+    assert "traces_tools_used" in [check.name for check in critical]

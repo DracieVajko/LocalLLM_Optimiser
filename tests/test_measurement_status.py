@@ -60,8 +60,18 @@ def test_generation_exception_is_not_measured(tmp_path: Path) -> None:
 def test_real_output_is_measured(tmp_path: Path) -> None:
     runner = _runner(tmp_path)
     email = (
-        "Subject: Kickoff follow-up\n\nHi Sarah,\n\n"
-        "Next step is the roadmap by Friday 14 November.\n\nBest regards,\nAlex\n"
+        "## Summary\n\n"
+        "Alice asked for a faster dashboard and a fix for the broken export "
+        "feature. Bob agreed to prioritize both and schedule a demo for next "
+        "Friday. Alice also requested an updated timeline, which Bob will send "
+        "by Wednesday.\n\n"
+        "## Email\n\n"
+        "Subject: Dashboard priorities and next steps\n\n"
+        "Hello Alice,\n\n"
+        "Thank you for the productive kickoff. The next step is to confirm the "
+        "dashboard scope and the export fix, and I will send the updated "
+        "timeline by Wednesday, 12 November 2026.\n\n"
+        "Best regards,\nBob\n"
     )
 
     result = runner.run(lambda feedback: email)

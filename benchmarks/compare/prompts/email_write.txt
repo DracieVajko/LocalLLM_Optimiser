@@ -1,1 +1,10 @@
-Write a concise professional follow-up email to a client after a project kickoff. Include a Subject line, a greeting, a 2-3 sentence body with the next step and a concrete deadline, and a closing. Output only the email, with no placeholders such as [name].
+You are an executive assistant. A client meeting just happened. Here is the meeting transcript:
+
+Alice (client): 'We need the new dashboard by end of Q3. The current version is too slow and the export feature is broken.'
+Bob (PM): 'Understood. We'll prioritize the dashboard and fix the export. Can we have a demo by next Friday?'
+Alice: 'Yes, that works. Also, please send us the updated timeline.'
+Bob: 'Will do. I'll send it by Wednesday.'
+
+TASK 1: Write a 3-5 sentence summary of the meeting (key decisions and next steps). Output it under a heading '## Summary'.
+
+TASK 2: Write a professional follow-up email to Alice based on the summary. Include a Subject line, a greeting, a body with the next step and a concrete deadline, and a closing. Output it under a heading '## Email'. Output only the two sections, no extra text.

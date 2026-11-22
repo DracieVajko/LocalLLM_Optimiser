@@ -138,14 +138,17 @@
                     .filter(function (m) { return m.category === "speed" && m.success; })
                     .map(function (m) { return m.generation_tok_s; })
                     .filter(function (v) { return typeof v === "number"; });
-                const median = speeds.length
-                    ? speeds.slice().sort(function (a, b) { return a - b; })[Math.floor(speeds.length / 2)]
+                const sorted = speeds.slice().sort(function (a, b) { return a - b; });
+              const median = speeds.length
+                    ? (speeds.length % 2 === 1
+                        ? sorted[Math.floor(speeds.length / 2)]
+                        : (sorted[speeds.length / 2 - 1] + sorted[speeds.length / 2]) / 2)
                     : null;
                 html += "<tr class='border-t border-gray-100'>";
                 html += "<td class='py-1'>" + esc(c.status) + "</td>";
                 html += "<td class='py-1'>" + esc(c.context_length) + "</td>";
                 html += "<td class='py-1 font-mono'>" + fmt(median, 2) + "</td>";
-                html += "<td class='py-1 font-mono'>" + fmt(c.estimated_ttft_ms, 0) + " ms</td>";
+                html += "<td class='py-1 font-mono'>" + fmt(c.estimated_ttft_ms ?? c.avg_ttft_ms, 0) + " ms</td>";
                 html += "<td class='py-1 font-mono'>" + fmt(c.score, 3) + "</td>";
                 html += "</tr>";
             });
@@ -163,13 +166,17 @@
             renderIdentity(model);
             renderCapabilities(model);
         } catch (err) {
-            el("md-identity").textContent = "Failed: " + err.message;
+            el("md-identity").innerHTML =
+                "<p class='text-red-600'>Failed: " + esc(err.message) + "</p>"
+                + "<button class='btn btn-outline btn-sm mt-2' onclick='boot()'>Retry</button>";
         }
 
         try {
             renderPresets(await getJSON(API + "/presets?model_id=" + encodeURIComponent(modelId)));
         } catch (err) {
-            el("md-presets").textContent = "Failed: " + err.message;
+            el("md-presets").innerHTML =
+                "<p class='text-red-600'>Failed: " + esc(err.message) + "</p>"
+                + "<button class='btn btn-outline btn-sm mt-2' onclick='boot()'>Retry</button>";
         }
 
         try {
@@ -182,7 +189,9 @@
                 el("md-configs").innerHTML = "<p>No configurations recorded.</p>";
             }
         } catch (err) {
-            el("md-runs").textContent = "Failed: " + err.message;
+            el("md-runs").innerHTML =
+                "<p class='text-red-600'>Failed: " + esc(err.message) + "</p>"
+                + "<button class='btn btn-outline btn-sm mt-2' onclick='boot()'>Retry</button>";
             el("md-configs").innerHTML = "<p>No configurations recorded.</p>";
         }
 
@@ -199,7 +208,9 @@
                 content.innerHTML = '<p class="text-xs text-gray-500">No LM Studio default saved for this model.</p>';
             }
         } catch (err) {
-            el("md-default-content").innerHTML = '<p class="text-xs text-red-600">Failed to load default info.</p>';
+            el("md-default-content").innerHTML =
+                '<p class="text-xs text-red-600">Failed to load default info.</p>'
+                + "<button class='btn btn-outline btn-sm mt-2' onclick='boot()'>Retry</button>";
         }
 
         // Test manager card

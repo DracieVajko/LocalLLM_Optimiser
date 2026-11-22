@@ -99,3 +99,11 @@ def test_force_refresh_clears_cache():
     asyncio.run(client.list_models(force_refresh=True))
     assert client._request_with_retry.await_count == 1
     assert len(client._models_cache) == len(API_MODELS["models"])
+
+
+def test_shared_moe_resolver_detects_gemma_a4b() -> None:
+    from lm_optimizer.services.moe_detection import is_moe_model
+
+    assert is_moe_model(model_id="google/gemma-4-26b-a4b-qat") is True
+    assert is_moe_model(name="Gemma 4 26B A4B QAT") is True
+    assert is_moe_model(model_id="swift-qwen3.8-27b") is False

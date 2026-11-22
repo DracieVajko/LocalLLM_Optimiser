@@ -1,5 +1,12 @@
 // LM Studio Auto Optimizer - UI Components
 
+const escapeHtml = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
 export const UI = {
     init() {
         this.setupTooltips();
@@ -25,6 +32,8 @@ export const UI = {
                 e.preventDefault();
                 this.showShortcutsHelp(shortcuts);
             } else if (e.key.toLowerCase() === 'r') {
+                // Skip when a modifier is held (Ctrl/Cmd+R = browser refresh).
+                if (e.ctrlKey || e.metaKey || e.altKey) return;
                 e.preventDefault();
                 // Refresh status if on dashboard
                 if (typeof window.App !== 'undefined' && window.App.updateStatus) {
@@ -288,7 +297,7 @@ export const UI = {
 
     renderOptimizationPanel(models) {
         // Sort models by name for deterministic display
-        const sorted = [...models].sort((a,b) => a.name.localeCompare(b.name));
+        const sorted = [...models].sort((a,b) => String(a.name || '').localeCompare(String(b.name || '')));
         const modelOptions = sorted.map(m => {
             const params = m.parameter_count ? `${(m.parameter_count/1e9).toFixed(1)}B` : 'N/A';
             const quant = m.quantization || 'unknown';
@@ -428,7 +437,6 @@ export const UI = {
 
     generatePreRunReview(modelId, profile, advanced, estimatedConfigs) {
         const est = estimatedConfigs || '~20–50';
-        const isLarge = (typeof estimatedConfigs === 'number' && estimatedConfigs > 100);
         return `
             <div class="space-y-4">
                 <h3 class="font-semibold text-gray-900">Optimization Review</h3>
@@ -733,8 +741,8 @@ export const UI = {
                                     <tr class="run-row hover:bg-gray-50 cursor-pointer" data-run-id="${r.id}">
                                         <td class="font-mono text-sm">${new Date(r.created_at).toLocaleString()}</td>
                                         <td>
-                                            <div class="font-medium">${r.model.name}</div>
-                                            <div class="text-xs text-gray-500 font-mono">${r.model.id}</div>
+                                            <div class="font-medium">${escapeHtml(r.model?.name || 'unknown')}</div>
+                                            <div class="text-xs text-gray-500 font-mono">${escapeHtml(r.model?.id || '')}</div>
                                         </td>
                                         <td><span class="badge badge-info">${r.profile}</span></td>
                                         <td><span class="badge ${this.getStatusBadge(r.status)}">${r.status}</span></td>
@@ -879,8 +887,19 @@ export const UI = {
 
     // Optimization Summary
     generateOptimizationSummary(modelId, profile, advancedEnabled) {
-        // This would ideally fetch the search space from the API
-        // For now, show a placeholder
+        // Best-effort plan estimate from the live form: profile threshold and
+        // advanced flags, never hard-coded 0.97 / "~16 probes".
+        const profileDefaults = { speed: 0.95, balanced: 0.97, context: 0.97, quality: 0.99 };
+        const thresholdEl = document.getElementById('quality-threshold');
+        const threshold = thresholdEl
+            ? Number(thresholdEl.value)
+            : (profileDefaults[String(profile || 'balanced').toLowerCase()] ?? 0.97);
+        const adv = (advancedEnabled && typeof advancedEnabled === 'object') ? advancedEnabled : {};
+        const maxCtx = Number(adv.max_context) || 0;
+        const phaseB = adv.optimize_context ? 'ON' : 'OFF';
+        const skip = Array.isArray(adv.skip_phases) ? adv.skip_phases : [];
+        const contextProbes = (maxCtx && !skip.includes('context'))
+            ? '~8 ladder points' : 'skipped';
         return `
             <div class="space-y-3">
                 <div class="flex items-center justify-between">
@@ -893,10 +912,18 @@ export const UI = {
                 </div>
                 <div class="flex items-center justify-between">
                     <span class="font-medium">Quality Threshold:</span>
-                    <span class="font-mono">0.97</span>
+                    <span class="font-mono">${threshold.toFixed(2)}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="font-medium">Context speed ladder:</span>
+                    <span class="font-mono">${contextProbes}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="font-medium">Phase B max-context:</span>
+                    <span class="font-mono">${phaseB}</span>
                 </div>
                 <div class="pt-2 border-t border-gray-200">
-                    <p class="text-sm text-gray-500">Click "Start Optimization" to begin. Estimated probes: ~16 cheap probes + ≤5 quality finalists.</p>
+                    <p class="text-sm text-gray-500">Staged cheap speed probes, then the full quality suite on finalists only. The exact probe count depends on the search space.</p>
                 </div>
             </div>
         `;
@@ -940,12 +967,18 @@ export const UI = {
         const container = this.getToastContainer();
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
+        const safeMessage = String(message ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
         toast.innerHTML = `
             <div class="flex items-center gap-2 p-4 bg-white rounded-lg shadow-lg border-l-4 ${this.getToastBorder(type)}">
                 <svg class="w-5 h-5 ${this.getToastIconColor(type)}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     ${this.getToastIcon(type)}
                 </svg>
-                <span class="text-sm font-medium text-gray-900">${message}</span>
+                <span class="text-sm font-medium text-gray-900">${safeMessage}</span>
             </div>
         `;
 
@@ -1033,3 +1066,4 @@ export const UI = {
         document.body.appendChild(modal);
     },
 };
+window.UI = UI;

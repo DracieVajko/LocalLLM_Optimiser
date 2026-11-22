@@ -47,6 +47,7 @@ from lm_optimizer.domain.models import (
 from lm_optimizer.logging_config import get_logger
 
 from lm_optimizer.scoring.normalization import (
+    composite_report,
     compute_bounds,
     score_result_breakdown,
     weighted_score,
@@ -2787,7 +2788,27 @@ class AdaptiveOptimizer:
 
                 self.state.run.best_config_id = self.state.best_config.id
 
-                self.state.run.status = RunStatus.SUCCESS
+                # Quality gate: a validated winner must also meet the recorded
+                # quality threshold. Otherwise the run is completed without a
+                # validated winner (R4-6).
+                _best_quality = getattr(self.state.best_config, "quality_score", None)
+                _threshold = getattr(
+                    getattr(self, "quality", None), "config", None
+                )
+                _threshold = getattr(_threshold, "minimum_score", None) if _threshold else None
+                if _best_quality is not None and _threshold is not None and _best_quality < _threshold:
+                    self.state.run.status = RunStatus.COMPLETED_NO_WINNER
+                    self.state.run.error = (
+                        f"Best config quality {_best_quality:.3f} below "
+                        f"threshold {_threshold:.2f}"
+                    )
+                    logger.warning(
+                        "quality below threshold - no validated winner",
+                        quality=_best_quality,
+                        threshold=_threshold,
+                    )
+                else:
+                    self.state.run.status = RunStatus.SUCCESS
 
                 self.state.run.validation_repetitions_effective = len(passed_results)
 
@@ -2835,6 +2856,13 @@ class AdaptiveOptimizer:
         """
 
         weights = dict(self.state.run.profile_weights or {})
+        if not weights:
+            try:
+                from lm_optimizer.profiles.registry import ProfileRegistry
+                prof = ProfileRegistry().get(self.state.run.profile.value if hasattr(self.state.run, "profile") else "balanced")
+                weights = dict(getattr(prof, "weights", {}) or {})
+            except Exception:
+                weights = {}
 
         if not self.state.score_context:
             weights["context"] = 0.0
@@ -2947,10 +2975,12 @@ class AdaptiveOptimizer:
 
         result.score = weighted_score(breakdown, weights)
 
+        report = composite_report(result, breakdown, weights, n_configs=len(self.state.tested_configs) + 1)
         result.generation = {
             **(result.generation or {}),
             "score_context": score_ctx,
             "score_weights": dict(weights),
+            "score_report": report,
         }
 
     async def _test_config(
@@ -3408,6 +3438,10 @@ class AdaptiveOptimizer:
 
         result.score = weighted_score(new_breakdown, weights)
 
+        if result.score is None:
+            self._log_event("CONFIG_REJECTED", "challenger score not measured after recompute")
+            return
+
         current_score = self.state.best_config.score
 
         new_score = result.score
@@ -3514,6 +3548,8 @@ class AdaptiveOptimizer:
 
                 r.score = weighted_score(breakdown, weights)
 
+                r.generation = {**(r.generation or {}), "score_report": composite_report(r, breakdown, weights, n_configs=len(self.state.tested_configs))}
+
                 config_repo.save(r)
 
         if self.state.best_config:
@@ -3524,7 +3560,11 @@ class AdaptiveOptimizer:
                 self.state.best_config,
             )
 
-            self.state.best_config = best
+            if getattr(best, "score", None) is None:
+                self.state.best_config = None
+                self.state.run.best_config_id = None
+            else:
+                self.state.best_config = best
 
     def _compute_pareto_frontier(
         self, results: list[ConfigurationResult]
@@ -3540,14 +3580,14 @@ class AdaptiveOptimizer:
             if r.status != ConfigurationStatus.PASSED or r.score is None:
                 continue
 
-            # Use quality_score if available, otherwise default to 1.0
-
-            # so that configs without quality_score are still considered
-
+            # Missing quality is UNKNOWN, not perfect. Defaulting it to 1.0
+            # let unmeasured configs dominate every measured one; treat it as
+            # the lowest score instead so a config with a real quality result
+            # wins the comparison.
             r_quality = (
                 r.quality_score.overall
                 if r.quality_score is not None and hasattr(r.quality_score, "overall")
-                else 1.0
+                else 0.0
             )
 
             dominated = False
@@ -3559,7 +3599,7 @@ class AdaptiveOptimizer:
                 other_quality = (
                     other.quality_score.overall
                     if other.quality_score is not None and hasattr(other.quality_score, "overall")
-                    else 1.0
+                    else 0.0
                 )
 
                 other_better = (

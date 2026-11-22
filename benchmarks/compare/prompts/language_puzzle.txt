@@ -1,0 +1,16 @@
+You are a linguist. Answer each of the following 12 questions. For each, give ONLY the correct form, no explanation.
+
+1. Slovak declension: genitive singular of 'diet (child).
+2. Slovak declension: instrumental plural of 'mesto' (city).
+3. English: past tense of 'run'.
+4. English: third-person singular present of 'go'.
+5. German: genitive singular of 'das Kind' (the child).
+6. French: passe compose of 'aller' (to go) for 'je'.
+7. Spanish: preterito perfecto of 'hablar' (to speak) for 'yo'.
+8. Italian: passato prossimo of 'andare' (to go) for 'io'.
+9. Russian: genitive singular of 'kniga' (book).
+10. Chinese: measure word (classifier) for 'book'.
+11. Japanese: past tense of 'taberu' (to eat).
+12. Arabic: plural of 'kitab' (book).
+
+Output format: numbered list 1-12, one answer per line. No extra text.

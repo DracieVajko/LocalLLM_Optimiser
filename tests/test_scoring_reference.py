@@ -135,12 +135,73 @@ def test_email_without_subject_vetoes_on_critical_check(tmp_path):
     result = _run(
         "email_write",
         "email.txt",
-        "Hello team,\n\nNext step by Friday.\n\nBest regards,\nAlex",
+        "## Summary\n\n"
+        "Alice asked for a faster dashboard and a fix for the broken export "
+        "feature. Bob agreed to prioritize both and schedule a demo for next "
+        "Friday. Alice also requested an updated timeline, which Bob will send "
+        "by Wednesday.\n\n"
+        "## Email\n\n"
+        "Hello Alice,\n\n"
+        "Thank you for the productive kickoff. The next step is to confirm the "
+        "dashboard scope and the export fix, and I will send the updated "
+        "timeline by Wednesday, 12 November 2026.\n\n"
+        "Best regards,\nBob\n",
         tmp_path,
     )
     assert result.final_score < 1.0
     assert result.final_success is False
     assert any("has_subject" in item for item in result.critical_failures)
+
+
+def test_email_without_summary_vetoes_on_critical_check(tmp_path):
+    result = _run(
+        "email_write",
+        "email.txt",
+        "## Email\n\n"
+        "Subject: Dashboard priorities and next steps\n\n"
+        "Hello Alice,\n\n"
+        "The next step is to send the updated timeline by Wednesday.\n\n"
+        "Best regards,\nBob\n",
+        tmp_path,
+    )
+    assert result.final_score < 1.0
+    assert result.final_success is False
+    assert any("has_summary" in item for item in result.critical_failures)
+
+
+def test_email_without_email_section_vetoes_on_critical_check(tmp_path):
+    result = _run(
+        "email_write",
+        "email.txt",
+        "## Summary\n\n"
+        "Alice asked for a faster dashboard and a fix for the broken export "
+        "feature. Bob agreed to prioritize both and schedule a demo for next "
+        "Friday. Alice also requested an updated timeline, which Bob will send "
+        "by Wednesday.\n",
+        tmp_path,
+    )
+    assert result.final_score < 1.0
+    assert result.final_success is False
+    assert any("has_email" in item for item in result.critical_failures)
+
+
+def test_email_short_output_fails_word_checks(tmp_path):
+    result = _run(
+        "email_write",
+        "email.txt",
+        "## Summary\n\n"
+        "Too short to meet the word count.\n\n"
+        "## Email\n\n"
+        "Subject: Hello\n\n"
+        "Hi Alice,\n\n"
+        "Best regards,\nBob\n",
+        tmp_path,
+    )
+    assert result.final_score < 1.0
+    assert result.final_success is False
+    failing = result.attempts[-1].failing_checks
+    assert any("summary_min_words" in item for item in failing)
+    assert any("email_min_words" in item for item in failing)
 
 
 def test_blender_scoring_accepts_valid_artifacts():
@@ -178,8 +239,9 @@ def test_blender_scoring_vetoes_when_command_or_artifacts_fail():
     )
     assert score < 0.5
     assert critical
-    assert any("blend_runs" in item for item in critical)
-    assert any("blend_is_binary" in item for item in critical)
+    critical_names = [check.name for check in critical]
+    assert "blend_runs" in critical_names
+    assert "blend_is_binary" in critical_names
 
 
 def test_critical_failure_zeroes_an_otherwise_high_score():

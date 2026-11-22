@@ -24,7 +24,7 @@ def test_env_var_wins(tmp_path, monkeypatch):
 
 def test_command_quotes_a_path_with_spaces(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        blender_locate, "find_blender", lambda: "C:/Program Files/Blender/blender.exe"
+        blender_locate, "find_blender", lambda blender_path="": "C:/Program Files/Blender/blender.exe"
     )
     command = build_command_for(SANDBOX_TASKS["blender_city"])
     assert command.startswith('"C:/Program Files/Blender/blender.exe"')
@@ -32,7 +32,7 @@ def test_command_quotes_a_path_with_spaces(tmp_path, monkeypatch):
 
 
 def test_no_blender_means_no_command(tmp_path, monkeypatch):
-    monkeypatch.setattr(blender_locate, "find_blender", lambda: None)
+    monkeypatch.setattr(blender_locate, "find_blender", lambda blender_path="": None)
     assert build_command_for(SANDBOX_TASKS["blender_city"]) == ""
 
 
@@ -42,6 +42,14 @@ def test_quoted_executable_passes_the_allowlist(tmp_path):
         '"C:/Program Files/Blender/blender.exe" --background --python build_scene.py'
     )
     assert policy.is_command_allowed(command)
+
+
+def test_explicit_blender_path_overrides_auto_detect(tmp_path):
+    exe = tmp_path / "blender.exe"
+    exe.write_bytes(b"")
+    command = build_command_for(SANDBOX_TASKS["blender_city"], blender_path=str(exe))
+    assert command.startswith(str(exe))
+    assert command.endswith("--background --python build_scene.py")
 
 
 def test_web_tasks_stay_command_free():

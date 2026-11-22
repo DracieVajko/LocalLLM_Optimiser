@@ -1,8 +1,7 @@
 """Backend seam conformance tests (Task 1) + factory tests (Task 5)."""
 
-import pytest
-
 from lm_optimizer.backends.base import assert_conforms
+from lm_optimizer.backends.llamacpp.client import LlamaCppClient
 from lm_optimizer.backends.ollama.client import OllamaClient
 from lm_optimizer.cli.main import get_backend_client
 from lm_optimizer.config import config
@@ -21,9 +20,16 @@ def test_backend_factory_ollama():
     assert isinstance(get_backend_client("ollama"), OllamaClient)
 
 
-def test_backend_factory_llama_cpp_is_phase2():
-    with pytest.raises(NotImplementedError, match="llama.cpp backend is phase 2"):
-        get_backend_client("llama-cpp")
+def test_backend_factory_llama_cpp_returns_client():
+    client = get_backend_client("llama-cpp")
+    assert isinstance(client, LlamaCppClient)
+    assert client.base_url == config.llamacpp_base_url
+
+
+def test_backend_factory_llama_cpp_respects_explicit_base_url():
+    client = get_backend_client("llama-cpp", base_url="http://127.0.0.1:9999")
+    assert isinstance(client, LlamaCppClient)
+    assert client.base_url == "http://127.0.0.1:9999"
 
 
 def test_backend_factory_explicit_arg_beats_global_config(monkeypatch):

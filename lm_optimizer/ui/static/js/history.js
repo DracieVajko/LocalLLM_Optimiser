@@ -23,8 +23,7 @@ const HistoryPage = {
         await this.loadRuns();
         await this.loadDuels();
         await this.loadSandboxTaskRuns();
-        this.render();
-        this.attachEvents();
+        this.render();  // render() attaches events exactly once
         // Deep link from the Sandbox page to its history section.
         if (window.location.hash === '#sandbox-history') {
             const el = document.getElementById('sandbox-history');
@@ -225,7 +224,7 @@ const HistoryPage = {
                 const d = await API.getDuel(id);
                 body.innerHTML = this.renderDuelDetail(d);
             } catch (e) {
-                body.innerHTML = `<p class="text-sm text-red-600">Failed: ${String((e && e.message) || e).slice(0, 200)}</p>`;
+                body.innerHTML = `<p class="text-sm text-red-600">Failed: ${esc(String((e && e.message) || e).slice(0, 200))}</p>`;
                 row.classList.remove('hidden');
                 return;
             }
@@ -250,7 +249,7 @@ const HistoryPage = {
         const sideBlock = (label, s) => {
             if (!s) return '';
             if (s.file_path) {
-                const rel = String(s.file_path).replace(/\\/g, '/');
+                let rel = String(s.file_path).replace(/\\/g, '/');
                 if (!/[.](html|htm)$/i.test(rel)) rel += '/index.html';
                 const url = `/api/sandbox/files?file_path=${encodeURIComponent(rel)}`;
                 return `<div><h4 class="font-bold">${label}</h4>`
@@ -296,17 +295,18 @@ const HistoryPage = {
                         <div class="table-container px-4 pb-3">
                             <table class="table">
                                 <thead><tr>
-                                    <th>Time</th><th>Task</th><th>Score</th><th>Result</th><th>Duration</th><th>Actions</th>
+                                    <th>Time</th><th>Task</th><th>First pass</th><th>Final</th><th>Result</th><th>Duration</th><th>Actions</th>
                                 </tr></thead>
                                 <tbody>
                                     ${group.map(({ idx, x }) => `
-                                        <tr class="sandbox-task-row hover:bg-gray-50" data-index="${idx}">
+                                        <tr class="sandbox-task-row hover:bg-gray-50" data-run-id="${x.id || x.run_id || idx}">
                                             <td class="font-mono text-sm">${new Date(x.ts || 0).toLocaleString()}</td>
                                             <td>${esc(x.task || '')}</td>
+                                            <td class="font-mono font-medium">${x.first_pass_score == null ? '-' : Number(x.first_pass_score).toFixed(3)}</td>
                                             <td class="font-mono">${x.final_score == null ? '-' : Number(x.final_score).toFixed(3)}</td>
                                             <td><span class="badge ${x.final_success ? 'badge-success' : 'badge-error'}">${x.final_success ? 'PASS' : 'FAIL'}</span></td>
                                             <td class="font-mono">${x.duration_s ? Number(x.duration_s).toFixed(0) + 's' : '—'}</td>
-                                            <td><button class="btn btn-outline btn-sm view-sandbox-run" data-index="${idx}">View</button></td>
+                                            <td><button class="btn btn-outline btn-sm view-sandbox-run" data-run-id="${x.id || x.run_id || idx}">View</button></td>
                                         </tr>
                                     `).join('')}
                                 </tbody>
@@ -322,7 +322,7 @@ const HistoryPage = {
         const models = [...new Set(this.state.runs.map(r => r.model.id))];
         return models.map(m => {
             const run = this.state.runs.find(r => r.model.id === m);
-            return `<option value="${m}">${run?.model.name || m}</option>`;
+            return `<option value="${m}">${esc(run?.model?.name || m)}</option>`;
         }).join('');
     },
 
@@ -372,8 +372,8 @@ const HistoryPage = {
                                     <td class="text-center"><input type="checkbox" class="run-select" value="${r.id}"></td>
                                     <td class="font-mono text-sm">${new Date(r.created_at).toLocaleString()}</td>
                                     <td class="model-cell">
-                                        <div class="font-medium">${r.model.name}</div>
-                                        <div class="text-xs text-gray-500 font-mono">${r.model.id}</div>
+                                        <div class="font-medium">${esc(r.model?.name || 'unknown')}</div>
+                                        <div class="text-xs text-gray-500 font-mono">${esc(r.model?.id || '')}</div>
                                     </td>
                                     <td><span class="badge badge-info">${r.profile}</span></td>
                                     <td><span class="badge ${UI.getStatusBadge(r.status)}">${r.status}</span>${r.stale ? ' <span class="badge badge-warning" title="No fresh checkpoint: process is gone">stale</span> <button class="btn btn-outline btn-sm abandon-run" data-run-id="${r.id}" title="Mark interrupted (keeps history)">Abandon</button>' : ''}</td>
@@ -392,6 +392,7 @@ const HistoryPage = {
                         </tbody>
                     </table>
                 </div>
+            </div>
             `;
     },
 
@@ -418,33 +419,8 @@ const HistoryPage = {
         return '—';
     },
 
-    attachEvents() {
-        // Resume All Pending
-        document.getElementById('resume-all-pending')?.addEventListener('click', () => this.resumeAllPending());
 
-        // Reconcile stale running runs (preview → confirm → apply).
-        document.getElementById('reconcile-runs')?.addEventListener('click', () => this.reconcileStaleRuns());
-
-        // Refresh
-        document.getElementById('refresh-history')?.addEventListener('click', () => this.loadRuns());
-
-        // Filters
-        ['model', 'profile', 'status'].forEach(key => {
-            const el = document.getElementById(`filter-${key}`);
-            if (el) {
-                el.addEventListener('change', () => this.applyFilters());
-            }
-        });
-
-        // Clear filters
-        document.getElementById('clear-filters')?.addEventListener('click', () => {
-            ['model', 'profile', 'status'].forEach(key => {
-                const el = document.getElementById(`filter-${key}`);
-                if (el) el.value = '';
-            });
-            this.applyFilters();
-        });
-
+    attachBulkEvents() {
         // Bulk selection (delete / re-run / compare)
         const boxes = () => Array.from(document.querySelectorAll('.run-select'));
         const selectedIds = () => boxes().filter(b => b.checked).map(b => b.value);
@@ -491,12 +467,18 @@ const HistoryPage = {
             const run = (this.state.runs || []).find(r => r.id === ids[0]);
             if (!run) { UI.showToast('Selected run not found', 'error'); return; }
             try {
-                await API.startOptimization({
+                // Carry the original run's settings instead of resetting them.
+                const params = run.benchmark_params || {};
+                const request = {
                     model_id: run.model.id,
-                    profile: run.profile,
-                    advanced_settings: {},
-                });
-                UI.showToast(`Re-run started: ${run.model.id}${ids.length > 1 ? ' (only the first selected model was started)' : ''}`, 'success');
+                    profile: run.profile || (run.profile?.value) || 'balanced',
+                    quality_threshold: run.quality_threshold ?? 0.97,
+                };
+                if (params.advanced_settings && typeof params.advanced_settings === 'object') {
+                    request.advanced_settings = params.advanced_settings;
+                }
+                await API.startOptimization(request);
+                UI.showToast(`Re-run started: ${esc(run.model?.id || '')}${ids.length > 1 ? ' (only the first selected model was started)' : ''}`, 'success');
             } catch (err) {
                 UI.showToast((err && err.message) || 'Re-run failed', 'error');
             }
@@ -510,7 +492,7 @@ const HistoryPage = {
             const dash = v => (v === null || v === undefined || v === '') ? '—' : v;
             const rows = runs.map(r => `
                 <tr>
-                    <td class="font-mono text-xs">${r.model.id}</td>
+                    <td class="font-mono text-xs">${esc(r.model?.id || '')}</td>
                     <td>${r.profile}</td>
                     <td>${r.status}</td>
                     <td class="text-right">${r.best_gen_tok_s != null ? Number(r.best_gen_tok_s).toFixed(1) : '—'}</td>
@@ -613,7 +595,7 @@ const HistoryPage = {
                     try {
                         await API.deleteDuel(id);
                     } catch (err) {
-                        UI.showToast(`Failed ${id}: ${(err && err.message) || err}`, 'error');
+                        UI.showToast(`Failed ${id}: ${esc((err && err.message) || err)}`, 'error');
                     }
                 }
                 await this.loadDuels();
@@ -622,19 +604,50 @@ const HistoryPage = {
             });
         }
 
+    },
+
+    attachEvents() {
+        // Resume All Pending
+        document.getElementById('resume-all-pending')?.addEventListener('click', () => this.resumeAllPending());
+
+        // Reconcile stale running runs (preview → confirm → apply).
+        document.getElementById('reconcile-runs')?.addEventListener('click', () => this.reconcileStaleRuns());
+
+        // Refresh — must re-render so the user sees updated rows.
+        document.getElementById('refresh-history')?.addEventListener('click', () => this.loadRuns().then(() => this.render()));
+
+        // Filters
+        ['model', 'profile', 'status'].forEach(key => {
+            const el = document.getElementById(`filter-${key}`);
+            if (el) {
+                el.addEventListener('change', () => this.applyFilters());
+            }
+        });
+
+        // Clear filters
+        document.getElementById('clear-filters')?.addEventListener('click', () => {
+            ['model', 'profile', 'status'].forEach(key => {
+                const el = document.getElementById(`filter-${key}`);
+                if (el) el.value = '';
+            });
+            this.applyFilters();
+        });
+
+        this.attachBulkEvents();
+
         // Sandbox task run View buttons
         document.querySelectorAll('.view-sandbox-run').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const idx = btn.dataset.index;
-                this.showSandboxTaskRunDetail(parseInt(idx, 10));
+                const runId = btn.dataset.runId;
+                this.showSandboxTaskRunDetail(runId);
             });
         });
     },
 
-    async showSandboxTaskRunDetail(index) {
+    async showSandboxTaskRunDetail(runId) {
         try {
-            const r = await fetch('/api/sandbox/run/' + encodeURIComponent(index));
+            const r = await fetch('/api/sandbox/run-id/' + encodeURIComponent(runId));
             if (!r.ok) throw new Error('HTTP ' + r.status);
             const x = await r.json();
             const crit = (x.critical_failures || []).length ? '<ul class="text-xs text-red-600 mt-1">'
@@ -649,7 +662,7 @@ const HistoryPage = {
                         <h3 class="font-bold text-lg">Sandbox Task Run Detail</h3>
                         <button class="btn btn-outline btn-sm" onclick="document.getElementById('sandbox-task-detail').innerHTML=''">Close</button>
                     </div>
-                    <div id="sandbox-task-detail-content" class="table text-sm"><tbody>
+                    <div id="sandbox-task-detail-content" class="text-sm"><table class="table text-sm"><tbody>
                         <tr><td class="font-bold">Time</td><td>${esc(x.ts || '')}</td></tr>
                         <tr><td class="font-bold">Model</td><td class="font-mono">${esc(x.model || '')}</td></tr>
                         <tr><td class="font-bold">Task</td><td>${esc(x.task || '')}</td></tr>
@@ -662,7 +675,7 @@ const HistoryPage = {
                         ${artifacts ? '<tr><td class="font-bold">Artifacts</td><td>' + artifacts + '</td></tr>' : ''}
                         ${x.error ? '<tr><td class="font-bold">Error</td><td class="text-red-600 text-xs">' + esc(x.error) + '</td></tr>' : ''}
                     </tbody></table>
-                    <div class="mt-3"><a class="underline text-blue-600 text-xs" href="/results" target="_blank" rel="noopener">Open Results folder</a></div>
+                    <div class="mt-3"><span class="text-xs text-gray-500">Results folder (local filesystem)</span></div>
                 </div></div>
             `;
             const container = document.getElementById('sandbox-task-runs-container');
@@ -685,24 +698,10 @@ const HistoryPage = {
             return true;
         });
 
-        // Re-render table
+        // Re-render table, then re-attach every handler that lived inside it.
         const container = document.getElementById('runs-table-container');
         container.innerHTML = this.renderRunsTable();
-
-        // Re-attach view button events
-        document.querySelectorAll('.view-run').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                window.location.href = `/results/${btn.dataset.runId}`;
-            });
-        });
-
-        // Re-attach row click
-        document.querySelectorAll('.run-row').forEach(row => {
-            row.addEventListener('click', () => {
-                window.location.href = `/results/${row.dataset.runId}`;
-            });
-        });
+        this.attachBulkEvents();
     },
 
     async refresh() {

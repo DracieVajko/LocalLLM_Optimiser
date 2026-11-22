@@ -68,7 +68,7 @@ class TestBenchmarkSuite:
     """Test benchmark suite."""
 
     def test_suite_not_empty(self):
-        assert len(BENCHMARK_SUITE) == 5
+        assert len(BENCHMARK_SUITE) == 9
 
     def test_categories_present(self):
         categories = {p.category for p in BENCHMARK_SUITE}
@@ -80,7 +80,7 @@ class TestBenchmarkSuite:
 
     def test_create_cases(self):
         cases = create_benchmark_cases(4096)
-        assert len(cases) == 5
+        assert len(cases) == 9
         for case in cases:
             assert case.max_tokens > 0
             assert case.context_length == 4096

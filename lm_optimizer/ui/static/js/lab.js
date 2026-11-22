@@ -34,6 +34,8 @@
     /* --- tabs --- */
     function initTabs() {
         const tabs = document.querySelectorAll(".lab-tab");
+        // Highlight the first tab on load so the Brewery never looks tabless.
+        if (tabs.length) tabs[0].classList.add("btn-primary");
         tabs.forEach(function (tab) {
             tab.addEventListener("click", function () {
                 tabs.forEach(function (t) { t.classList.remove("btn-primary"); });

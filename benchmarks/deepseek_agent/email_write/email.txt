@@ -1,11 +1,14 @@
-Subject: Kickoff follow-up — next step and deadline
+## Summary
 
-Hello team,
+Alice asked for a faster dashboard and a fix for the broken export feature. Bob agreed to prioritize both and schedule a demo for next Friday. Alice also requested an updated timeline, which Bob will send by Wednesday.
 
-Thank you for the productive kickoff today. To keep momentum, the next step is to confirm the data migration scope and assign owners by Friday, 13 November 2026. I will circulate the updated project plan by Tuesday, 10 November 2026.
+## Email
 
-Please reply with any blockers before then.
+Subject: Dashboard priorities and next steps
+
+Hello Alice,
+
+Thank you for the productive kickoff. The next step is to confirm the dashboard scope and the export fix, and I will send the updated timeline by Wednesday, 12 November 2026.
 
 Best regards,
-Alex Morgan
-Project Lead
+Bob

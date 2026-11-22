@@ -58,6 +58,11 @@ const SettingsPage = {
                                 </div>
                                 <p class="text-xs text-gray-500 mt-1">The URL of your LM Studio instance with Developer API enabled.</p>
                             </div>
+                            <div class="mt-4">
+                                <label class="form-label">API Token</label>
+                                <input type="password" id="api-token" name="api_token" value="" class="form-input" placeholder="${this.state.settings.api_token ? '•••••••• (unchanged)' : 'Optional API token'}">
+                                <p class="text-xs text-gray-500 mt-1">Required for remote (non-loopback) clients. Leave blank to keep the stored token unchanged; type a new value to replace it.</p>
+                            </div>
                         </div>
                     </div>
 
@@ -133,15 +138,15 @@ const SettingsPage = {
                         <div class="card-body grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
                                 <label class="form-label">GPU VRAM (GB) - Auto if empty</label>
-                                <input type="number" name="gpu_vram_gb" value="" step="0.1" min="0" class="form-input" placeholder="Auto-detect">
+                                <input type="number" name="gpu_vram_gb" value="${this.state.settings.gpu_vram_gb ?? ''}" step="0.1" min="0" class="form-input" placeholder="Auto-detect">
                             </div>
                             <div>
                                 <label class="form-label">System RAM (GB) - Auto if empty</label>
-                                <input type="number" name="system_ram_gb" value="" step="0.1" min="0" class="form-input" placeholder="Auto-detect">
+                                <input type="number" name="system_ram_gb" value="${this.state.settings.system_ram_gb ?? ''}" step="0.1" min="0" class="form-input" placeholder="Auto-detect">
                             </div>
                             <div>
                                 <label class="form-label">GPU Name - Auto if empty</label>
-                                <input type="text" name="gpu_name" value="" class="form-input" placeholder="Auto-detect">
+                                <input type="text" name="gpu_name" value="${this.state.settings.gpu_name ?? ''}" class="form-input" placeholder="Auto-detect">
                             </div>
                         </div>
                         <p class="text-xs text-gray-500">Leave empty to auto-detect. Override only if auto-detection is incorrect.</p>
@@ -162,13 +167,13 @@ const SettingsPage = {
                         <div class="p-4 bg-red-50 rounded-lg border border-red-200">
                             <h3 class="font-medium text-red-800">Reset All Data</h3>
                             <p class="text-sm text-red-600 mt-1">This will permanently delete all optimization runs, configurations, presets, and benchmark data. This action cannot be undone.</p>
-                            <button id="reset-data" class="btn btn-danger mt-3">Delete All Data</button>
+                            <button id="reset-data" class="btn btn-danger mt-3" disabled title="Not available: requires backend endpoint">Delete All Data</button>
                         </div>
 
                         <div class="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
                             <h3 class="font-medium text-yellow-800">Export All Data</h3>
                             <p class="text-sm text-yellow-600 mt-1">Download a complete backup of all runs, presets, and settings as JSON.</p>
-                            <button id="export-all" class="btn btn-outline mt-3">Export Everything</button>
+                            <button id="export-all" class="btn btn-outline mt-3" disabled title="Not available: requires backend endpoint">Export Everything</button>
                         </div>
 
                         <div class="p-4 bg-blue-50 rounded-lg border border-blue-200">
@@ -176,15 +181,13 @@ const SettingsPage = {
                             <p class="text-sm text-blue-600 mt-1">Restore from a previously exported backup file.</p>
                             <div class="flex gap-2 mt-3">
                                 <input type="file" id="import-file" accept=".json" class="form-input flex-1">
-                                <button id="import-data" class="btn btn-primary">Import</button>
+                                <button id="import-data" class="btn btn-primary" disabled title="Not available: requires backend endpoint">Import</button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         `;
-
-        this.attachEvents();
     },
 
     attachEvents() {
@@ -219,8 +222,9 @@ const SettingsPage = {
                 // Skip empty optional fields
                 continue;
             } else {
-                // Convert numeric values
-                if (!isNaN(value) && value !== '') {
+                // Convert numeric values, but never coerce the API token
+                // (a numeric-looking token must stay a string).
+                if (key !== 'api_token' && !isNaN(value) && value !== '') {
                     settings[key] = value.includes('.') ? parseFloat(value) : parseInt(value);
                 } else {
                     settings[key] = value;
@@ -269,48 +273,20 @@ const SettingsPage = {
     },
 
     async resetData() {
-        if (!confirm('This will permanently delete ALL optimization runs, presets, and benchmark data. Are you absolutely sure?')) {
-            return;
-        }
-
-        if (!confirm('This action cannot be undone. Type "DELETE" to confirm:')) {
-            return;
-        }
-
-        // This would need a backend endpoint
-        UI.showToast('Data reset not yet implemented', 'warning');
+        // Disabled in UI: no backend endpoint available.
+        UI.showToast('Data reset not available — requires backend endpoint', 'warning');
     },
 
     async exportAll() {
-        try {
-            // This would need a backend endpoint
-            UI.showToast('Full export not yet implemented', 'info');
-        } catch (error) {
-            UI.showToast('Export failed', 'error');
-        }
+        UI.showToast('Full export not available — requires backend endpoint', 'warning');
     },
 
     async importData() {
-        const fileInput = document.getElementById('import-file');
-        const file = fileInput.files[0];
-
-        if (!file) {
-            UI.showToast('Please select a file', 'error');
-            return;
-        }
-
-        try {
-            const text = await file.text();
-            const data = JSON.parse(text);
-            // This would need a backend endpoint
-            UI.showToast('Import not yet implemented', 'info');
-        } catch (error) {
-            UI.showToast('Invalid file format', 'error');
-        }
+        UI.showToast('Import not available — requires backend endpoint', 'warning');
     },
 };
 
-// readyState-safe boot: deferred modules may evaluate after DOMContentLoaded.
+    // readyState-safe boot: deferred modules may evaluate after DOMContentLoaded.
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => SettingsPage.init());
 } else {

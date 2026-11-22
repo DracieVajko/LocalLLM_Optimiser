@@ -195,6 +195,29 @@ class ModelGateConfig(BaseSettings):
         return [m.strip() for m in self.fallback_models.split(",") if m.strip()]
 
 
+class WatchdogConfig(BaseSettings):
+    """Configurable watchdog for LLM model loading priority.
+
+    Priority mode: our automated task owns the GPU and evicts foreign models.
+    Non-priority mode: yield to user/3rd-party models, wait, then resume.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="WATCHDOG_", extra="ignore")
+
+    enabled: bool = Field(default=True, description="Enable the watchdog")
+    priority: bool = Field(
+        default=False,
+        description="True = our task has priority (evict others); False = yield to others",
+    )
+    poll_interval_s: float = Field(default=5.0, gt=0.0, description="Poll interval")
+    wait_timeout_s: float = Field(
+        default=3600.0, ge=0.0, description="Max wait for a free slot before fallback"
+    )
+    fallback_to_api: bool = Field(
+        default=True, description="Fall back to API after timeout"
+    )
+
+
 class Config(BaseSettings):
     """Main application configuration."""
 
@@ -213,6 +236,7 @@ class Config(BaseSettings):
     web_ui: WebUIConfig = Field(default_factory=WebUIConfig)
     safety: SafetyConfig = Field(default_factory=SafetyConfig)
     model_gate: ModelGateConfig = Field(default_factory=ModelGateConfig)
+    watchdog: WatchdogConfig = Field(default_factory=WatchdogConfig)
 
     backend: Literal["lm-studio", "ollama", "llama-cpp"] = Field(
         default="lm-studio", description="Inference backend (llama-cpp is phase 2)"

@@ -15,7 +15,7 @@
     const MODE_HINTS = {
         full: "Speed discovery + quality suite + recovery + final validation.",
         speed: "S0 budget + planned speed probes at the pinned context. No winner.",
-        quality: "One quality suite on the baseline config at the max context.",
+        quality: "One quality suite on the baseline config at the chosen quality context (separate field below).",
         reasoning: "5-level reasoning sweep (off/low/medium/high/xhigh).",
         mtp: "S0 + speculative/MTP probes at the pinned context, OFF baseline included.",
     };
@@ -51,7 +51,7 @@
             min_context: 2048,
             max_context: parseInt(el("ex-maxctx").value, 10) || 32768,
             quality_context: parseInt(el("ex-quality-ctx").value, 10) || 8192,
-            min_generation_tok_s: parseFloat(el("ex-min-tps").value) || 2.0,
+            min_generation_tok_s: (el("ex-min-tps").value === '' ? 2.0 : Number(el("ex-min-tps").value)),
             skip_phases: MODE_SKIP[currentMode].slice(),
             quality_lab: el("ex-quality-lab").checked,
         };
@@ -70,7 +70,7 @@
             model_id: el("ex-model").value,
             profile: el("ex-profile").value,
             quality_threshold: parseFloat(el("ex-threshold").value) || 0.97,
-            min_generation_tok_s: parseFloat(el("ex-min-tps").value) || 2.0,
+            min_generation_tok_s: (el("ex-min-tps").value === '' ? 2.0 : Number(el("ex-min-tps").value)),
             advanced_settings: advanced,
         };
     }
