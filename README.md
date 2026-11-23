@@ -81,7 +81,12 @@ Details and the reasoning behind each row: [`docs/HARDWARE.md`](docs/HARDWARE.md
 * **LM Studio** with the Developer server enabled (default port `1234`).
 * A downloaded model in LM Studio (GGUF).
 * **Node.js** - optional, only needed to validate JavaScript in sandbox output.
-* **Blender** - optional, only needed for the `blender_city` task.
+* **Blender 5.2+** - optional, needed for the `blender_city` sandbox task and for
+  rendering 3D scenes. Also installable via `uv tool install cad --python 3.13`
+  (text-to-cad) for a headless Blender-as-Python-module workflow.
+* **Blender MCP (MCP-Link)** - optional, for live Blender control from the LLM.
+  See `docs/BLENDER_MCP.md` and run `python -m lm_optimizer blender-mcp`.
+* **Node.js** - optional, needed to validate JavaScript in sandbox output.
 * A Chromium-based browser (Chrome or Edge) - optional, needed for pixel-level
   checks of rendered HTML.
 
@@ -330,6 +335,61 @@ The task definitions live in
 [`lm_optimizer/services/sandbox_lab.py`](lm_optimizer/services/sandbox_lab.py);
 the checks and their semantics are described in
 [`docs/benchmarks/scoring_reference.md`](docs/benchmarks/scoring_reference.md).
+
+## 13a. Blender 3D modeling
+
+LM Studio Optimizer can benchmark a model's ability to generate 3D scenes and
+render them. Two paths are supported:
+
+### Path A — text-to-cad (recommended, no Blender app needed)
+
+[text-to-cad](https://github.com/earthtojake/text-to-cad) (MIT, 27k ⭐) turns a
+text prompt into a CAD model (STEP/STL/3MF/GLB) written in build123d, with
+Blender rendering via `cad run render.py` (auto-provisions bpy 5.2.3).
+
+```bash
+# Install the cad CLI (isolated Python 3.13 environment)
+uv tool install cad --python 3.13
+cad server start
+cad --version   # should print 0.11.17
+
+# Build a model
+cad run model.py
+# Export
+cad model export <id> model.glb
+# Render a preview
+cad run render.py
+```
+
+The `blender_city` sandbox task scores a model's ability to write a Blender
+Python script. A `cad_bracket` task (build123d + export + render + DFM check)
+is planned.
+
+### Path B — Blender MCP (live control)
+
+[MCP-Link for Blender](https://github.com/AuraFriday/mcp_link_blender) exposes
+Blender's Python API to LLMs via MCP. Setup is one command:
+
+```bash
+python -m lm_optimizer blender-mcp --apply
+```
+
+This auto-detects Blender, the MCP-Link server and LM Studio, and writes the
+MCP config into `~/.lmstudio/mcp.json`. Then start a model and ask it to build
+a 3D scene.
+
+See [`docs/BLENDER_MCP.md`](docs/BLENDER_MCP.md) for details.
+
+### Ladder results (Blender context)
+
+| Model | Max context | Speed | Notes |
+|-------|-------------|-------|-------|
+| google/gemma-4-12b-qat | 262144 | 3.6–6.0 tok/s | full ladder PASS |
+| google/gemma-4-26b-a4b-qat | 177152 | 2.1–7.4 tok/s | 262144 FAIL (server crash) |
+| mirothinker-30b | 262144 | 10.5–14.4 tok/s | full ladder PASS |
+| nvidia-nemotron-3.5-bolt-e4b | n/a | n/a | engine crash (llama-server) |
+| openai-gpt-oss-20b | n/a | n/a | LM Studio guardrail (~14 GB) |
+| nvidia-nemotron-3.5-bolt-74b-a9b | n/a | n/a | engine crash / OOM |
 
 ## 14. Web UI
 
