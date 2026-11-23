@@ -795,6 +795,7 @@ class LMStudioClient:
         presence_penalty: float | None = None,
         reasoning: str | None = None,
         stop_sequences: list[str] | None = None,
+        timeout_s: float | None = None,
     ) -> dict:
         """Generate completion via the native /api/v1/chat endpoint.
 
@@ -842,6 +843,10 @@ class LMStudioClient:
             max(CHAT_TIMEOUT_FLOOR_S, float(max_output_tokens)),
             config.lm_studio.chat_timeout_max,
         )
+        if timeout_s is not None:
+            # Callers that prefill a very large prompt (context fill/retrieval
+            # probes) need more than the output-token-derived timeout.
+            chat_timeout = max(chat_timeout, float(timeout_s))
         reasoning_retry_used = False
         response = None
         for attempt in range(UNLOADED_RETRY_ATTEMPTS + 1):

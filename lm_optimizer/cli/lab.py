@@ -59,6 +59,18 @@ def _write_json(name: str, payload: dict) -> Path:
     return path
 # --- P2 Context Explorer --------------------------------------------------
 @app.command("context-explorer")
+def _same_load_failure(first: str, second: str) -> bool:
+    """True when two load errors are effectively the same failure.
+
+    Engine crashes and LM Studio guardrail refusals do not depend on the GPU
+    ratio or batch size; retrying every combination only wastes minutes.
+    """
+    def norm(text: str) -> str:
+        return " ".join(str(text or "").lower().split())[:160]
+
+    return bool(first and second and norm(first) == norm(second))
+
+
 def context_explorer(
     model: str = typer.Argument(..., help="Model ID to explore"),
     min_context: int = typer.Option(4096, "--min-context"),
@@ -97,24 +109,99 @@ def context_explorer(
             svc = BenchmarkService(client)
             points: list[ContextPoint] = []
             console.print(f"[dim]Ladder: {ladder}[/dim]")
-            for ctx in ladder:
-                cfg = LoadConfiguration(
-                    context_length=ctx,
-                    gpu_ratio=gpu_ratio,
-                    flash_attention=flash,
-                    offload_kv_cache_to_gpu=kv_gpu,
-                    eval_batch_size=batch,
+
+            # A model larger than VRAM needs partial offload, and a 6 GB card
+            # cannot take an eval batch of 2048 at long context. Try the
+            # requested config first, then progressively safer ones. A level
+            # is only cut when every candidate fails to load.
+            preferred_ratio = gpu_ratio
+            preferred_batch = batch
+
+            def _candidates(ctx: int) -> list[LoadConfiguration]:
+                # Keep this short: the LM Studio guardrail usually rejects a
+                # model for total memory regardless of GPU ratio, so 24
+                # combinations only spam the log. Try the requested config,
+                # then one lower-ratio, one lower-batch and one combined.
+                lower_ratio = next(
+                    (r for r in (0.9, 0.75, 0.5, 0.25, 0.0) if r < preferred_ratio),
+                    preferred_ratio,
                 )
+                lower_batch = next(
+                    (b for b in (1024, 512, 256) if b < preferred_batch),
+                    preferred_batch,
+                )
+                combos = [
+                    (preferred_ratio, preferred_batch),
+                    (lower_ratio, preferred_batch),
+                    (preferred_ratio, lower_batch),
+                    (lower_ratio, lower_batch),
+                ]
+                seen: set[tuple[float, int]] = set()
+                out: list[LoadConfiguration] = []
+                for ratio, batch in combos:
+                    if (ratio, batch) in seen:
+                        continue
+                    seen.add((ratio, batch))
+                    out.append(
+                        LoadConfiguration(
+                            context_length=ctx,
+                            gpu_ratio=ratio,
+                            flash_attention=flash,
+                            offload_kv_cache_to_gpu=kv_gpu,
+                            eval_batch_size=batch,
+                        )
+                    )
+                return out
+
+            for ctx in ladder:
                 speeds: list[float] = []
                 err = ""
                 ok = False
-                for _ in range(max(1, repetitions)):
-                    good, tok, error = await svc.smoke_test(model, cfg)
-                    if good:
+                used_cfg: LoadConfiguration | None = None
+                for attempt_cfg in _candidates(ctx):
+                    attempt_ok = True
+                    attempt_speeds: list[float] = []
+                    attempt_err = ""
+                    for _ in range(max(1, repetitions)):
+                        good, tok, error = await svc.smoke_test(model, attempt_cfg)
+                        if good:
+                            attempt_speeds.append(tok)
+                        else:
+                            attempt_ok = False
+                            attempt_err = error
+                            break
+                    if attempt_ok:
                         ok = True
-                        speeds.append(tok)
-                    else:
-                        err = error
+                        used_cfg = attempt_cfg
+                        speeds = attempt_speeds
+                        preferred_ratio = attempt_cfg.gpu_ratio
+                        preferred_batch = attempt_cfg.eval_batch_size
+                        if (
+                            attempt_cfg.gpu_ratio != gpu_ratio
+                            or attempt_cfg.eval_batch_size != batch
+                        ):
+                            console.print(
+                                f"  {ctx}: load fallback gpu="
+                                f"{attempt_cfg.gpu_ratio:g} batch="
+                                f"{attempt_cfg.eval_batch_size} worked"
+                            )
+                        break
+                    console.print(
+                        f"  {ctx}: load attempt gpu={attempt_cfg.gpu_ratio:g} "
+                        f"batch={attempt_cfg.eval_batch_size} failed: "
+                        f"{attempt_err[:120]}"
+                    )
+                    if err and _same_load_failure(err, attempt_err):
+                        # Same guardrail/engine failure: no other ratio or
+                        # batch will help, so stop at once instead of 24 tries.
+                        console.print(
+                            f"  {ctx}: same failure repeated — stopping load "
+                            "retries for this level"
+                        )
+                        break
+                    err = attempt_err
+                if used_cfg is None:
+                    console.print(f"  {ctx}: all load configs failed ({err[:120]})")
                 median = statistics.median(speeds) if speeds else None
                 verdict = classify_point(median, ok=ok, error=err, min_tps=min_tps)
                 point = ContextPoint(
@@ -167,6 +254,7 @@ def context_explorer(
                                     input_text=filler + question,
                                     temperature=0.0,
                                     max_output_tokens=64,
+                                    timeout_s=1800,
                                 )
                                 text = ""
                                 choices = response.get("choices") or []
@@ -197,6 +285,7 @@ def context_explorer(
                                 input_text=needle.prompt + "\n\n" + needle.question,
                                 temperature=0.0,
                                 max_output_tokens=64,
+                                timeout_s=1800,
                             )
                             text = ""
                             choices = response.get("choices") or []

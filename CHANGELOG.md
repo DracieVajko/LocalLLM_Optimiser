@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed — context ladder robustness
+- **Load fallback**: the context ladder now retries a failed load with a lower GPU ratio and batch size (4 candidates, not 24), logs every attempt, and stops immediately when the same guardrail/engine failure repeats.
+- **Long-prompt timeout**: `chat_completion(timeout_s=...)` lets context fill/retrieval probes wait up to 30 minutes for a very large prefill instead of the 300 s output-derived default.
+- **Honest model failures**: LM Studio guardrail refusals and `llama-server` engine crashes are reported as `FAIL_LOAD` with the exact reason instead of a generic OOM.
+
 ### Fixed — WebUI review (31 defects)
 - **Results**: no winner is inferred from `score || 0`; a validated winner requires `best_config_id` plus a measured composite. Running/paused runs no longer render as "unsuccessful".
 - **Results**: prompt, thinking, model output and judge verdicts are HTML-escaped (XSS fix).
