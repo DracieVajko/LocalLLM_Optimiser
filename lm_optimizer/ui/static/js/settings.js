@@ -387,7 +387,7 @@ const SettingsPage = {
         const copyBtn = document.getElementById('blender-copy-config');
         if (status) status.textContent = 'Detecting…';
         try {
-            const data = await API.request('/blender/detect');
+            const data = await API.request('/blender/detect?apply=true');
             const st = data.status || {};
             const lines = (st.steps || []).map(s => (s.status === 'ok' ? '✓' : '✗') + ' ' + s.step + ': ' + s.detail);
             if (status) status.textContent = lines.join(' · ');
@@ -397,7 +397,12 @@ const SettingsPage = {
             }
             if (copyBtn) copyBtn.classList.toggle('hidden', !data.ready);
             if (data.ready) {
-                UI.showToast('Blender MCP ready — paste the config into LM Studio', 'success');
+                if (data.apply && data.apply.success) {
+                    UI.showToast('Blender MCP ready — config written to ' + data.apply.path, 'success');
+                    if (status) status.textContent = lines.join(' · ') + ' · config written to ' + data.apply.path;
+                } else {
+                    UI.showToast('Blender MCP ready — paste the config into LM Studio', 'success');
+                }
             }
         } catch (err) {
             if (status) status.textContent = 'Detect failed: ' + ((err && err.message) || err);

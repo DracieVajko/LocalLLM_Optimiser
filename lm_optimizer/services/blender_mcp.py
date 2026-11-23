@@ -115,8 +115,41 @@ def build_mcp_config(st: BlenderMcpStatus) -> dict[str, Any]:
     }
 
 
-def seamless_setup() -> dict[str, Any]:
-    """One call: detect everything and return config + instructions."""
+def _mcp_config_path() -> Path:
+    """LM Studio's MCP client config location."""
+    return Path.home() / ".lmstudio" / "mcp.json"
+
+
+def apply_config(st: BlenderMcpStatus | None = None) -> dict[str, Any]:
+    """Write the Blender MCP config into LM Studio's mcp.json (seamless).
+
+    Merges with any existing config instead of overwriting it.
+    """
+    status = st or detect()
+    config = build_mcp_config(status)
+    path = _mcp_config_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        existing: dict[str, Any] = {}
+        if path.exists():
+            try:
+                existing = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                existing = {}
+        servers = existing.setdefault("mcpServers", {})
+        servers.update(config["mcpServers"])
+        path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+        return {"success": True, "path": str(path), "servers": list(servers.keys())}
+    except Exception as e:
+        return {"success": False, "error": str(e), "path": str(path)}
+
+
+def seamless_setup(apply: bool = False) -> dict[str, Any]:
+    """One call: detect everything and return config + instructions.
+
+    If ``apply`` is True, the MCP config is written to LM Studio's mcp.json
+    automatically (seamless setup).
+    """
     st = detect()
     config = build_mcp_config(st)
     instructions = []
@@ -128,10 +161,13 @@ def seamless_setup() -> dict[str, Any]:
     if not st.lm_studio_reachable:
         instructions.append("Start LM Studio and enable the local server (port 1234)")
     if st.ready:
-        instructions.append("Paste the config below into LM Studio's MCP servers list and restart the server.")
-    return {
+        instructions.append("MCP config written to ~/.lmstudio/mcp.json — restart LM Studio to pick it up.")
+    result = {
         "status": st.as_dict(),
         "config": config,
         "instructions": instructions,
         "ready": st.ready,
     }
+    if apply:
+        result["apply"] = apply_config(st)
+    return result

@@ -12,15 +12,16 @@ console = Console()
 
 
 def blender_mcp(
-    write_config: bool = typer.Option(
-        False, "--write-config", help="Write the MCP config snippet to ./blender_mcp.json"
+    apply: bool = typer.Option(
+        False, "--apply", help="Write the MCP config directly into ~/.lmstudio/mcp.json"
     ),
 ):
     """Detect Blender + MCP-Link + LM Studio and print the MCP config.
 
-    Zero setup: auto-detects everything and prints a ready-to-paste config.
+    Zero setup: auto-detects everything. With --apply, writes the config
+    into LM Studio's mcp.json automatically (no copy-paste needed).
     """
-    result = seamless_setup()
+    result = seamless_setup(apply=apply)
     status = result["status"]
     console.print("\n[bold]Blender MCP status[/bold]")
     for step in status["steps"]:
@@ -33,12 +34,15 @@ def blender_mcp(
         console.print("[yellow]Missing dependencies:[/yellow]")
         for inst in result["instructions"]:
             console.print(f"  • {inst}")
-    console.print("\n[bold]MCP config (paste into LM Studio):[/bold]")
+    if "apply" in result:
+        ap = result["apply"]
+        if ap.get("success"):
+            console.print(f"\n[green]Wrote config to {ap['path']}[/green]")
+            console.print(f"Servers: {ap.get('servers')}")
+        else:
+            console.print(f"\n[red]Failed to write config: {ap.get('error')}[/red]")
+    console.print("\n[bold]MCP config:[/bold]")
     console.print(json.dumps(result["config"], indent=2))
-    if write_config:
-        import pathlib
-        out = pathlib.Path("blender_mcp.json")
-        out.write_text(json.dumps(result["config"], indent=2), encoding="utf-8")
-        console.print(f"\nWrote {out}")
+    # (write_config removed: --apply writes directly to ~/.lmstudio/mcp.json)
     console.print("\n[dim]Then start a model and ask it to build a 3D scene.[/dim]")
     console.print("[dim]See docs/BLENDER_MCP.md for details.[/dim]")

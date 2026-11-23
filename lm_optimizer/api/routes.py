@@ -429,10 +429,14 @@ def _convert_preset(p: dict) -> PresetSchema:
 
 
 @router.get("/blender/detect")
-async def blender_detect() -> dict:
-    """Detect Blender + MCP-Link + LM Studio for seamless 3D setup."""
+async def blender_detect(apply: bool = False) -> dict:
+    """Detect Blender + MCP-Link + LM Studio for seamless 3D setup.
+
+    With ``apply=true`` the MCP config is written into LM Studio's
+    ``~/.lmstudio/mcp.json`` automatically.
+    """
     from lm_optimizer.services.blender_mcp import seamless_setup
-    return seamless_setup()
+    return seamless_setup(apply=apply)
 
 
 @router.get("/status", response_model=StatusResponse)
