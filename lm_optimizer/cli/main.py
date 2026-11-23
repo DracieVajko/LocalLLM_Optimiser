@@ -7253,6 +7253,8 @@ from lm_optimizer.cli.sandbox_duel import sandbox_duel
 
 from lm_optimizer.cli.blender_mcp import blender_mcp
 
+from lm_optimizer.cli.update import update
+
 app.command()(auto_run)
 
 app.command(name="sandbox-duel")(sandbox_duel)
@@ -7260,6 +7262,7 @@ app.command(name="sandbox-duel")(sandbox_duel)
 app.command(name="host-watch")(host_watch)
 
 app.command(name="blender-mcp")(blender_mcp)
+app.command(name="update")(update)
 
 if __name__ == "__main__":
     app()
