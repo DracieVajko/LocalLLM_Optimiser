@@ -155,6 +155,48 @@ def _blender_exe() -> str | None:
         return None
 
 
+def _addon_installed() -> bool:
+    """Check if the blender-mcp addon is installed in Blender."""
+    import os
+    from pathlib import Path
+    # Check common addon locations
+    roots = []
+    if os.name == "nt":
+        appdata = os.environ.get("APPDATA", "")
+        if appdata:
+            roots.append(Path(appdata) / "Blender Foundation")
+    roots.append(Path.home() / ".config" / "blender")
+    for root in roots:
+        if not root.is_dir():
+            continue
+        try:
+            for p in root.rglob("blender_mcp.py"):
+                if p.is_file():
+                    return True
+        except OSError:
+            continue
+    return False
+
+
+def _auto_install_addon() -> dict:
+    """Attempt to auto-install the blender-mcp addon via uvx."""
+    import shutil
+    uvx = shutil.which("uvx")
+    if not uvx:
+        return {"success": False, "error": "uvx not found (install uv first)"}
+    try:
+        import subprocess
+        result = subprocess.run(
+            [uvx, "mcp-for-blender", "install-addon"],
+            capture_output=True, text=True, timeout=120,
+        )
+        if result.returncode == 0:
+            return {"success": True, "output": result.stdout.strip()}
+        return {"success": False, "error": result.stderr.strip() or result.stdout.strip()}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 def _blender_version(exe: str | None) -> str | None:
     if not exe:
         return None
@@ -187,6 +229,14 @@ def detect() -> BlenderMcpStatus:
         steps.append({"step": "blender", "status": "missing",
                       "detail": "Install Blender 4.2+ from blender.org"})
 
+    if not _addon_installed() and exe:
+        install_result = _auto_install_addon()
+        if install_result["success"]:
+            steps.append({"step": "blender_mcp_install", "status": "ok", "detail": "addon installed automatically"})
+        else:
+            steps.append({"step": "blender_mcp_install", "status": "missing",
+                          "detail": f"Could not auto-install: {install_result['error']}"})
+
     tcp_ok = detect_tcp()
     st.mcp_server_reachable = tcp_ok
     if tcp_ok:
@@ -195,7 +245,7 @@ def detect() -> BlenderMcpStatus:
         steps.append({"step": "blender_mcp", "status": "ok", "detail": detail})
     else:
         steps.append({"step": "blender_mcp", "status": "missing",
-                      "detail": "Start Blender and enable the MCP add-on (Edit -> Preferences -> Add-ons -> Blender MCP)"})
+                      "detail": "Start Blender (the addon auto-starts its server on port 9876)"})
 
     lm_ok = _probe("http://127.0.0.1:1234/v1/models")
     st.lm_studio_reachable = lm_ok
@@ -223,11 +273,12 @@ def seamless_setup(apply: bool = False) -> dict:
     if not st.blender_exe:
         instructions.append("Install Blender 4.2+ from https://www.blender.org/download/")
     if not st.mcp_server_reachable:
-        instructions.append("In Blender: Edit -> Preferences -> Add-ons -> search 'Blender MCP' -> enable it")
+        instructions.append("Start Blender (the addon auto-starts its server on port 9876)")
+        instructions.append("If the addon is missing: uvx mcp-for-blender install-addon")
     if not st.lm_studio_reachable:
         instructions.append("Start LM Studio and enable the local server (port 1234)")
     if st.ready:
-        instructions.append("All set — Blender is reachable via direct TCP. No MCP config needed.")
+        instructions.append("All set — Blender is reachable via direct TCP. No MCP config file needed.")
     return {
         "status": st.as_dict(),
         "config": build_mcp_config(st),

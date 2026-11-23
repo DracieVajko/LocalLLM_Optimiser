@@ -1,37 +1,62 @@
 # Blender MCP Integration — LM Studio Optimizer
 
 ## Overview
-Models can generate Blender Python (`bpy`) scripts that create 3D scenes. The
-LM Studio Optimizer can benchmark and score these scripts via the
-`blender_city` sandbox task and the `code_runner` subprocess harness.
+Models can generate 3D scenes in Blender. The LM Studio Optimizer can benchmark
+and score these scripts via the `blender_city` sandbox task and the `code_runner`
+subprocess harness. For live control, the optimizer connects to Blender directly
+via TCP (port 9876) — **no separate MCP-Link server is needed**.
 
 ## Prerequisites
 1. **Blender 4.2+** installed ([blender.org/download](https://www.blender.org/download/))
-2. **MCP-Link server** (free, from [aurafriday.com/downloads](https://aurafriday.com/downloads/)) — exposes Blender's Python API to LLMs via MCP.
-3. **MCP-Link Blender add-on** installed in Blender (Edit → Preferences → Get Extensions → search "MCP-Link").
+2. **blender-mcp add-on** installed in Blender (auto-installable via
+   `uvx mcp-for-blender install-addon`)
+3. **LM Studio** running with the local server enabled (port 1234)
 
-## Setup
-1. Start the MCP-Link server on your machine.
-2. Open Blender — the add-on auto-connects to the server.
-3. In LM Studio, configure the MCP server endpoint (default: `http://127.0.0.1:PORT`).
-4. Models can now execute `bpy` code through the MCP tool.
+## Seamless setup (one command)
+```bash
+python -m lm_optimizer blender-mcp --apply
+```
+This auto-detects Blender, the MCP add-on and LM Studio, and prints the status.
+If the add-on is missing, it attempts to install it automatically via `uvx`.
+
+## How it works
+- The `blender-mcp` add-on (ahujasid's, MIT license) starts a TCP server on
+  port 9876 inside Blender.
+- LM Studio Optimizer connects directly to this socket and sends JSON commands:
+  `execute_code`, `get_scene_info`, `get_viewport_screenshot`, `ping`, etc.
+- No separate MCP-Link server, no config files, no copy-paste.
 
 ## How the optimizer uses Blender
 - `blender_city` sandbox task: model generates a Python script that builds a
   dense low-poly city scene. Scored by: blend file creation, mesh count,
-  vertex count, render success, viewport render.
-- `code_runner.run_find_duplicates`: crash/hang isolation only (not a security sandbox).
+  vertex count, render success.
+- `code_runner.run_find_duplicates`: crash/hang isolation only.
 - Generated scripts are executed headless: `blender --background --python script.py`.
 
-## Tips for best results
-- Use models with strong Python/code generation (e.g., Swift, Nemotron, Gemma).
-- Provide the model with the `bpy` API context in the prompt.
-- Set `max_output_tokens` high (2048+) for complex scenes.
-- The `blender_city` task requires O(n) mesh generation; O(n²) scripts fail perf checks.
+## text-to-cad (recommended for real CAD)
+For manufacturable 3D models, use [text-to-cad](https://github.com/earthtojake/text-to-cad):
+```bash
+uv tool install cad --python 3.13
+cad server start
+cad run model.py          # build
+cad model export <id> model.glb  # export
+cad run render.py         # render (Cycles)
+```
+This produces STEP/STL/3MF/GLB files from build123d Python scripts, with
+Blender rendering via `cad run render.py` (auto-provisions bpy 5.2.3).
 
 ## Troubleshooting
-- If Blender MCP fails to connect, check that the MCP-Link server is running and Blender is in Object Mode.
-- For headless rendering, ensure `blender` is on PATH.
+- **Blender MCP not detected**: Start Blender with the MCP add-on enabled.
+  The add-on's server starts automatically when Blender opens.
+- **EEVEE compute shaders fail** (`HW_UNSUPPORTED`): Use Cycles at low samples (16–32)
+  instead. The `cad run render.py` flow uses Cycles by default.
+- **Model loading guardrail**: LM Studio refuses large models (>14 GB). Adjust
+  guardrails in LM Studio Settings → Advanced.
 - On Windows, use forward slashes in file paths inside Python scripts.
-- **EEVEE compute shaders may fail on some GPUs** (`HW_UNSUPPORTED` / `E_SC_NOTSUPPORTED`). Use Cycles at low samples (16–32) instead, or `BLENDER_WORKBENCH` for previews. The `cad run render.py` flow uses Cycles by default in this project's render scripts.
-"
+- For headless rendering, ensure `blender` is on PATH or set `BLENDER_PATH`.
+
+## Honest limits
+- Modelling a real product is the slowest step for an agent.
+- The agent does not have your taste — use the gates and references.
+- Final renders: 5–8 s/frame on RTX 4090; 1–2 h for a 30 s film.
+- macOS and Linux are untested for the optimizer itself.
