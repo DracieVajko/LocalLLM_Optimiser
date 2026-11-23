@@ -58,7 +58,6 @@ def _write_json(name: str, payload: dict) -> Path:
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     return path
 # --- P2 Context Explorer --------------------------------------------------
-@app.command("context-explorer")
 def _same_load_failure(first: str, second: str) -> bool:
     """True when two load errors are effectively the same failure.
 
@@ -71,6 +70,7 @@ def _same_load_failure(first: str, second: str) -> bool:
     return bool(first and second and norm(first) == norm(second))
 
 
+@app.command("context-explorer")
 def context_explorer(
     model: str = typer.Argument(..., help="Model ID to explore"),
     min_context: int = typer.Option(4096, "--min-context"),

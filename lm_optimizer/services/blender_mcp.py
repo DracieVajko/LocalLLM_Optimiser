@@ -1,0 +1,137 @@
+"""Blender MCP auto-detection and seamless setup.
+
+The goal: a user should not have to install MCP-Link by hand, edit JSON
+config files, or guess ports. This module detects Blender, the MCP-Link
+server and the LM Studio API, then produces (and optionally writes) the
+MCP client configuration that connects them.
+
+Everything here is best-effort and offline: if a dependency is missing the
+result explains exactly which step failed and how to fix it.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import socket
+import subprocess
+import urllib.request
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any
+
+from lm_optimizer.services.blender_locate import find_blender
+
+
+@dataclass
+class BlenderMcpStatus:
+    blender_exe: str | None = None
+    blender_version: str | None = None
+    mcp_server_reachable: bool = False
+    mcp_server_url: str = "http://127.0.0.1:8101"
+    mcp_link_addon_present: bool | None = None
+    lm_studio_reachable: bool = False
+    lm_studio_url: str = "http://127.0.0.1:1234"
+    ready: bool = False
+    steps: list[dict[str, str]] = field(default_factory=list)
+
+    def as_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def _probe(url: str, timeout: float = 3.0) -> bool:
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            return 200 <= resp.status < 400
+    except Exception:
+        return False
+
+
+def _blender_version(exe: str | None) -> str | None:
+    if not exe:
+        return None
+    try:
+        out = subprocess.check_output(
+            [exe, "--version"], text=True, timeout=10, stderr=subprocess.STDOUT
+        )
+        first = out.splitlines()[0] if out else ""
+        return first.strip() or None
+    except Exception:
+        return None
+
+
+def detect() -> BlenderMcpStatus:
+    st = BlenderMcpStatus()
+    steps: list[dict[str, str]] = []
+
+    # 1. Blender
+    exe = find_blender()
+    st.blender_exe = exe
+    st.blender_version = _blender_version(exe)
+    if exe:
+        steps.append({"step": "blender", "status": "ok", "detail": exe})
+    else:
+        steps.append({"step": "blender", "status": "missing",
+                      "detail": "Install Blender 4.2+ from blender.org"})
+
+    # 2. MCP-Link server (Prism or a dedicated MCP-Link instance)
+    mcp_ok = _probe(st.mcp_server_url + "/health")
+    st.mcp_server_reachable = mcp_ok
+    if mcp_ok:
+        steps.append({"step": "mcp_server", "status": "ok", "detail": st.mcp_server_url})
+    else:
+        steps.append({"step": "mcp_server", "status": "missing",
+                      "detail": "Start MCP-Link server (aurafriday.com/downloads)"})
+
+    # 3. LM Studio
+    lm_ok = _probe(st.lm_studio_url + "/v1/models")
+    st.lm_studio_reachable = lm_ok
+    if lm_ok:
+        steps.append({"step": "lm_studio", "status": "ok", "detail": st.lm_studio_url})
+    else:
+        steps.append({"step": "lm_studio", "status": "missing",
+                      "detail": "Start LM Studio and enable the local server"})
+
+    st.steps = steps
+    st.ready = bool(exe and mcp_ok and lm_ok)
+    return st
+
+
+def build_mcp_config(st: BlenderMcpStatus) -> dict[str, Any]:
+    """Return the LM Studio MCP client config snippet for Blender.
+
+    Written to be copy-pasted into LM Studio's MCP servers list; no editing
+    required beyond pasting.
+    """
+    return {
+        "mcpServers": {
+            "blender": {
+                "url": st.mcp_server_url,
+                "transport": "sse",
+                "autoConnect": True,
+                "description": "Blender Python API (bpy) via MCP-Link",
+            }
+        }
+    }
+
+
+def seamless_setup() -> dict[str, Any]:
+    """One call: detect everything and return config + instructions."""
+    st = detect()
+    config = build_mcp_config(st)
+    instructions = []
+    if not st.blender_exe:
+        instructions.append("Install Blender 4.2+ from https://www.blender.org/download/")
+    if not st.mcp_server_reachable:
+        instructions.append("Download and start the MCP-Link server from https://aurafriday.com/downloads/")
+        instructions.append("In Blender: Edit -> Preferences -> Get Extensions -> search 'MCP-Link' -> Install")
+    if not st.lm_studio_reachable:
+        instructions.append("Start LM Studio and enable the local server (port 1234)")
+    if st.ready:
+        instructions.append("Paste the config below into LM Studio's MCP servers list and restart the server.")
+    return {
+        "status": st.as_dict(),
+        "config": config,
+        "instructions": instructions,
+        "ready": st.ready,
+    }
