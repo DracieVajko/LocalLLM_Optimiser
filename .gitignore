@@ -45,6 +45,10 @@ pause_*.flag
 *.swo
 *~
 
+# Blender binary artifacts (generated, machine-specific)
+*.blend
+*.blend1
+
 # OS / editor noise
 .DS_Store
 Thumbs.db
