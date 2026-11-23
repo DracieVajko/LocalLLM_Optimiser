@@ -428,6 +428,13 @@ def _convert_preset(p: dict) -> PresetSchema:
 # ============================================================
 
 
+@router.get("/blender/detect")
+async def blender_detect() -> dict:
+    """Detect Blender + MCP-Link + LM Studio for seamless 3D setup."""
+    from lm_optimizer.services.blender_mcp import seamless_setup
+    return seamless_setup()
+
+
 @router.get("/status", response_model=StatusResponse)
 async def get_status() -> dict[str, Any]:
     """Get system status (degrades to disconnected when LM Studio is down)."""

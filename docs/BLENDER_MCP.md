@@ -33,4 +33,5 @@ LM Studio Optimizer can benchmark and score these scripts via the
 - If Blender MCP fails to connect, check that the MCP-Link server is running and Blender is in Object Mode.
 - For headless rendering, ensure `blender` is on PATH.
 - On Windows, use forward slashes in file paths inside Python scripts.
+- **EEVEE compute shaders may fail on some GPUs** (`HW_UNSUPPORTED` / `E_SC_NOTSUPPORTED`). Use Cycles at low samples (16–32) instead, or `BLENDER_WORKBENCH` for previews. The `cad run render.py` flow uses Cycles by default in this project's render scripts.
 "

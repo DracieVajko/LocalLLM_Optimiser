@@ -164,6 +164,22 @@ const SettingsPage = {
                     </div>
                 </form>
 
+                <!-- Blender MCP -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="text-lg font-semibold text-gray-900">Blender MCP (3D modeling)</h2>
+                    </div>
+                    <div class="card-body space-y-3">
+                        <p class="text-sm text-gray-500">Auto-detect Blender + MCP-Link server and print the LM Studio MCP config.</p>
+                        <div class="flex gap-2">
+                            <button id="blender-detect" class="btn btn-outline">Detect</button>
+                            <button id="blender-copy-config" class="btn btn-outline hidden">Copy MCP config</button>
+                        </div>
+                        <pre id="blender-config" class="font-mono text-xs bg-gray-50 p-2 rounded hidden overflow-auto max-h-40"></pre>
+                        <p id="blender-status" class="text-xs text-gray-500"></p>
+                    </div>
+                </div>
+
                 <!-- Updates -->
                 <div class="card">
                     <div class="card-header">
@@ -236,6 +252,12 @@ const SettingsPage = {
         if (checkBtn) checkBtn.addEventListener('click', () => this.checkUpdates());
         const applyBtn = document.getElementById('apply-update');
         if (applyBtn) applyBtn.addEventListener('click', () => this.applyUpdate());
+
+        // Blender MCP detect
+        const blenderDetect = document.getElementById('blender-detect');
+        if (blenderDetect) blenderDetect.addEventListener('click', () => this.detectBlender());
+        const blenderCopy = document.getElementById('blender-copy-config');
+        if (blenderCopy) blenderCopy.addEventListener('click', () => this.copyBlenderConfig());
 
         // Danger zone buttons
         document.getElementById('reset-data')?.addEventListener('click', () => this.resetData());
@@ -356,6 +378,40 @@ const SettingsPage = {
             UI.showToast('Update failed', 'error');
         } finally {
             if (applyBtn) applyBtn.disabled = false;
+        }
+    },
+
+    async detectBlender() {
+        const status = document.getElementById('blender-status');
+        const configEl = document.getElementById('blender-config');
+        const copyBtn = document.getElementById('blender-copy-config');
+        if (status) status.textContent = 'Detecting…';
+        try {
+            const data = await API.request('/blender/detect');
+            const st = data.status || {};
+            const lines = (st.steps || []).map(s => (s.status === 'ok' ? '✓' : '✗') + ' ' + s.step + ': ' + s.detail);
+            if (status) status.textContent = lines.join(' · ');
+            if (configEl) {
+                configEl.textContent = JSON.stringify(data.config || {}, null, 2);
+                configEl.classList.remove('hidden');
+            }
+            if (copyBtn) copyBtn.classList.toggle('hidden', !data.ready);
+            if (data.ready) {
+                UI.showToast('Blender MCP ready — paste the config into LM Studio', 'success');
+            }
+        } catch (err) {
+            if (status) status.textContent = 'Detect failed: ' + ((err && err.message) || err);
+        }
+    },
+
+    async copyBlenderConfig() {
+        const el = document.getElementById('blender-config');
+        if (!el) return;
+        try {
+            await navigator.clipboard.writeText(el.textContent);
+            UI.showToast('MCP config copied', 'success');
+        } catch (e) {
+            UI.showToast('Copy failed', 'error');
         }
     },
 
