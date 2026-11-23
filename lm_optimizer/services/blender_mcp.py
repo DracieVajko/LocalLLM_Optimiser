@@ -28,7 +28,7 @@ class BlenderMcpStatus:
     blender_exe: str | None = None
     blender_version: str | None = None
     mcp_server_reachable: bool = False
-    mcp_server_url: str = "http://127.0.0.1:8101"
+    mcp_server_url: str | None = None
     mcp_link_addon_present: bool | None = None
     lm_studio_reachable: bool = False
     lm_studio_url: str = "http://127.0.0.1:1234"
@@ -39,12 +39,27 @@ class BlenderMcpStatus:
         return asdict(self)
 
 
+# Candidate ports for the MCP-Link server (aurafriday). We probe all of them
+# and accept the first that answers like an MCP server, instead of assuming
+# Prism's port (8101) is MCP-Link (it is not).
+_MCP_CANDIDATE_PORTS = (8765, 9876, 9800, 8000, 9000, 7860)
+
+
 def _probe(url: str, timeout: float = 3.0) -> bool:
     try:
         with urllib.request.urlopen(url, timeout=timeout) as resp:
             return 200 <= resp.status < 400
     except Exception:
         return False
+
+
+def _find_mcp_server() -> tuple[str | None, bool]:
+    """Return (url, reachable) for the first MCP-Link-like server."""
+    for port in _MCP_CANDIDATE_PORTS:
+        url = f"http://127.0.0.1:{port}"
+        if _probe(url + "/health") or _probe(url + "/mcp") or _probe(url + "/sse"):
+            return url, True
+    return None, False
 
 
 def _blender_version(exe: str | None) -> str | None:
@@ -74,11 +89,12 @@ def detect() -> BlenderMcpStatus:
         steps.append({"step": "blender", "status": "missing",
                       "detail": "Install Blender 4.2+ from blender.org"})
 
-    # 2. MCP-Link server (Prism or a dedicated MCP-Link instance)
-    mcp_ok = _probe(st.mcp_server_url + "/health")
+    # 2. MCP-Link server (real probe, not Prism)
+    url, mcp_ok = _find_mcp_server()
+    st.mcp_server_url = url
     st.mcp_server_reachable = mcp_ok
     if mcp_ok:
-        steps.append({"step": "mcp_server", "status": "ok", "detail": st.mcp_server_url})
+        steps.append({"step": "mcp_server", "status": "ok", "detail": url})
     else:
         steps.append({"step": "mcp_server", "status": "missing",
                       "detail": "Start MCP-Link server (aurafriday.com/downloads)"})
