@@ -106,7 +106,19 @@ def apply_update(download_url: str | None = None, target_dir: str | None = None)
     url = download_url or info.download_url
     if not url:
         return {"success": False, "reason": "no download URL", "current": info.current}
-    target = Path(target_dir or os.getcwd())
+    if not target_dir:
+        return {
+            "success": False,
+            "reason": "target_dir is required (refusing to write into the process cwd)",
+            "current": info.current,
+        }
+    target = Path(target_dir).resolve()
+    if not (target / "lm_optimizer").is_dir():
+        return {
+            "success": False,
+            "reason": f"{target} does not look like the project root (no lm_optimizer/)",
+            "current": info.current,
+        }
     backup = None
     try:
         with tempfile.TemporaryDirectory() as tmp:
@@ -115,12 +127,23 @@ def apply_update(download_url: str | None = None, target_dir: str | None = None)
             extract = Path(tmp) / "extracted"
             import zipfile
             with zipfile.ZipFile(zip_path) as zf:
+                # Validate before extracting: refuse absolute paths, parent
+                # traversal and symlinks (zip-slip protection).
+                for member in zf.infolist():
+                    name = member.filename.replace("\\", "/")
+                    if name.startswith("/") or ".." in name.split("/"):
+                        return {"success": False, "reason": f"unsafe archive member: {name}"}
+                    mode = (member.external_attr >> 16) & 0o170000
+                    if mode == 0o120000:
+                        return {"success": False, "reason": f"symlink in archive: {name}"}
                 zf.extractall(extract)
             # The archive has a single top-level directory.
             tops = [p for p in extract.iterdir() if p.is_dir()]
             if not tops:
                 return {"success": False, "reason": "empty archive"}
             src = tops[0]
+            if not (src / "lm_optimizer").is_dir() or not (src / "pyproject.toml").exists():
+                return {"success": False, "reason": "archive is not a project snapshot"}
             # Backup the current tree (excluding data/results/.venv).
             backup = target / f".update-backup-{info.latest}"
             backup.mkdir(exist_ok=True)

@@ -457,25 +457,6 @@ async def get_status() -> dict[str, Any]:
     _STATUS_OFFLINE_UNTIL = 0.0
     hardware = hardware_detector.detect()
 
-@router.get("/version")
-async def get_version() -> dict:
-    """Report the running LM Studio Optimizer version."""
-    from lm_optimizer import __version__
-    return {"version": __version__}
-
-
-@router.get("/update/check")
-async def check_update() -> dict:
-    """Check GitHub for a newer release (best-effort, never raises)."""
-    from lm_optimizer.services.updater import check_update as _check
-    return _check().as_dict()
-
-@router.post("/update/apply")
-async def apply_update_endpoint() -> dict:
-    """Download and apply the latest update (best-effort, never raises)."""
-    from lm_optimizer.services.updater import apply_update as _apply
-    return _apply()
-
     try:
         try:
             lm_connected = await asyncio.wait_for(client.health_check(), timeout=2.0)
@@ -513,6 +494,40 @@ async def apply_update_endpoint() -> dict:
 
         except Exception as exc:
             log_best_effort("best-effort operation failed", exc)
+
+
+@router.get("/version")
+async def get_version() -> dict:
+    """Report the running LM Studio Optimizer version."""
+    from lm_optimizer import __version__
+    return {"version": __version__}
+
+
+@router.get("/update/check")
+async def check_update() -> dict:
+    """Check GitHub for a newer release (best-effort, never raises)."""
+    from lm_optimizer.services.updater import check_update as _check
+    return _check().as_dict()
+
+@router.post("/update/apply")
+async def apply_update_endpoint(request: Request) -> dict:
+    """Download and apply the latest update (best-effort, never raises).
+
+    Mutating a local checkout is high-impact, so this endpoint requires an
+    explicit confirmation header (``X-Confirm-Update: yes``) and a same-origin
+    request header (``X-Requested-With: fetch``). Browsers cannot send a
+    custom header cross-origin without a CORS preflight, which prevents a
+    random web page from triggering an update on localhost.
+    """
+    if request.headers.get("x-confirm-update", "").lower() != "yes":
+        raise HTTPException(status_code=400, detail="X-Confirm-Update: yes is required")
+    if request.headers.get("x-requested-with", "").lower() != "fetch":
+        raise HTTPException(status_code=400, detail="X-Requested-With: fetch is required")
+    from pathlib import Path
+    from lm_optimizer.services.updater import apply_update as _apply
+
+    target = str(Path(__file__).resolve().parents[2])
+    return _apply(target_dir=target)
 
 
 @router.post("/connect")

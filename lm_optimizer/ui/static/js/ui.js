@@ -437,6 +437,7 @@ export const UI = {
 
     generatePreRunReview(modelId, profile, advanced, estimatedConfigs) {
         const est = estimatedConfigs || '~20–50';
+        const isLarge = (typeof estimatedConfigs === 'number' && estimatedConfigs > 100);
         return `
             <div class="space-y-4">
                 <h3 class="font-semibold text-gray-900">Optimization Review</h3>

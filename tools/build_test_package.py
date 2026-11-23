@@ -14,7 +14,7 @@ import zipfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(os.path.dirname(ROOT), "LM_Studio_Optimizer_Full_TestPackage.zip")
 
-INCLUDE_DIRS = ["lm_optimizer", "tests", "benchmarks", "docs"]
+INCLUDE_DIRS = ["lm_optimizer", "tests", "benchmarks", "docs", "tools"]
 INCLUDE_FILES = [
     "README.md",
     "CHANGELOG.md",
@@ -22,6 +22,8 @@ INCLUDE_FILES = [
     "conftest.py",
     "pytest.ini",
     "requirements.txt",
+    "start.bat",
+    "setup.py",
 ]
 
 SKIP_DIRS = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "data", "results", "logs"}

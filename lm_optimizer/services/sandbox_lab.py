@@ -1094,6 +1094,27 @@ def _basename_any(path_token: str) -> str:
     return re.split(r"[\\/]", cleaned)[-1]
 
 
+def _normalize_executable(name: str) -> str:
+    """Normalise an executable name for the allowlist.
+
+    ``python``, ``python3`` and ``python3.12`` are the same interpreter on
+    most systems, and a task that allows ``python`` must not reject
+    ``python3`` on Linux/macOS (or vice versa). The same applies to
+    ``pip``/``pip3`` and ``node``/``nodejs``.
+    """
+    value = str(name or "").strip().lower()
+    if value.endswith(".exe"):
+        value = value[: -len(".exe")]
+    for base in ("python", "pip", "pypy"):
+        if value == base:
+            return base
+        if value.startswith(base) and value[len(base):].lstrip("0123456789.") == "":
+            return base
+    if value in ("nodejs", "node"):
+        return "node"
+    return value
+
+
 @dataclass
 class SandboxPolicy:
     """Isolation and resource policy (spec 13.5)."""
@@ -1118,10 +1139,8 @@ class SandboxPolicy:
             return False
         if not parts:
             return False
-        exe = _basename_any(parts[0]).lower()
-        if exe.endswith(".exe"):
-            exe = exe[: -len(".exe")]
-        return exe in {e.lower().removesuffix(".exe") for e in self.allowed_executables}
+        exe = _normalize_executable(_basename_any(parts[0]))
+        return exe in {_normalize_executable(e) for e in self.allowed_executables}
 
     def sanitize_command(self, command: str) -> str:
         """Render a command for display without leaking host paths."""

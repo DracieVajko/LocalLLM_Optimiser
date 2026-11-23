@@ -331,13 +331,19 @@ const SettingsPage = {
     async applyUpdate() {
         const status = document.getElementById('update-status');
         const applyBtn = document.getElementById('apply-update');
+        if (!window.confirm('Download and apply the update? A backup of the current files is written first. The app must be restarted afterwards.')) {
+            return;
+        }
         if (applyBtn) applyBtn.disabled = true;
         if (status) status.textContent = 'Downloading and applying update…';
         try {
-            const data = await API.request('/update/check');
-            // Re-check first; the actual apply needs the download URL from
-            // the latest release, which the backend returns.
-            const apply = await API.request('/update/apply', { method: 'POST' });
+            const apply = await API.request('/update/apply', {
+                method: 'POST',
+                headers: {
+                    'X-Confirm-Update': 'yes',
+                    'X-Requested-With': 'fetch',
+                },
+            });
             if (apply && apply.success) {
                 if (status) status.textContent = 'Updated ' + apply.from + ' → ' + apply.to + '. Restart the app.';
                 UI.showToast('Update applied — restart LM Studio Optimizer', 'success');
