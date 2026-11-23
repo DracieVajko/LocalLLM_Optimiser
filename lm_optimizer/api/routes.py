@@ -457,6 +457,25 @@ async def get_status() -> dict[str, Any]:
     _STATUS_OFFLINE_UNTIL = 0.0
     hardware = hardware_detector.detect()
 
+@router.get("/version")
+async def get_version() -> dict:
+    """Report the running LM Studio Optimizer version."""
+    from lm_optimizer import __version__
+    return {"version": __version__}
+
+
+@router.get("/update/check")
+async def check_update() -> dict:
+    """Check GitHub for a newer release (best-effort, never raises)."""
+    from lm_optimizer.services.updater import check_update as _check
+    return _check().as_dict()
+
+@router.post("/update/apply")
+async def apply_update_endpoint() -> dict:
+    """Download and apply the latest update (best-effort, never raises)."""
+    from lm_optimizer.services.updater import apply_update as _apply
+    return _apply()
+
     try:
         try:
             lm_connected = await asyncio.wait_for(client.health_check(), timeout=2.0)

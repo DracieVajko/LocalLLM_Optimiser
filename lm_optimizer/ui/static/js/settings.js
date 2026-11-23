@@ -13,6 +13,12 @@ const SettingsPage = {
         await this.loadSettings();
         this.render();
         this.attachEvents();
+        // Show the installed version immediately, then check for updates.
+        try {
+            const v = await API.request('/version');
+            const el = document.getElementById('installed-version');
+            if (el) el.textContent = v.version || '—';
+        } catch (e) { /* leave placeholder */ }
     },
 
     async loadSettings() {
@@ -158,6 +164,28 @@ const SettingsPage = {
                     </div>
                 </form>
 
+                <!-- Updates -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="text-lg font-semibold text-gray-900">Updates</h2>
+                    </div>
+                    <div class="card-body space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="font-medium">Installed version</span>
+                            <span class="font-mono" id="installed-version">loading…</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="font-medium">Latest on GitHub</span>
+                            <span class="font-mono" id="latest-version">—</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button id="check-updates" class="btn btn-outline">Check for updates</button>
+                            <button id="apply-update" class="btn btn-success hidden">Apply update</button>
+                        </div>
+                        <p id="update-status" class="text-xs text-gray-500"></p>
+                    </div>
+                </div>
+
                 <!-- Danger Zone -->
                 <div class="card border-red-200">
                     <div class="card-header border-red-200">
@@ -202,6 +230,12 @@ const SettingsPage = {
         if (testBtn) {
             testBtn.addEventListener('click', () => this.testConnection());
         }
+
+        // Updates
+        const checkBtn = document.getElementById('check-updates');
+        if (checkBtn) checkBtn.addEventListener('click', () => this.checkUpdates());
+        const applyBtn = document.getElementById('apply-update');
+        if (applyBtn) applyBtn.addEventListener('click', () => this.applyUpdate());
 
         // Danger zone buttons
         document.getElementById('reset-data')?.addEventListener('click', () => this.resetData());
@@ -269,6 +303,53 @@ const SettingsPage = {
         } finally {
             btn.disabled = false;
             btn.textContent = 'Test Connection';
+        }
+    },
+
+    async checkUpdates() {
+        const status = document.getElementById('update-status');
+        const installed = document.getElementById('installed-version');
+        const latest = document.getElementById('latest-version');
+        const applyBtn = document.getElementById('apply-update');
+        if (status) status.textContent = 'Checking GitHub…';
+        try {
+            const data = await API.request('/update/check');
+            if (installed) installed.textContent = data.current || '—';
+            if (latest) latest.textContent = data.latest || '—';
+            if (data.update_available) {
+                if (status) status.textContent = 'Update available: ' + data.current + ' → ' + data.latest;
+                if (applyBtn) applyBtn.classList.remove('hidden');
+            } else {
+                if (status) status.textContent = data.error ? data.error : 'You are up to date.';
+                if (applyBtn) applyBtn.classList.add('hidden');
+            }
+        } catch (err) {
+            if (status) status.textContent = 'Check failed: ' + ((err && err.message) || err);
+        }
+    },
+
+    async applyUpdate() {
+        const status = document.getElementById('update-status');
+        const applyBtn = document.getElementById('apply-update');
+        if (applyBtn) applyBtn.disabled = true;
+        if (status) status.textContent = 'Downloading and applying update…';
+        try {
+            const data = await API.request('/update/check');
+            // Re-check first; the actual apply needs the download URL from
+            // the latest release, which the backend returns.
+            const apply = await API.request('/update/apply', { method: 'POST' });
+            if (apply && apply.success) {
+                if (status) status.textContent = 'Updated ' + apply.from + ' → ' + apply.to + '. Restart the app.';
+                UI.showToast('Update applied — restart LM Studio Optimizer', 'success');
+            } else {
+                if (status) status.textContent = 'Update failed: ' + (apply?.reason || 'unknown');
+                UI.showToast('Update failed', 'error');
+            }
+        } catch (err) {
+            if (status) status.textContent = 'Apply failed: ' + ((err && err.message) || err);
+            UI.showToast('Update failed', 'error');
+        } finally {
+            if (applyBtn) applyBtn.disabled = false;
         }
     },
 
