@@ -7251,11 +7251,15 @@ from lm_optimizer.cli.host_watch import host_watch
 
 from lm_optimizer.cli.sandbox_duel import sandbox_duel
 
+from lm_optimizer.cli.blender_mcp import blender_mcp
+
 app.command()(auto_run)
 
 app.command(name="sandbox-duel")(sandbox_duel)
 
 app.command(name="host-watch")(host_watch)
+
+app.command(name="blender-mcp")(blender_mcp)
 
 if __name__ == "__main__":
     app()
